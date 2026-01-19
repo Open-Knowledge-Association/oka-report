@@ -1,0 +1,14 @@
+{
+  "name": "report-generator",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "moon run api:dev"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}

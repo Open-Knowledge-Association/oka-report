@@ -1,0 +1,24 @@
+language: typescript
+tags: ["db", "library"]
+
+tasks:
+  generate:
+    command: "bun prisma generate"
+    description: "Generate Prisma Client"
+    inputs:
+      - "prisma/schema.prisma"
+    options:
+      cache: true
+      envFile:
+        - "/.env"
+        - ".env"
+
+  push:
+    command: "bun prisma db push"
+    description: "Push schema changes to database"
+    options:
+      cache: false
+      interactive: true
+      envFile:
+        - "/.env"
+        - ".env"

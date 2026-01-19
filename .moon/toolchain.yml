@@ -1,0 +1,5 @@
+node:
+  version: "25.3.0"
+  packageManager: "bun"
+  bun:
+    version: "system"

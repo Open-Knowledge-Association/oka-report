@@ -1,0 +1,36 @@
+language: typescript
+tags: ["backend", "api"]
+
+dependsOn:
+  - "db"
+
+tasks:
+  dev:
+    command: "bun run --hot src/index.ts"
+    description: "Run this application in development mode"
+    deps:
+      - "db:generate"
+    options:
+      envFile:
+        - "/.env"
+        - ".env"
+      cache: false
+      persistent: true
+      runInCI: false
+
+  build:
+    command: "bun build --compile --minify --sourcemap ./src/index.ts --outfile ./dist/server"
+    outputs:
+      - "dist"
+    description: "Build server to a single binary"
+    options:
+      envFile:
+        - "/.env"
+        - ".env"
+
+  test:
+    command: "bun test"
+    inputs:
+      - "src/**/*"
+      - "test/**/*"
+    description: "Run unit tests"
