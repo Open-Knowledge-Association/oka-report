@@ -837,14 +837,14 @@ Create error handling middleware for Hono.
 
 # Phase 7: Frontend
 
-## report-k0h: Initialize TanStack Router app ✅
+## report-k0h: Initialize TanStack Start app ✅
 
 - Type: task
 - Priority: 1
 - Labels: frontend
 - Status: CLOSED
 
-Frontend initialized with TanStack Router + Vite in `apps/web/`.
+Frontend initialized with TanStack Start (full-stack React with SSR) in `apps/web/`.
 
 ---
 

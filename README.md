@@ -69,7 +69,8 @@ The platform automatically collects and calculates:
 
 ### Frontend
 
-- **Framework**: TanStack Router + Vite
+- **Framework**: TanStack Start (full-stack React with SSR)
+- **Routing**: TanStack Router (file-based, type-safe)
 - **UI Components**: shadcn/ui (Radix primitives)
 - **Styling**: Tailwind CSS v4
 - **Data Fetching**: TanStack Query
@@ -90,7 +91,7 @@ report/
 ├── .prototools         # Toolchain versions (bun, node)
 ├── apps/
 │   ├── api/            # Hono API server
-│   └── web/            # TanStack Router frontend (shadcn/ui)
+│   └── web/            # TanStack Start frontend (SSR + shadcn/ui)
 ├── docs/
 │   ├── HIGH_LEVEL_DESIGN.md   # Technical design document
 │   ├── PROJECT_STRUCTURE.md   # Folder mapping & roadmap
@@ -158,8 +159,8 @@ moon run web:dev   # Frontend at http://localhost:3001
 ### Running Development Servers
 
 ```bash
-moon run api:dev   # Hono API server (port 3000)
-moon run web:dev   # TanStack Router frontend (port 3001)
+moon run api:dev   # Hono API server (port 3001)
+moon run web:dev   # TanStack Start frontend (port 3000)
 moon run :dev      # Run all dev servers
 ```
 
@@ -199,7 +200,7 @@ The platform is built as a monorepo with clear separation of concerns:
 - **API Layer**: RESTful API built with Hono for lightweight, fast HTTP handling
 - **Database Layer**: PostgreSQL with Prisma for type-safe database operations
 - **Integration Layer**: Consumes Wikimedia APIs for automated data collection
-- **Frontend**: TanStack Router + shadcn/ui dashboard for visualization and filtering
+- **Frontend**: TanStack Start + shadcn/ui dashboard for visualization and filtering
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────────────────┐
@@ -287,7 +288,7 @@ The platform uses PostgreSQL with Prisma ORM. Key entities:
 
 - [x] Project scaffolding and Moon v2 monorepo setup
 - [x] Database schema design (Prisma)
-- [x] Frontend scaffold (TanStack Router + shadcn/ui)
+- [x] Frontend scaffold (TanStack Start + shadcn/ui)
 
 ### Phase 2: API Integration (Current)
 

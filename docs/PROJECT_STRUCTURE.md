@@ -19,19 +19,20 @@ oka-report/
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
-│   └── web/                    # ✅ EXISTS - TanStack Router Frontend
+│   └── web/                    # ✅ EXISTS - TanStack Start Frontend (SSR)
 │       ├── src/
 │       │   ├── routes/         # File-based routing (TanStack Router)
-│       │   │   ├── __root.tsx  # ✅ Root layout
+│       │   │   ├── __root.tsx  # ✅ Root layout with SSR
 │       │   │   └── index.tsx   # ✅ Index page (scaffold)
 │       │   ├── components/     # UI components
 │       │   │   └── Header.tsx  # ✅ Basic header
+│       │   ├── integrations/   # TanStack Query integration
 │       │   └── lib/
 │       │       └── utils.ts    # ✅ cn() helper
 │       ├── components.json     # ✅ shadcn/ui config (new-york style)
 │       ├── moon.yml            # ✅ Moon tasks
-│       ├── package.json        # ✅ TanStack Router + Tailwind v4
-│       ├── vite.config.ts      # ✅ Vite config
+│       ├── package.json        # ✅ TanStack Start + Tailwind v4
+│       ├── vite.config.ts      # ✅ Vite config with tanstackStart plugin
 │       └── tsconfig.json
 │
 ├── packages/
@@ -81,7 +82,7 @@ oka-report/
 | `packages/db/`                     | Prisma ORM, schema, migrations | ✅ Complete    |
 | `packages/db/prisma/schema.prisma` | All models defined             | ✅ Complete    |
 | `apps/api/`                        | Hono.js API scaffold           | ✅ Basic setup |
-| `apps/web/`                        | TanStack Router + shadcn/ui    | ✅ Scaffold    |
+| `apps/web/`                        | TanStack Start + shadcn/ui     | ✅ Scaffold    |
 | `docs/`                            | Documentation                  | ✅ Complete    |
 
 ### 🟡 EXISTS BUT INCOMPLETE
