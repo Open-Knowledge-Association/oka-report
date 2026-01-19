@@ -60,35 +60,55 @@ The platform automatically collects and calculates:
 
 ## Tech Stack
 
+### Backend
+
 - **Runtime**: Bun
 - **API Framework**: Hono
 - **Database**: PostgreSQL with Prisma ORM
+- **Validation**: Zod
+
+### Frontend
+
+- **Framework**: TanStack Router + Vite
+- **UI Components**: shadcn/ui (Radix primitives)
+- **Styling**: Tailwind CSS v4
+- **Data Fetching**: TanStack Query
+- **Tables**: TanStack Table
+
+### Tooling
+
+- **Monorepo**: Moon v2
+- **Toolchain**: proto (bun 1.3.5, node 25.3.0)
 - **Language**: TypeScript
-- **Build Tool**: Moon (monorepo orchestration)
 - **Hosting**: Wikimedia Cloud Services (planned)
 
 ## Project Structure
 
 ```
 report/
+├── .moon/              # Moon v2 workspace config
+├── .prototools         # Toolchain versions (bun, node)
 ├── apps/
-│   ├── api/          # Hono API server
-│   └── web/          # Frontend application (planned)
+│   ├── api/            # Hono API server
+│   └── web/            # TanStack Router frontend (shadcn/ui)
 ├── docs/
-│   └── HIGH_LEVEL_DESIGN.md  # Technical design document
+│   ├── HIGH_LEVEL_DESIGN.md   # Technical design document
+│   ├── PROJECT_STRUCTURE.md   # Folder mapping & roadmap
+│   └── TASKS.md               # Task overview by phase
 ├── packages/
-│   ├── db/           # Prisma schema and database client
-│   └── utils/        # Shared utilities
+│   ├── db/             # Prisma schema and database client
+│   └── utils/          # Shared utilities (Wikimedia API client)
 └── README.md
 ```
+
+> 📖 For detailed folder mapping, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) (latest version)
+- [proto](https://moonrepo.dev/proto) - Toolchain manager
 - PostgreSQL database
-- Node.js 18+ (for tooling compatibility)
 
 ### Installation
 
@@ -99,13 +119,20 @@ git clone <repository-url>
 cd report
 ```
 
-2. Install dependencies:
+2. Install proto toolchain (manages bun, node versions):
+
+```bash
+curl -fsSL https://moonrepo.dev/install/proto.sh | bash
+proto use   # Installs bun 1.3.5, node 25.3.0
+```
+
+3. Install dependencies:
 
 ```bash
 bun install
 ```
 
-3. Set up environment variables:
+4. Set up environment variables:
 
 Create `.env` file in the root:
 
@@ -113,54 +140,56 @@ Create `.env` file in the root:
 DATABASE_URL="postgresql://user:password@host:port/database"
 ```
 
-4. Run database migrations:
+5. Run database migrations:
 
 ```bash
-cd packages/db
-bun prisma migrate dev
+moon run db:migrate
 ```
 
-5. Start the development server:
+6. Start development servers:
 
 ```bash
-moon run api:dev
+moon run api:dev   # API at http://localhost:3000
+moon run web:dev   # Frontend at http://localhost:3001
 ```
-
-The API will be available at `http://localhost:3000`
 
 ## Development
 
-### Running the API Server
+### Running Development Servers
 
 ```bash
-moon run api:dev
+moon run api:dev   # Hono API server (port 3000)
+moon run web:dev   # TanStack Router frontend (port 3001)
+moon run :dev      # Run all dev servers
 ```
 
 ### Database Management
 
 ```bash
-# Generate Prisma Client
-moon run db:generate
-
-# Run migrations
-cd packages/db && bun prisma migrate dev
-
-# Open Prisma Studio
-bun prisma studio
+moon run db:generate    # Generate Prisma Client
+moon run db:migrate     # Run migrations
+moon run db:studio      # Open Prisma Studio
 ```
 
-### Project Commands
+### Project Commands (Moon v2)
 
 ```bash
 # Install dependencies
 bun install
 
-# Run specific app
-moon run api:dev
-moon run web:dev
+# Development
+moon run api:dev        # Start API server
+moon run web:dev        # Start frontend
+moon run :dev           # Start all dev servers
 
-# Build all packages
-moon run :build
+# Build
+moon run api:build      # Build API to binary
+moon run web:build      # Build frontend for production
+moon run :build         # Build all projects
+
+# Testing
+moon run web:test       # Run frontend tests (vitest)
+moon run :test          # Run all tests
 ```
 
 ## Architecture
@@ -170,12 +199,12 @@ The platform is built as a monorepo with clear separation of concerns:
 - **API Layer**: RESTful API built with Hono for lightweight, fast HTTP handling
 - **Database Layer**: PostgreSQL with Prisma for type-safe database operations
 - **Integration Layer**: Consumes Wikimedia APIs for automated data collection
-- **Frontend**: (Planned) Dashboard interface for visualization and filtering
+- **Frontend**: TanStack Router + shadcn/ui dashboard for visualization and filtering
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────────────────┐
-│   Frontend   │────▶│   Hono API   │────▶│      PostgreSQL DB       │
-│   (Web App)  │◀────│   Server     │◀────│   (Prisma ORM)           │
+│   Frontend   │───▶│   Hono API   │───▶│      PostgreSQL DB       │
+│   (Web App)  │◀───│   Server     │◀───│   (Prisma ORM)           │
 └──────────────┘     └──────┬───────┘     └──────────────────────────┘
                             │
                             ▼
@@ -254,30 +283,39 @@ The platform uses PostgreSQL with Prisma ORM. Key entities:
 
 ## Roadmap
 
-### Phase 1 (Current)
+### Phase 1: Foundation ✅
 
-- [x] Project scaffolding and monorepo setup
-- [x] Database schema design
-- [ ] Wikimedia API integration
+- [x] Project scaffolding and Moon v2 monorepo setup
+- [x] Database schema design (Prisma)
+- [x] Frontend scaffold (TanStack Router + shadcn/ui)
+
+### Phase 2: API Integration (Current)
+
+- [ ] Wikimedia API client (`packages/utils`)
+- [ ] Background sync service
 - [ ] Core metrics calculation engine
 
-### Phase 2
+### Phase 3: Backend API
+
+- [ ] Editor management endpoints
+- [ ] Statistics endpoints
+- [ ] Sync trigger endpoints
+
+### Phase 4: Frontend Dashboard
 
 - [ ] Overall statistics dashboard
-- [ ] Time-series visualizations
-- [ ] Date range filtering
-
-### Phase 3
-
 - [ ] Per-editor statistics view
-- [ ] Advanced filtering (editor, wiki version)
-- [ ] Export functionality
+- [ ] Time-series visualizations (Chart.js)
+- [ ] Date range and wiki project filtering
 
-### Phase 4
+### Phase 5: Polish & Deploy
 
+- [ ] Export functionality (CSV)
 - [ ] Migration to Wikimedia Cloud Services
+- [ ] CI/CD with GitHub Actions
 - [ ] Performance optimization
-- [ ] Commons upload tracking
+
+> 📖 For detailed task breakdown, see [docs/TASKS.md](docs/TASKS.md)
 
 ## Contributing
 
@@ -292,6 +330,19 @@ This is an open-source project and contributions are welcome! Please ensure:
 
 - [README.md](README.md) - Project overview and getting started
 - [docs/HIGH_LEVEL_DESIGN.md](docs/HIGH_LEVEL_DESIGN.md) - Technical design, APIs, database schema, and mockups
+- [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) - Folder mapping and implementation roadmap
+- [docs/TASKS.md](docs/TASKS.md) - Task overview organized by phase
+
+### Issue Tracking
+
+This project uses [bd (beads)](https://github.com/symphco/beads) for issue tracking:
+
+```bash
+bd ready              # Show available work
+bd show <id>          # View issue details
+bd update <id> --status in_progress  # Claim work
+bd close <id>         # Complete work
+```
 
 ## License
 
