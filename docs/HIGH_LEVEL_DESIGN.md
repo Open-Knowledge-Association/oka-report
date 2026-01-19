@@ -65,14 +65,16 @@ The OKA Stats Platform is a comprehensive solution for tracking Wikipedia editin
 | Task Scheduling | node-cron / BullMQ | Background job processing                  |
 | Validation      | Zod                | Runtime type validation                    |
 
-### Frontend (Planned)
+### Frontend
 
-| Component   | Technology | Purpose                     |
-| ----------- | ---------- | --------------------------- |
-| Framework   | React      | UI component framework      |
-| Charts      | Chart.js   | Time-series visualizations  |
-| Data Tables | TanStack   | Sortable, filterable tables |
-| Styling     | Tailwind   | Utility-first CSS           |
+| Component     | Technology      | Purpose                                      |
+| ------------- | --------------- | -------------------------------------------- |
+| Framework     | TanStack Start  | Full-stack React framework with SSR          |
+| Routing       | TanStack Router | File-based routing with type-safe navigation |
+| Data Fetching | TanStack Query  | Server state management and caching          |
+| Data Tables   | TanStack Table  | Sortable, filterable tables                  |
+| Charts        | Chart.js        | Time-series visualizations                   |
+| Styling       | Tailwind CSS    | Utility-first CSS                            |
 
 ### DevOps & Infrastructure
 

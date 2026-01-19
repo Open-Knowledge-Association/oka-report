@@ -130,39 +130,41 @@ Location: `apps/api/src/routes/`
 
 Location: `apps/web/`
 
+**Framework: TanStack Start** (full-stack React framework with SSR, file-based routing, and TanStack Query)
+
 ### Setup
 
-| Task                    | Description                   | Priority |
-| ----------------------- | ----------------------------- | -------- |
-| Initialize React + Vite | Frontend application scaffold | P1       |
-| Tailwind CSS setup      | Styling configuration         | P1       |
-| Layout component        | Navigation and page structure | P1       |
+| Task                      | Description                               | Priority |
+| ------------------------- | ----------------------------------------- | -------- |
+| Initialize TanStack Start | Frontend app with TanStack Router & Query | P1       |
+| Tailwind CSS setup        | Styling configuration for TanStack Start  | P1       |
+| Layout component          | Root layout with TanStack Router Outlet   | P1       |
 
 ### Dashboard Page
 
-| Task                | Description                                 | Priority |
-| ------------------- | ------------------------------------------- | -------- |
-| Dashboard page      | Main overall stats view                     | P1       |
-| Stats summary cards | Edits, words, pageviews, articles cards     | P1       |
-| Stats by wiki table | Table showing metrics per Wikipedia version | P1       |
-| Time-series chart   | Line chart using Chart.js                   | P1       |
+| Task                | Description                                       | Priority |
+| ------------------- | ------------------------------------------------- | -------- |
+| Dashboard page      | Main stats view with TanStack Query data fetching | P1       |
+| Stats summary cards | Edits, words, pageviews, articles cards           | P1       |
+| Stats by wiki table | TanStack Table with sorting                       | P1       |
+| Time-series chart   | Line chart using Chart.js                         | P1       |
 
 ### Editor Stats Page
 
-| Task                | Description                 | Priority |
-| ------------------- | --------------------------- | -------- |
-| Editors page        | Per-editor statistics table | P1       |
-| Date range filter   | Filter by date range        | P1       |
-| Wiki project filter | Filter by Wikipedia version | P1       |
+| Task                | Description                                | Priority |
+| ------------------- | ------------------------------------------ | -------- |
+| Editors page        | Per-editor stats with TanStack Table       | P1       |
+| Date range filter   | Filter using TanStack Router search params | P1       |
+| Wiki project filter | Filter with TanStack Query integration     | P1       |
 
 ### Admin Panel
 
-| Task                   | Description                     | Priority |
-| ---------------------- | ------------------------------- | -------- |
-| Editor management page | List/add/remove editors         | P2       |
-| Add editor form        | Single editor registration      | P2       |
-| Bulk import form       | Import multiple editors at once | P2       |
-| Export to CSV          | Download stats as CSV           | P2       |
+| Task                   | Description                               | Priority |
+| ---------------------- | ----------------------------------------- | -------- |
+| Editor management page | CRUD with TanStack Query mutations        | P2       |
+| Add editor form        | Form with mutation and cache invalidation | P2       |
+| Bulk import form       | Import multiple editors at once           | P2       |
+| Export to CSV          | Download stats as CSV                     | P2       |
 
 ---
 

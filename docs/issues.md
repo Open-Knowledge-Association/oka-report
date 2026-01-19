@@ -523,18 +523,27 @@ Create error handling middleware for Hono:
 
 # Phase 7: Frontend
 
-## Initialize React app with Vite
+## Initialize TanStack Start app
 
 - Type: task
 - Priority: 1
 - Labels: frontend
 
-Set up frontend application in `apps/web/`:
+Set up frontend application in `apps/web/` using TanStack Start:
 
-- Initialize with Vite + React + TypeScript
+- Initialize with TanStack Start (full-stack React framework)
 - Configure path aliases
-- Set up API client for backend communication
+- Set up API client with TanStack Query for backend communication
 - Add environment variable support
+- TanStack Router for file-based routing
+
+TanStack Start features:
+
+- Server-side rendering (SSR)
+- File-based routing
+- Built-in data fetching with TanStack Query
+- TypeScript first
+- Vinxi/Nitro as the underlying server
 
 ---
 
@@ -544,12 +553,13 @@ Set up frontend application in `apps/web/`:
 - Priority: 1
 - Labels: frontend
 
-Configure Tailwind CSS:
+Configure Tailwind CSS for TanStack Start:
 
 - Install tailwindcss, postcss, autoprefixer
-- Create tailwind.config.js
-- Set up base styles
+- Create tailwind.config.js compatible with TanStack Start
+- Set up base styles and CSS variables
 - Configure for production build optimization
+- Add @tailwindcss/forms plugin for form styling
 
 ---
 
@@ -559,12 +569,14 @@ Configure Tailwind CSS:
 - Priority: 1
 - Labels: frontend
 
-Create main layout component:
+Create main layout component with TanStack Router:
 
+- Root layout using TanStack Router's createRootRoute
 - Header with OKA Stats Platform branding
-- Navigation links: Dashboard, Editors, Admin
+- Navigation links: Dashboard, Editors, Admin (using Link component)
 - Responsive sidebar/navbar
 - Footer with version info
+- Outlet for nested routes
 
 ---
 
@@ -574,12 +586,14 @@ Create main layout component:
 - Priority: 1
 - Labels: frontend
 
-Create main dashboard page:
+Create main dashboard page with TanStack:
 
-- Route: /
-- Fetch and display overall stats
+- Route: / (index route)
+- Use TanStack Query for data fetching from /api/stats/overall
+- Use createFileRoute for route definition
 - Include stats cards, table, and chart components
-- Add date range filter controls
+- Add date range filter controls with URL search params
+- Loading and error states with TanStack Query
 
 ---
 
@@ -604,12 +618,13 @@ Create reusable stats cards component:
 - Priority: 1
 - Labels: frontend
 
-Create sortable data table component:
+Create sortable data table component using TanStack Table:
 
 - Columns: Wiki Project, Edits, Words, Pageviews, Created, Modified
-- Sortable columns (default: words descending)
+- Sortable columns using TanStack Table (default: words descending)
 - Total row at bottom
-- Use TanStack Table for functionality
+- TypeScript types for table data
+- Responsive design with Tailwind
 
 ---
 
@@ -634,12 +649,13 @@ Create line chart component using Chart.js:
 - Priority: 1
 - Labels: frontend
 
-Create per-editor statistics page:
+Create per-editor statistics page with TanStack:
 
-- Route: /editors
-- Fetch and display editor stats table
-- Include search/filter controls
-- Pagination support
+- Route: /editors using createFileRoute
+- Use TanStack Query to fetch from /api/stats/editors
+- Use TanStack Table for editor stats display
+- Include search/filter controls using URL search params
+- Pagination support with TanStack Table
 
 ---
 
@@ -649,12 +665,13 @@ Create per-editor statistics page:
 - Priority: 1
 - Labels: frontend
 
-Create reusable date range picker:
+Create reusable date range picker component:
 
 - Start date and end date inputs
 - Preset options: Last 7 days, Last 30 days, This year, All time
-- Apply button to trigger data refresh
-- Store selection in URL params
+- Use TanStack Router search params for state management
+- Apply filter triggers route navigation with updated params
+- Compatible with TanStack Query cache invalidation
 
 ---
 
@@ -664,12 +681,13 @@ Create reusable date range picker:
 - Priority: 1
 - Labels: frontend
 
-Create wiki project dropdown filter:
+Create wiki project dropdown filter component:
 
-- Fetch available projects from API
+- Fetch available projects from API using TanStack Query
 - Multi-select or single select option
 - "All projects" option
-- Store selection in URL params
+- Use TanStack Router search params for state
+- Integrate with TanStack Query for data refetching
 
 ---
 
@@ -681,10 +699,12 @@ Create wiki project dropdown filter:
 
 Create admin page for editor management:
 
-- Route: /admin/editors
+- Route: /admin/editors using createFileRoute
+- Use TanStack Query for fetching and mutating editors
 - List all registered editors with status
-- Add/Edit/Remove editor actions
+- Add/Edit/Remove editor actions with mutations
 - Bulk import form
+- Optimistic updates with TanStack Query
 
 ---
 
@@ -698,8 +718,9 @@ Create form to register new editor:
 
 - Fields: Wikipedia username, Display name (optional)
 - Validate username format
-- Submit to POST /api/editors
-- Show success/error feedback
+- Use TanStack Query mutation for POST /api/editors
+- Show success/error feedback with toast notifications
+- Invalidate editors query on success
 
 ---
 
