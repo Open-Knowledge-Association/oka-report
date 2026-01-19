@@ -83,7 +83,8 @@ The OKA Stats Platform is a comprehensive solution for tracking Wikipedia editin
 
 | Component  | Technology               | Purpose                        |
 | ---------- | ------------------------ | ------------------------------ |
-| Build Tool | Moon                     | Monorepo task orchestration    |
+| Build Tool | Moon v2                  | Monorepo task orchestration    |
+| Toolchain  | proto                    | Version management (bun, node) |
 | Hosting    | Wikimedia Cloud Services | Production deployment          |
 | CI/CD      | GitHub Actions           | Automated testing & deployment |
 | Monitoring | Prometheus + Grafana     | Metrics and alerting           |

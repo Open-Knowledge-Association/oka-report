@@ -216,15 +216,20 @@ Location: `apps/web/`
 ## Quick Start for Development
 
 ```bash
+# Install proto toolchain (manages bun, node versions)
+curl -fsSL https://moonrepo.dev/install/proto.sh | bash
+
+# Setup toolchain (bun 1.3.5, node 25.3.0)
+proto use
+
 # Install dependencies
 bun install
 
-# Start database (ensure PostgreSQL is running)
-cd packages/db && bun run db:migrate
+# Run tasks with moon v2
+moon run db:generate        # Generate Prisma client
+moon run api:dev            # Start API server (Hono)
+moon run web:dev            # Start frontend (TanStack Start)
 
-# Start API server
-cd apps/api && bun run dev
-
-# Start web (once implemented)
-cd apps/web && bun run dev
+# Or run all at once
+moon run :dev               # Run dev task in all projects
 ```
