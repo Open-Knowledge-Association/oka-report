@@ -73,8 +73,11 @@ The OKA Stats Platform is a comprehensive solution for tracking Wikipedia editin
 | Routing       | TanStack Router | File-based routing with type-safe navigation |
 | Data Fetching | TanStack Query  | Server state management and caching          |
 | Data Tables   | TanStack Table  | Sortable, filterable tables                  |
-| Charts        | Chart.js        | Time-series visualizations                   |
+| UI Components | shadcn/ui       | Accessible, customizable React components    |
 | Styling       | Tailwind CSS    | Utility-first CSS                            |
+| Charts        | Chart.js        | Time-series visualizations                   |
+
+> **Note**: Frontend (TanStack Start) is separate from Backend (Hono.js API). The frontend fetches data from the Hono API via REST endpoints.
 
 ### DevOps & Infrastructure
 

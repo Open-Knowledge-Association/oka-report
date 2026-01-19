@@ -130,41 +130,52 @@ Location: `apps/api/src/routes/`
 
 Location: `apps/web/`
 
-**Framework: TanStack Start** (full-stack React framework with SSR, file-based routing, and TanStack Query)
+**Stack:**
+
+- **Framework:** TanStack Start (full-stack React with SSR)
+- **Routing:** TanStack Router (file-based, type-safe)
+- **Data Fetching:** TanStack Query
+- **UI Components:** shadcn/ui (Radix UI primitives)
+- **Styling:** Tailwind CSS
+- **Tables:** TanStack Table + shadcn Table
+- **Charts:** Chart.js
+
+> **Note:** Frontend fetches data from Hono.js API (apps/api) via REST endpoints. Prisma ORM is used only on the backend.
 
 ### Setup
 
-| Task                      | Description                               | Priority |
-| ------------------------- | ----------------------------------------- | -------- |
-| Initialize TanStack Start | Frontend app with TanStack Router & Query | P1       |
-| Tailwind CSS setup        | Styling configuration for TanStack Start  | P1       |
-| Layout component          | Root layout with TanStack Router Outlet   | P1       |
+| Task                      | Description                                     | Priority |
+| ------------------------- | ----------------------------------------------- | -------- |
+| Initialize TanStack Start | Frontend app with TanStack Router & Query       | P1       |
+| Tailwind CSS setup        | Styling configuration for TanStack Start        | P1       |
+| Set up shadcn/ui          | Install components: Button, Card, Table, Dialog | P1       |
+| Layout component          | Root layout with navigation and shadcn Toaster  | P1       |
 
 ### Dashboard Page
 
 | Task                | Description                                       | Priority |
 | ------------------- | ------------------------------------------------- | -------- |
 | Dashboard page      | Main stats view with TanStack Query data fetching | P1       |
-| Stats summary cards | Edits, words, pageviews, articles cards           | P1       |
-| Stats by wiki table | TanStack Table with sorting                       | P1       |
+| Stats summary cards | shadcn Card with trend indicators                 | P1       |
+| Stats by wiki table | TanStack Table + shadcn Table styling             | P1       |
 | Time-series chart   | Line chart using Chart.js                         | P1       |
 
 ### Editor Stats Page
 
-| Task                | Description                                | Priority |
-| ------------------- | ------------------------------------------ | -------- |
-| Editors page        | Per-editor stats with TanStack Table       | P1       |
-| Date range filter   | Filter using TanStack Router search params | P1       |
-| Wiki project filter | Filter with TanStack Query integration     | P1       |
+| Task                | Description                                     | Priority |
+| ------------------- | ----------------------------------------------- | -------- |
+| Editors page        | Per-editor stats with TanStack Table            | P1       |
+| Date range filter   | shadcn Popover + Calendar, Router search params | P1       |
+| Wiki project filter | shadcn Select with TanStack Query               | P1       |
 
 ### Admin Panel
 
-| Task                   | Description                               | Priority |
-| ---------------------- | ----------------------------------------- | -------- |
-| Editor management page | CRUD with TanStack Query mutations        | P2       |
-| Add editor form        | Form with mutation and cache invalidation | P2       |
-| Bulk import form       | Import multiple editors at once           | P2       |
-| Export to CSV          | Download stats as CSV                     | P2       |
+| Task                   | Description                             | Priority |
+| ---------------------- | --------------------------------------- | -------- |
+| Editor management page | CRUD with shadcn Dialog and AlertDialog | P2       |
+| Add editor form        | shadcn Form with Zod validation         | P2       |
+| Bulk import form       | Import multiple editors at once         | P2       |
+| Export to CSV          | Download stats as CSV                   | P2       |
 
 ---
 
