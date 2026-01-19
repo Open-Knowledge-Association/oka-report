@@ -1,0 +1,31 @@
+language: typescript
+tags: ["frontend", "web"]
+
+tasks:
+  dev:
+    command: "bun run dev"
+    description: "Run TanStack Start in development mode"
+    options:
+      cache: false
+      persistent: true
+      runInCI: false
+
+  build:
+    command: "bun run build"
+    outputs:
+      - ".output"
+    description: "Build frontend for production"
+
+  preview:
+    command: "bun run preview"
+    description: "Preview production build"
+    deps:
+      - "build"
+    options:
+      cache: false
+      persistent: true
+      runInCI: false
+
+  test:
+    command: "bun run test"
+    description: "Run frontend tests with vitest"
