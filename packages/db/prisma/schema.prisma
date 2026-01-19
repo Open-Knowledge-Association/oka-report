@@ -13,11 +13,133 @@ datasource db {
   provider = "postgresql"
 }
 
+// Registered editors to track
+model Editor {
+  id              String  @id @default(cuid())
+  username        String  @unique
+  wikimediaUserId Int?
+  displayName     String?
+  isActive        Boolean @default(true)
+
+  contributions   Contribution[]
+  commonsUploads  CommonsUpload[]
+  createdArticles Article[]       @relation("CreatedArticles")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("editors")
+}
+
+// Wikipedia articles
+model Article {
+  id          String @id @default(cuid())
+  pageId      Int
+  title       String
+  wikiProject String // e.g., "en.wikipedia.org", "fr.wikipedia.org"
+
+  createdByEditor   Editor?   @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
+  createdByEditorId String?
+  articleCreatedAt  DateTime?
+
+  contributions Contribution[]
+  pageviews     Pageview[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, wikiProject])
+  @@map("articles")
+}
+
+// Individual edit contributions
+model Contribution {
+  id String @id @default(cuid())
+
+  editor   Editor @relation(fields: [editorId], references: [id])
+  editorId String
+
+  article   Article @relation(fields: [articleId], references: [id])
+  articleId String
+
+  revisionId    Int
+  parentId      Int?
+  bytesChanged  Int // Can be negative (content removed)
+  wordsAdded    Int      @default(0)
+  isCreation    Boolean  @default(false)
+  editTimestamp DateTime
+
+  createdAt DateTime @default(now())
+
+  @@unique([revisionId, articleId])
+  @@index([editorId])
+  @@index([articleId])
+  @@index([editTimestamp])
+  @@map("contributions")
+}
+
+// Daily pageview statistics
+model Pageview {
+  id String @id @default(cuid())
+
+  article   Article @relation(fields: [articleId], references: [id])
+  articleId String
+
+  date  DateTime @db.Date
+  views Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([articleId, date])
+  @@index([date])
+  @@map("pageviews")
+}
+
+// Wikimedia Commons uploads
+model CommonsUpload {
+  id String @id @default(cuid())
+
+  editor   Editor @relation(fields: [editorId], references: [id])
+  editorId String
+
+  fileName   String
+  fileUrl    String
+  fileSize   Int?
+  mimeType   String?
+  uploadedAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@unique([fileName])
+  @@index([editorId])
+  @@map("commons_uploads")
+}
+
+// Sync job tracking
+model SyncJob {
+  id          String    @id @default(cuid())
+  jobType     String // "contributions", "pageviews", "commons"
+  status      String // "pending", "running", "completed", "failed"
+  startedAt   DateTime?
+  completedAt DateTime?
+  error       String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+  @@index([jobType])
+  @@map("sync_jobs")
+}
+
+// Application users (admin access)
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
+  id       String  @id @default(cuid())
+  email    String  @unique
+  name     String?
+  password String
+  role     String  @default("viewer") // "admin", "editor", "viewer"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

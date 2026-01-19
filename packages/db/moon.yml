@@ -13,6 +13,16 @@ tasks:
         - "/.env"
         - ".env"
 
+  migrate:
+    command: "bun prisma migrate dev"
+    description: "Run database migrations"
+    options:
+      cache: false
+      interactive: true
+      envFile:
+        - "/.env"
+        - ".env"
+
   push:
     command: "bun prisma db push"
     description: "Push schema changes to database"
