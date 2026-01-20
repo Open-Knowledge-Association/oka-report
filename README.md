@@ -229,6 +229,8 @@ The platform integrates with official Wikimedia APIs:
 | **Pageviews API**        | `https://wikimedia.org/api/rest_v1`       | Article view statistics        |
 | **Commons API**          | `https://commons.wikimedia.org/w/api.php` | Media upload tracking          |
 
+> **⚠️ User-Agent Policy**: All API requests MUST include a custom User-Agent header for higher rate limits (200 req/s vs 50 req/s). See [HIGH_LEVEL_DESIGN.md](docs/HIGH_LEVEL_DESIGN.md#31-mediawiki-action-api) for details.
+
 ### Example API Calls
 
 ```bash
@@ -266,13 +268,25 @@ The platform uses PostgreSQL with Prisma ORM. Key entities:
 
 ### Editors Management
 
-| Method | Endpoint           | Description                 |
-| ------ | ------------------ | --------------------------- |
-| GET    | `/api/editors`     | List all registered editors |
-| POST   | `/api/editors`     | Register a new editor       |
-| DELETE | `/api/editors/:id` | Remove editor from tracking |
+| Method | Endpoint            | Description                 |
+| ------ | ------------------- | --------------------------- |
+| GET    | `/api/editors`      | List all registered editors |
+| POST   | `/api/editors`      | Register a new editor       |
+| POST   | `/api/editors/bulk` | Bulk import editors (CSV)   |
+| DELETE | `/api/editors/:id`  | Remove editor from tracking |
+
+> **Editor Sources**: Editors can be added manually via UI, bulk imported via CSV, or synced from external sources (future). See [HIGH_LEVEL_DESIGN.md](docs/HIGH_LEVEL_DESIGN.md#9-editor-management) for the hybrid approach.
 
 > 📖 See [docs/HIGH_LEVEL_DESIGN.md](docs/HIGH_LEVEL_DESIGN.md#6-api-design) for full API documentation.
+
+## Known Limitations
+
+- **Pageviews**: Data delayed ~24 hours, history available from July 2015 only
+- **Word Count**: Estimated from bytes changed (`bytes / 6`), not exact
+- **Rate Limits**: 200 req/s with proper User-Agent header
+- **Scope**: Wikipedia + Commons only (Wiktionary, Wikibooks not yet supported)
+
+> 📖 See [docs/HIGH_LEVEL_DESIGN.md](docs/HIGH_LEVEL_DESIGN.md#12-limitations--constraints) for detailed limitations.
 
 ## Design Principles
 
