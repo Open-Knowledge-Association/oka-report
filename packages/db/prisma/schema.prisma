@@ -13,13 +13,34 @@ datasource db {
   provider = "postgresql"
 }
 
-// Registered editors to track
+/// Registered Wikipedia editors to track
+/// These are OKA members, grantees, or other editors whose contributions we monitor
 model Editor {
-  id              String  @id @default(cuid())
-  username        String  @unique
+  id String @id @default(cuid())
+
+  /// Wikipedia username (case-sensitive, must match exactly)
+  /// Format: Underscores for spaces (e.g., "Jimbo_Wales" not "Jimbo Wales")
+  /// Example: "Jimbo_Wales", "Example_User_123"
+  username String @unique
+
+  /// Wikimedia global user ID (optional, for future cross-wiki tracking)
+  /// Example: 12345678
   wikimediaUserId Int?
-  displayName     String?
-  isActive        Boolean @default(true)
+
+  /// Whether this editor is actively being tracked
+  /// Set to false to pause syncing without deleting historical data
+  /// Example: true (active), false (paused)
+  isActive Boolean @default(true)
+
+  /// Source of this editor record for audit trail
+  /// Values: "manual" (added via UI), "csv_import" (bulk import), 
+  ///         "outreach_dashboard" (future), "wiki_category" (future)
+  /// Example: "manual"
+  source String @default("manual")
+
+  /// External ID from source system (for sync deduplication)
+  /// Example: Outreach Dashboard participant ID "12345"
+  externalId String?
 
   contributions   Contribution[]
   commonsUploads  CommonsUpload[]
@@ -31,16 +52,33 @@ model Editor {
   @@map("editors")
 }
 
-// Wikipedia articles
+/// Wikipedia articles created or modified by tracked editors
 model Article {
-  id          String @id @default(cuid())
-  pageId      Int
-  title       String
-  wikiProject String // e.g., "en.wikipedia.org", "fr.wikipedia.org"
+  id String @id @default(cuid())
 
+  /// MediaWiki page ID (unique within each wiki project)
+  /// Example: 12345678
+  pageId Int
+
+  /// Article title as it appears in the URL (with underscores)
+  /// Format: "Article_Title" not "Article Title"
+  /// Example: "Borobudur_Temple", "Komodo_dragon"
+  title String
+
+  /// Wikipedia language/project code
+  /// Format: "{lang}.wikipedia.org" 
+  /// Example: "en.wikipedia.org", "id.wikipedia.org", "commons.wikimedia.org"
+  wikiProject String
+
+  /// Reference to the tracked editor who created this article (if any)
+  /// Null if article was created by a non-tracked editor
   createdByEditor   Editor?   @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
   createdByEditorId String?
-  articleCreatedAt  DateTime?
+
+  /// When this article was first created on Wikipedia
+  /// Fetched from MediaWiki API (first revision timestamp)
+  /// Example: "2024-03-15T10:30:00Z"
+  articleCreatedAt DateTime?
 
   contributions Contribution[]
   pageviews     Pageview[]
@@ -52,7 +90,7 @@ model Article {
   @@map("articles")
 }
 
-// Individual edit contributions
+/// Individual edit/contribution made by a tracked editor
 model Contribution {
   id String @id @default(cuid())
 
@@ -62,11 +100,31 @@ model Contribution {
   article   Article @relation(fields: [articleId], references: [id])
   articleId String
 
-  revisionId    Int
-  parentId      Int?
-  bytesChanged  Int // Can be negative (content removed)
-  wordsAdded    Int      @default(0)
-  isCreation    Boolean  @default(false)
+  /// MediaWiki revision ID (unique identifier for this edit)
+  /// Example: 1234567890
+  revisionId Int
+
+  /// Parent revision ID (the revision this edit was based on)
+  /// Null for the first revision (article creation)
+  /// Example: 1234567889
+  parentId Int?
+
+  /// Net bytes changed in this edit (positive = added, negative = removed)
+  /// Example: 1500 (added 1.5KB), -200 (removed 200 bytes)
+  bytesChanged Int
+
+  /// Estimated words added (calculated as bytesChanged / 6)
+  /// Based on Wikimedia's standard estimation methodology
+  /// Example: 250 (approximately 250 words added)
+  wordsAdded Int @default(0)
+
+  /// Whether this edit created the article (first revision)
+  /// True only for the initial creation edit
+  /// Example: true (article creation), false (subsequent edit)
+  isCreation Boolean @default(false)
+
+  /// Timestamp of when this edit was made on Wikipedia
+  /// Example: "2026-01-15T10:30:00Z"
   editTimestamp DateTime
 
   createdAt DateTime @default(now())
@@ -78,14 +136,22 @@ model Contribution {
   @@map("contributions")
 }
 
-// Daily pageview statistics
+/// Daily pageview statistics for tracked articles
+/// Only tracks articles CREATED by tracked editors (per PRD requirement)
 model Pageview {
   id String @id @default(cuid())
 
   article   Article @relation(fields: [articleId], references: [id])
   articleId String
 
-  date  DateTime @db.Date
+  /// Date for this pageview count (daily granularity)
+  /// Format: Date only, no time component
+  /// Example: "2026-01-15"
+  date DateTime @db.Date
+
+  /// Number of pageviews on this date
+  /// Source: Wikimedia Pageviews API (user traffic only, excludes bots)
+  /// Example: 1523
   views Int
 
   createdAt DateTime @default(now())
@@ -95,17 +161,32 @@ model Pageview {
   @@map("pageviews")
 }
 
-// Wikimedia Commons uploads
+/// Wikimedia Commons file uploads by tracked editors
 model CommonsUpload {
   id String @id @default(cuid())
 
   editor   Editor @relation(fields: [editorId], references: [id])
   editorId String
 
-  fileName   String
-  fileUrl    String
-  fileSize   Int?
-  mimeType   String?
+  /// Filename on Commons (without "File:" namespace prefix)
+  /// Format: Exact filename with extension
+  /// Example: "Borobudur_sunrise_2024.jpg"
+  fileName String
+
+  /// Full URL to the file on Commons
+  /// Example: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Borobudur_sunrise_2024.jpg"
+  fileUrl String
+
+  /// File size in bytes
+  /// Example: 2500000 (2.5 MB)
+  fileSize Int?
+
+  /// MIME type of the uploaded file
+  /// Example: "image/jpeg", "image/png", "video/webm", "application/pdf"
+  mimeType String?
+
+  /// When the file was uploaded to Commons
+  /// Example: "2026-01-15T10:30:00Z"
   uploadedAt DateTime
 
   createdAt DateTime @default(now())
@@ -115,15 +196,34 @@ model CommonsUpload {
   @@map("commons_uploads")
 }
 
-// Sync job tracking
+/// Background sync job tracking for monitoring and debugging
 model SyncJob {
-  id          String    @id @default(cuid())
-  jobType     String // "contributions", "pageviews", "commons"
-  status      String // "pending", "running", "completed", "failed"
-  startedAt   DateTime?
+  id String @id @default(cuid())
+
+  /// Type of sync operation
+  /// Values: "full" (all data), "contributions", "pageviews", "commons", "editors"
+  /// Example: "full"
+  jobType String
+
+  /// Current status of the job
+  /// Values: "pending", "running", "completed", "failed"
+  /// Example: "running"
+  status String
+
+  /// When the job started execution
+  /// Null if still pending
+  startedAt DateTime?
+
+  /// When the job finished (success or failure)
   completedAt DateTime?
-  error       String?
-  metadata    Json?
+
+  /// Error message if job failed
+  /// Example: "Rate limited by Wikimedia API after 1000 requests"
+  error String?
+
+  /// Job statistics and metadata as JSON
+  /// Example: {"editorsProcessed": 50, "contributionsSynced": 1234, "errors": 2}
+  metadata Json?
 
   createdAt DateTime @default(now())
 
@@ -132,13 +232,27 @@ model SyncJob {
   @@map("sync_jobs")
 }
 
-// Application users (admin access)
+/// Application users for admin access
+/// Dashboard is publicly viewable; auth required for admin functions
 model User {
-  id       String  @id @default(cuid())
-  email    String  @unique
-  name     String?
+  id String @id @default(cuid())
+
+  /// User email (used for login)
+  /// Example: "admin@oka.org"
+  email String @unique
+
+  /// User's display name
+  /// Example: "Admin User"
+  name String?
+
+  /// Hashed password (bcrypt)
+  /// Never store plain text passwords
   password String
-  role     String  @default("viewer") // "admin", "editor", "viewer"
+
+  /// User role for access control
+  /// Values: "admin" (full access), "viewer" (read-only)
+  /// Example: "admin"
+  role String @default("viewer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
