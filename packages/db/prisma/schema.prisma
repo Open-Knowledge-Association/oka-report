@@ -72,7 +72,7 @@ model Article {
 
   /// Reference to the tracked editor who created this article (if any)
   /// Null if article was created by a non-tracked editor
-  createdByEditor   Editor?   @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
+  createdByEditor   Editor? @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
   createdByEditorId String?
 
   /// When this article was first created on Wikipedia
@@ -238,7 +238,7 @@ model User {
   id String @id @default(cuid())
 
   /// User email (used for login)
-  /// Example: "admin@oka.org"
+  /// Example: "admin@oka.wiki"
   email String @unique
 
   /// User's display name
