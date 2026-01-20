@@ -113,7 +113,7 @@ We **MUST** include a custom User-Agent header on all requests. This is required
 ```typescript
 // REQUIRED: Custom User-Agent for all Wikimedia API requests
 const USER_AGENT =
-  "OKAStatsBot/1.0 (https://oka.or.id/stats; tech@oka.or.id) bun/1.3.5";
+  "OKAStatsBot/1.0 (https://oka.wiki/stats; tech@oka.wiki) bun/1.3.5";
 
 const headers = {
   "User-Agent": USER_AGENT,
@@ -695,7 +695,7 @@ User                    API                     Database              Wikimedia
 │                    │                         │                              │
 │                    │  Email                  │                              │
 │                    │  ┌─────────────────┐    │                              │
-│                    │  │ admin@oka.or.id │    │                              │
+│                    │  │ admin@oka.wiki │    │                              │
 │                    │  └─────────────────┘    │                              │
 │                    │                         │                              │
 │                    │  Password               │                              │
@@ -816,7 +816,7 @@ DATABASE_URL="postgresql://user:pass@db-host:5432/oka_stats"
 NODE_ENV="production"
 
 # Wikimedia API (REQUIRED)
-WIKIMEDIA_USER_AGENT="OKAStatsBot/1.0 (https://oka.or.id/stats; tech@oka.or.id) bun/1.3.5"
+WIKIMEDIA_USER_AGENT="OKAStatsBot/1.0 (https://oka.wiki/stats; tech@oka.wiki) bun/1.3.5"
 
 # Sync Configuration
 SYNC_SCHEDULE="0 2 * * *"  # Daily at 2 AM UTC
