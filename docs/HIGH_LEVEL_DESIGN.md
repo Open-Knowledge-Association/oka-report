@@ -1,6 +1,6 @@
 # OKA Stats Platform - High-Level Design Document
 
-> 📋 **Product Requirements Document**: See [README.md](../README.md) for project overview and requirements.
+> 📋 **Product Requirements Document**: See [PRD Doc](https://docs.google.com/document/d/1E_9ZE0Kc_fP05CBsUGHtwdhETrNZVDy_ee7ug_q0UKY/edit?tab=t.0#heading=h.4wbw0bxdr2eg) for project overview and requirements.
 
 ## Table of Contents
 
