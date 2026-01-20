@@ -1,5 +1,7 @@
 # OKA Stats Platform - High-Level Design Document
 
+> 📋 **Product Requirements Document**: See [README.md](../README.md) for project overview and requirements.
+
 ## Table of Contents
 
 - [1. System Overview](#1-system-overview)
@@ -10,8 +12,10 @@
 - [6. API Design](#6-api-design)
 - [7. Data Flow](#7-data-flow)
 - [8. UI Mockups](#8-ui-mockups)
-- [9. Deployment Architecture](#9-deployment-architecture)
-- [10. Security Considerations](#10-security-considerations)
+- [9. Editor Management](#9-editor-management)
+- [10. Deployment Architecture](#10-deployment-architecture)
+- [11. Security Considerations](#11-security-considerations)
+- [12. Limitations & Constraints](#12-limitations--constraints)
 
 ---
 
@@ -56,38 +60,37 @@ The OKA Stats Platform is a comprehensive solution for tracking Wikipedia editin
 
 ### Backend
 
-| Component       | Technology         | Purpose                                    |
-| --------------- | ------------------ | ------------------------------------------ |
-| Runtime         | Bun                | Fast JavaScript runtime with built-in APIs |
-| API Framework   | Hono               | Lightweight, fast HTTP framework           |
-| ORM             | Prisma             | Type-safe database access                  |
-| Database        | PostgreSQL         | Relational database for structured data    |
-| Task Scheduling | node-cron / BullMQ | Background job processing                  |
-| Validation      | Zod                | Runtime type validation                    |
+| Component       | Technology | Purpose                                                                                                                                       | Alternatives Considered                                                                                                       |
+| --------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Runtime         | Bun        | Fastest JS runtime, native TypeScript support, built-in bundler reduces tooling complexity                                                    | Node.js (slower startup, requires TS compilation), Deno (smaller ecosystem)                                                   |
+| API Framework   | Hono       | Ultra-lightweight (14kb), edge-ready, excellent TypeScript support, Bun-optimized                                                             | Express (heavier, older API design), Fastify (good but less Bun-optimized), Elysia (newer, less mature)                       |
+| ORM             | Prisma     | Type-safe queries with auto-generated types, excellent migration system, visual Studio tool for debugging                                     | Drizzle (newer, less documentation), TypeORM (verbose, weaker type inference), Kysely (query builder only, no migrations)     |
+| Database        | PostgreSQL | Industry standard for relational data, excellent JSON support, available on Wikimedia Cloud Services. Required for production hosting target. | SQLite (no concurrent writes), MySQL (less feature-rich JSON support), MongoDB (document DB not ideal for relational metrics) |
+| Task Scheduling | node-cron  | Simple, reliable cron-style scheduling, sufficient for daily sync jobs                                                                        | BullMQ (overkill for our needs), Agenda (MongoDB dependency)                                                                  |
+| Validation      | Zod        | Runtime + compile-time validation, excellent TypeScript type inference, integrates seamlessly with Hono                                       | Yup (weaker TypeScript support), io-ts (steeper learning curve), Valibot (newer, smaller community)                           |
 
 ### Frontend
 
-| Component     | Technology      | Purpose                                      |
-| ------------- | --------------- | -------------------------------------------- |
-| Framework     | TanStack Start  | Full-stack React framework with SSR          |
-| Routing       | TanStack Router | File-based routing with type-safe navigation |
-| Data Fetching | TanStack Query  | Server state management and caching          |
-| Data Tables   | TanStack Table  | Sortable, filterable tables                  |
-| UI Components | shadcn/ui       | Accessible, customizable React components    |
-| Styling       | Tailwind CSS    | Utility-first CSS                            |
-| Charts        | Chart.js        | Time-series visualizations                   |
+| Component     | Technology      | Purpose                                                                                                 | Alternatives Considered                                                                                |
+| ------------- | --------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Framework     | TanStack Start  | Full-stack React with SSR, file-based routing, excellent TypeScript integration, built-in data fetching | Next.js (heavier, Vercel-focused), Remix (less type-safe routing), Vite + React (no SSR)               |
+| Routing       | TanStack Router | File-based routing with full type safety, integrated with TanStack Start                                | React Router (less type-safe), Wouter (too simple)                                                     |
+| Data Fetching | TanStack Query  | Best-in-class server state management, caching, background refetching                                   | SWR (less features), Apollo (GraphQL-focused), RTK Query (Redux dependency)                            |
+| Data Tables   | TanStack Table  | Headless, highly customizable, excellent TypeScript support, sorting/filtering built-in                 | AG Grid (heavy, commercial), React Table v7 (deprecated)                                               |
+| UI Components | shadcn/ui       | Copy-paste components (no dependency lock-in), Radix primitives for accessibility, highly customizable  | Material UI (heavy, opinionated), Chakra UI (runtime CSS-in-JS overhead), Ant Design (large bundle)    |
+| Styling       | Tailwind CSS v4 | Utility-first with tiny production bundles, CSS-native config in v4, excellent DX                       | CSS Modules (more boilerplate), Styled Components (runtime overhead), vanilla CSS (slower development) |
+| Charts        | Chart.js        | Simple API, good performance, sufficient for time-series line charts                                    | Recharts (heavier), D3 (overkill for our needs), Visx (steeper learning curve)                         |
 
 > **Note**: Frontend (TanStack Start) is separate from Backend (Hono.js API). The frontend fetches data from the Hono API via REST endpoints.
 
 ### DevOps & Infrastructure
 
-| Component  | Technology               | Purpose                        |
-| ---------- | ------------------------ | ------------------------------ |
-| Build Tool | Moon v2                  | Monorepo task orchestration    |
-| Toolchain  | proto                    | Version management (bun, node) |
-| Hosting    | Wikimedia Cloud Services | Production deployment          |
-| CI/CD      | GitHub Actions           | Automated testing & deployment |
-| Monitoring | Prometheus + Grafana     | Metrics and alerting           |
+| Component | Technology               | Purpose                                                                                    | Alternatives Considered                                                                         |
+| --------- | ------------------------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Monorepo  | Moon v2                  | Fast Rust-based task runner, intelligent caching, project-aware dependencies               | Turborepo (Vercel lock-in), Nx (complex configuration), pnpm workspaces (no task orchestration) |
+| Toolchain | proto                    | Manages runtime versions (bun, node), integrates with Moon, reproducible environments      | nvm/fnm (Node only), asdf (slower), volta (less Moon integration)                               |
+| Hosting   | Wikimedia Cloud Services | Free for Wikimedia-affiliated projects, direct infrastructure access, PostgreSQL available | Vercel (paid for backend), Railway (cost), self-hosted (maintenance burden)                     |
+| CI/CD     | GitHub Actions           | Free for open source, excellent ecosystem, easy configuration                              | GitLab CI (migration effort), CircleCI (cost for private)                                       |
 
 ---
 
@@ -98,6 +101,25 @@ The OKA Stats Platform is a comprehensive solution for tracking Wikipedia editin
 **Purpose**: Retrieve editor contributions, article metadata, and revision history.
 
 **Base URL**: `https://{lang}.wikipedia.org/w/api.php`
+
+**User-Agent Requirement** (MANDATORY):
+
+We **MUST** include a custom User-Agent header on all requests. This is required by Wikimedia API policy and provides:
+
+- Higher rate limits (200 req/s vs 50 req/s for anonymous)
+- Better support from Wikimedia operations team
+- Compliance with Wikimedia API etiquette
+
+```typescript
+// REQUIRED: Custom User-Agent for all Wikimedia API requests
+const USER_AGENT =
+  "OKAStatsBot/1.0 (https://oka.or.id/stats; tech@oka.or.id) bun/1.3.5";
+
+const headers = {
+  "User-Agent": USER_AGENT,
+  "Api-User-Agent": USER_AGENT, // Some APIs prefer this header
+};
+```
 
 **Key Endpoints**:
 
@@ -114,8 +136,11 @@ GET /w/api.php?action=query&titles={article}&prop=revisions&rvprop=user&rvlimit=
 
 **Rate Limits**:
 
-- Anonymous: 500 requests/hour
-- With User-Agent header: Higher limits available
+| Type                  | Limit     | Notes           |
+| --------------------- | --------- | --------------- |
+| Anonymous             | 50 req/s  | Not recommended |
+| With User-Agent       | 200 req/s | **We use this** |
+| Authenticated (OAuth) | 200 req/s | Future option   |
 
 **Example Response** (User Contributions):
 
@@ -141,11 +166,47 @@ GET /w/api.php?action=query&titles={article}&prop=revisions&rvprop=user&rvlimit=
 
 ### 3.2 Wikimedia Pageviews API
 
-**Purpose**: Retrieve article view statistics.
+**Purpose**: Retrieve article view statistics for time-series and total views.
 
 **Base URL**: `https://wikimedia.org/api/rest_v1`
 
-**Key Endpoints**:
+**Capabilities & Limitations**:
+
+| Feature               | Value                                       | Notes                                   |
+| --------------------- | ------------------------------------------- | --------------------------------------- |
+| **Granularity**       | Daily, Monthly                              | We use **daily** for time-series charts |
+| **History Available** | ~2.5 years                                  | Data starts from July 2015              |
+| **Max Date Range**    | 1 year per request                          | Pagination needed for longer periods    |
+| **Data Delay**        | ~24 hours                                   | Not real-time                           |
+| **Access Types**      | all-access, desktop, mobile-app, mobile-web | We use **all-access**                   |
+| **Agent Types**       | all-agents, user, spider                    | We use **user** (excludes bots)         |
+
+**Implementation for Total Views + Time-Series**:
+
+```typescript
+// Fetch daily pageviews for time-series charts
+const getDailyPageviews = async (
+  article: string,
+  project: string,
+  start: string,
+  end: string,
+) => {
+  const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/${project}/all-access/user/${encodeURIComponent(article)}/daily/${start}/${end}`;
+  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  return response.json();
+};
+
+// Calculate total views by summing daily data
+const calculateTotalViews = (items: PageviewItem[]) => {
+  return items.reduce((sum, item) => sum + item.views, 0);
+};
+
+// Store both:
+// 1. Daily snapshots → pageviews table (for time-series charts)
+// 2. Running total → calculated on-demand from daily data
+```
+
+**Key Endpoint**:
 
 ```
 # Get pageviews for an article
@@ -204,21 +265,21 @@ GET /w/api.php?action=query&list=allimages&aisort=timestamp&aiuser={username}&ai
 │      Editor       │       │   Contribution    │       │     Article       │
 ├───────────────────┤       ├───────────────────┤       ├───────────────────┤
 │ id (PK)           │       │ id (PK)           │       │ id (PK)           │
-│ username          │◀─────│ editorId (FK)     │─────▶│ pageId            │
+│ username          │◀──────│ editorId (FK)     │──────▶│ pageId            │
 │ wikimediaUserId   │       │ articleId (FK)    │       │ title             │
 │ isActive          │       │ revisionId        │       │ wikiProject       │
-│ createdAt         │       │ bytesChanged      │       │ createdByEditorId │
-│ updatedAt         │       │ wordsAdded        │       │ createdAt         │
-└───────────────────┘       │ isCreation        │       │ updatedAt         │
-         │                  │ timestamp         │       └───────────────────┘
-         │                  │ createdAt         │                │
+│ source            │       │ bytesChanged      │       │ createdByEditorId │
+│ externalId        │       │ wordsAdded        │       │ articleCreatedAt  │
+│ createdAt         │       │ isCreation        │       │ createdAt         │
+│ updatedAt         │       │ editTimestamp     │       │ updatedAt         │
+└───────────────────┘       │ createdAt         │       └───────────────────┘
          │                  └───────────────────┘                │
          │                                                       │
          │                  ┌───────────────────┐                │
          │                  │    Pageview       │                │
          │                  ├───────────────────┤                │
          │                  │ id (PK)           │                │
-         │                  │ articleId (FK)    │◀──────────────┘
+         │                  │ articleId (FK)    │◀───────────────┘
          │                  │ date              │
          │                  │ views             │
          │                  │ createdAt         │
@@ -227,152 +288,40 @@ GET /w/api.php?action=query&list=allimages&aisort=timestamp&aiuser={username}&ai
          │                  ┌───────────────────┐
          │                  │   CommonsUpload   │
          │                  ├───────────────────┤
-         └────────────────▶│ id (PK)           │
+         └─────────────────▶│ id (PK)           │
                             │ editorId (FK)     │
                             │ fileName          │
                             │ fileUrl           │
                             │ fileSize          │
+                            │ mimeType          │
                             │ uploadedAt        │
                             │ createdAt         │
                             └───────────────────┘
+
+┌───────────────────┐       ┌───────────────────┐
+│     SyncJob       │       │       User        │
+├───────────────────┤       ├───────────────────┤
+│ id (PK)           │       │ id (PK)           │
+│ jobType           │       │ email             │
+│ status            │       │ name              │
+│ startedAt         │       │ password (hashed) │
+│ completedAt       │       │ role              │
+│ error             │       │ createdAt         │
+│ metadata (JSON)   │       │ updatedAt         │
+│ createdAt         │       └───────────────────┘
+└───────────────────┘
 ```
 
-### 4.2 Proposed Prisma Schema
+### 4.2 Prisma Schema
 
-```prisma
-// Registered editors to track
-model Editor {
-  id              String         @id @default(cuid())
-  username        String         @unique
-  wikimediaUserId Int?
-  displayName     String?
-  isActive        Boolean        @default(true)
+See [packages/db/prisma/schema.prisma](../packages/db/prisma/schema.prisma) for the complete annotated schema with field definitions and example values.
 
-  contributions   Contribution[]
-  commonsUploads  CommonsUpload[]
-  createdArticles Article[]      @relation("CreatedArticles")
+Key design decisions:
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  @@map("editors")
-}
-
-// Wikipedia articles
-model Article {
-  id              String         @id @default(cuid())
-  pageId          Int
-  title           String
-  wikiProject     String         // e.g., "en.wikipedia.org", "fr.wikipedia.org"
-
-  createdByEditor   Editor?      @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
-  createdByEditorId String?
-  articleCreatedAt  DateTime?
-
-  contributions   Contribution[]
-  pageviews       Pageview[]
-
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  @@unique([pageId, wikiProject])
-  @@map("articles")
-}
-
-// Individual edit contributions
-model Contribution {
-  id            String   @id @default(cuid())
-
-  editor        Editor   @relation(fields: [editorId], references: [id])
-  editorId      String
-
-  article       Article  @relation(fields: [articleId], references: [id])
-  articleId     String
-
-  revisionId    Int
-  parentId      Int?
-  bytesChanged  Int      // Can be negative (content removed)
-  wordsAdded    Int      @default(0)
-  isCreation    Boolean  @default(false)
-  editTimestamp DateTime
-
-  createdAt     DateTime @default(now())
-
-  @@unique([revisionId, articleId])
-  @@index([editorId])
-  @@index([articleId])
-  @@index([editTimestamp])
-  @@map("contributions")
-}
-
-// Daily pageview statistics
-model Pageview {
-  id        String   @id @default(cuid())
-
-  article   Article  @relation(fields: [articleId], references: [id])
-  articleId String
-
-  date      DateTime @db.Date
-  views     Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([articleId, date])
-  @@index([date])
-  @@map("pageviews")
-}
-
-// Wikimedia Commons uploads
-model CommonsUpload {
-  id         String   @id @default(cuid())
-
-  editor     Editor   @relation(fields: [editorId], references: [id])
-  editorId   String
-
-  fileName   String
-  fileUrl    String
-  fileSize   Int?
-  mimeType   String?
-  uploadedAt DateTime
-
-  createdAt  DateTime @default(now())
-
-  @@unique([fileName])
-  @@index([editorId])
-  @@map("commons_uploads")
-}
-
-// Sync job tracking
-model SyncJob {
-  id          String    @id @default(cuid())
-  jobType     String    // "contributions", "pageviews", "commons"
-  status      String    // "pending", "running", "completed", "failed"
-  startedAt   DateTime?
-  completedAt DateTime?
-  error       String?
-  metadata    Json?
-
-  createdAt   DateTime  @default(now())
-
-  @@index([status])
-  @@index([jobType])
-  @@map("sync_jobs")
-}
-
-// Application users (admin access)
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
-  role      String   @default("viewer") // "admin", "editor", "viewer"
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("users")
-}
-```
+- **No displayName field**: Removed per reviewer feedback - Wikipedia only shows public usernames
+- **source field on Editor**: Tracks origin (manual, csv_import, outreach_dashboard) for audit trail
+- **Daily pageviews**: Stored individually for time-series, totals calculated on-demand
+- **Words estimated from bytes**: `wordsAdded = bytesChanged / 6` per Wikimedia methodology
 
 ### 4.3 Indexes and Performance
 
@@ -715,36 +664,119 @@ User                    API                     Database              Wikimedia
 │  OKA Stats Platform  >  Admin  >  Editors               [+ Add Editor]      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Registered Editors                                                         │
-│  ┌──────────────────┬──────────────────┬────────────┬────────┬───────────┐  │
-│  │ Username         │ Display Name     │ Registered │ Status │ Actions   │  │
-│  ├──────────────────┼──────────────────┼────────────┼────────┼───────────┤  │
-│  │ WikiEditor2024   │ John Doe         │ 2025-03-15 │ Active │ [✏️] [🗑️] │  │
-│  │ KnowledgeSeeker  │ Jane Smith       │ 2025-04-20 │ Active │ [✏️] [🗑️] │  │
-│  │ ArticleCrafter   │ Bob Johnson      │ 2025-06-01 │ Active │ [✏️] [🗑️] │  │
-│  └──────────────────┴──────────────────┴────────────┴────────┴───────────┘  │
+│  [+ Add Editor]  [📥 Import CSV]  [🔄 Sync Now]                             │
 │                                                                             │
-├─────────────────────────────────────────────────────────────────────────────┤
+│  Registered Editors (47)                              [Search... 🔍]        │
+│  ┌──────────────────┬─────────────────┬──────────┬────────┬─────────────┐   │
+│  │ Username         │ Wiki Projects   │ Source   │ Status │ Actions     │   │
+│  ├──────────────────┼─────────────────┼──────────┼────────┼─────────────┤   │
+│  │ Jimbo_Wales      │ en, id, jv      │ manual   │ Active │ [✏️] [🗑️]  │   │
+│  │ Example_User     │ id, su          │ csv      │ Active │ [✏️] [🗑️]  │   │
+│  │ Another_Editor   │ en              │ manual   │ Active │ [✏️] [🗑️]  │   │
+│  │ ...              │                 │          │        │             │   │
+│  └──────────────────┴─────────────────┴──────────┴────────┴─────────────┘   │
 │                                                                             │
-│  📥 Bulk Import                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Paste usernames (one per line):                                    │    │
-│  │  ┌───────────────────────────────────────────────────────────────┐  │    │
-│  │  │ WikiUser1                                                     │  │    │
-│  │  │ WikiUser2                                                     │  │    │
-│  │  │ WikiUser3                                                     │  │    │
-│  │  └───────────────────────────────────────────────────────────────┘  │    │
-│  │                                                        [Import]     │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
+│  [< Prev]  Page 1 of 5  [Next >]                                           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 8.4 Sign In Page
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│                                                                             │
+│                         OKA Stats Platform                                  │
+│                                                                             │
+│                    ┌─────────────────────────┐                              │
+│                    │                         │                              │
+│                    │      🔐 Admin Login     │                              │
+│                    │                         │                              │
+│                    │  Email                  │                              │
+│                    │  ┌─────────────────┐   │                              │
+│                    │  │ admin@oka.or.id │   │                              │
+│                    │  └─────────────────┘   │                              │
+│                    │                         │                              │
+│                    │  Password               │                              │
+│                    │  ┌─────────────────┐   │                              │
+│                    │  │ ••••••••••••••  │   │                              │
+│                    │  └─────────────────┘   │                              │
+│                    │                         │                              │
+│                    │  ┌─────────────────┐   │                              │
+│                    │  │    Sign In      │   │                              │
+│                    │  └─────────────────┘   │                              │
+│                    │                         │                              │
+│                    └─────────────────────────┘                              │
+│                                                                             │
+│              📊 Dashboard is publicly viewable                              │
+│              🔒 Sign in required for admin functions                        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 9. Deployment Architecture
+## 9. Editor Management
 
-### 9.1 Wikimedia Cloud Services Deployment
+### 9.1 Hybrid Approach
+
+The platform supports multiple sources for registering editors:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Editor Sources                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────────┐                                           │
+│  │ 1. Manual Add    │──┐                                        │
+│  │    (Admin UI)    │  │                                        │
+│  └──────────────────┘  │                                        │
+│                        │    ┌─────────────────┐                 │
+│  ┌──────────────────┐  │    │                 │                 │
+│  │ 2. CSV Import    │──┼───▶│  editors table  │                 │
+│  │    (Bulk upload) │  │    │  (PostgreSQL)   │                 │
+│  └──────────────────┘  │    │                 │                 │
+│                        │    └─────────────────┘                 │
+│  ┌──────────────────┐  │                                        │
+│  │ 3. API Sync      │──┘                                        │
+│  │    (Future)      │                                           │
+│  └──────────────────┘                                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 Source Types
+
+| Source                 | Status    | Use Case                                           |
+| ---------------------- | --------- | -------------------------------------------------- |
+| **Manual Add**         | ✅ MVP    | Add individual editors via Admin UI                |
+| **CSV Import**         | ✅ MVP    | Initial migration from Google Sheets, bulk updates |
+| **Outreach Dashboard** | 🔮 Future | Sync from existing Wikimedia campaigns             |
+| **Wiki Category**      | 🔮 Future | Sync from "Category:OKA_editors" page              |
+
+### 9.3 CSV Import Format
+
+```csv
+username
+Jimbo_Wales
+Example_User
+Another_Editor
+```
+
+### 9.4 Deduplication
+
+Editors are deduplicated by `username`. When importing:
+
+- Existing editors are updated (wiki projects merged)
+- New editors are created
+- `source` field tracks origin for audit
+
+---
+
+## 10. Deployment Architecture
+
+### 10.1 Wikimedia Cloud Services Deployment
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -776,44 +808,88 @@ User                    API                     Database              Wikimedia
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 9.2 Environment Configuration
+### 10.2 Environment Configuration
 
 ```bash
 # Production Environment Variables
 DATABASE_URL="postgresql://user:pass@db-host:5432/oka_stats"
 NODE_ENV="production"
-API_BASE_URL="hhttps://outreachdashboard.wmflabs.org/courses/OKA/OKA/"
-WIKIMEDIA_USER_AGENT="OKA-Stats/1.0 (https://oka.wiki; contact@oka.wiki)"
+
+# Wikimedia API (REQUIRED)
+WIKIMEDIA_USER_AGENT="OKAStatsBot/1.0 (https://oka.or.id/stats; tech@oka.or.id) bun/1.3.5"
+
+# Sync Configuration
 SYNC_SCHEDULE="0 2 * * *"  # Daily at 2 AM UTC
+
+# Authentication
+JWT_SECRET="your-secure-secret-here"
 ```
 
 ---
 
-## 10. Security Considerations
+## 11. Security Considerations
 
-### 10.1 Authentication & Authorization
+### 11.1 Authentication & Authorization
 
-- Admin panel protected with JWT-based authentication
-- Role-based access control (Admin, Editor, Viewer)
-- API rate limiting to prevent abuse
+- **Public access**: Dashboard and stats endpoints are publicly viewable
+- **Admin access**: Editor management, sync triggers require authentication
+- **JWT-based auth**: Stateless tokens for API authentication
+- **Role-based access**: Admin (full), Viewer (read-only)
 
-### 10.2 Data Protection
+### 11.2 Data Protection
 
 - No personally identifiable information stored beyond Wikipedia usernames (public data)
 - Database connections encrypted via TLS
+- Passwords hashed with bcrypt
 - Environment variables for sensitive configuration
 
-### 10.3 API Security
+### 11.3 API Security
 
 - Input validation using Zod schemas
 - SQL injection prevention via Prisma ORM
 - CORS configuration for frontend origin only
+- Rate limiting on authentication endpoints
 
-### 10.4 Wikimedia API Compliance
+### 11.4 Wikimedia API Compliance
 
-- Proper User-Agent header as per Wikimedia guidelines
+- **REQUIRED**: Custom User-Agent header on all requests
 - Respect rate limits with exponential backoff
 - Cache responses where appropriate
+- No scraping or circumventing API limits
+
+---
+
+## 12. Limitations & Constraints
+
+### 12.1 Wikimedia API Limitations
+
+| Limitation                                  | Impact                         | Mitigation                                                   |
+| ------------------------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| **Pageview history from July 2015 only**    | No historical data before 2015 | Show "N/A" for older articles, document in UI                |
+| **Pageviews delayed ~24 hours**             | No real-time stats             | Display "as of yesterday" disclaimer                         |
+| **Rate limits (200 req/s with User-Agent)** | Large syncs take time          | Background processing, chunked requests, exponential backoff |
+| **No word count API**                       | Must estimate from bytes       | Use Wikimedia standard: `bytes / 6 ≈ words`                  |
+| **Article renames**                         | Pageview history may be split  | Track redirects where possible                               |
+| **Deleted articles**                        | No pageview data available     | Mark as deleted, preserve historical contribution data       |
+
+### 12.2 Data Accuracy Limitations
+
+| Limitation                      | Impact                                         | Mitigation                               |
+| ------------------------------- | ---------------------------------------------- | ---------------------------------------- |
+| **Bytes ≠ Words**               | Word count is approximation                    | Label as "estimated words" in UI         |
+| **No edit quality metric**      | Cannot distinguish good vs. reverted edits     | Future: track reverts separately         |
+| **Commons username may differ** | Some editors use different username on Commons | Future: allow mapping in editor settings |
+
+### 12.3 Features Explicitly Not Supported (MVP)
+
+| Feature                       | Status     | Notes                                                                              |
+| ----------------------------- | ---------- | ---------------------------------------------------------------------------------- |
+| Real-time statistics          | ❌         | Wikimedia APIs have inherent 24-hour delay                                         |
+| Edit quality scoring          | ❌         | Would require ML/complex analysis                                                  |
+| All Wikimedia sister projects | ⚠️ Partial | Wikipedia + Commons supported; Wiktionary, Wikibooks, etc. require additional work |
+| Public editor profiles        | ❌         | Privacy considerations; dashboard is aggregate only                                |
+| Email notifications           | ❌         | Out of scope for MVP                                                               |
+| Mobile app                    | ❌         | Web responsive design is sufficient                                                |
 
 ---
 
@@ -821,36 +897,36 @@ SYNC_SCHEDULE="0 2 * * *"  # Daily at 2 AM UTC
 
 Initial supported projects (can be expanded):
 
-| Code | Project              |
-| ---- | -------------------- |
-| en   | English Wikipedia    |
-| fr   | French Wikipedia     |
-| de   | German Wikipedia     |
-| es   | Spanish Wikipedia    |
-| it   | Italian Wikipedia    |
-| pt   | Portuguese Wikipedia |
-| ru   | Russian Wikipedia    |
-| ja   | Japanese Wikipedia   |
-| zh   | Chinese Wikipedia    |
-| ar   | Arabic Wikipedia     |
+| Code    | Project              |
+| ------- | -------------------- |
+| en      | English Wikipedia    |
+| id      | Indonesian Wikipedia |
+| jv      | Javanese Wikipedia   |
+| su      | Sundanese Wikipedia  |
+| ms      | Malay Wikipedia      |
+| commons | Wikimedia Commons    |
 
 ---
 
 ## Appendix B: Words Added Calculation
 
-The "words added" metric follows the methodology used by the Wikimedia Outreach Dashboard:
+The "words added" metric follows Wikimedia's methodology:
 
-1. Fetch revision diff (before/after content)
-2. Strip wikitext markup
-3. Count words in added content (not removed)
-4. Aggregate by editor/article/date
+```typescript
+// Simple estimation (used in sync)
+const estimatedWords = Math.round(bytesChanged / 6);
 
-Alternative: Use bytes changed (`sizediff` from API) if word counting proves too resource-intensive.
+// More accurate (future enhancement)
+// 1. Fetch revision diff
+// 2. Strip wikitext markup
+// 3. Count actual words in added content
+```
 
 ---
 
 ## Document History
 
-| Version | Date       | Author | Changes       |
-| ------- | ---------- | ------ | ------------- |
-| 1.0     | 2026-01-19 | Team   | Initial draft |
+| Version | Date       | Author | Changes                                                                                                                                                                                                          |
+| ------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-01-19 | Team   | Initial draft                                                                                                                                                                                                    |
+| 1.1     | 2026-01-20 | Team   | Added technology rationale, User-Agent requirements, Pageviews API details, Editor management hybrid approach, Sign-in UI mock, Limitations section. Removed displayName field. Updated Prisma schema reference. |
