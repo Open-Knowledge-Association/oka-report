@@ -41,6 +41,7 @@ editorsRoutes.post("/", async (c) => {
   const editor = await prisma.editor.create({
     data: {
       username: body.username,
+      source: body.source ?? "manual",
     },
   });
 
@@ -120,7 +121,7 @@ editorsRoutes.post("/bulk", async (c) => {
       }
 
       await prisma.editor.create({
-        data: { username },
+        data: { username, source: "csv_import" },
       });
 
       results.created++;

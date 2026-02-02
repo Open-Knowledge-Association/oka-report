@@ -3,6 +3,7 @@ import { z } from "zod";
 export const CreateEditorSchema = z.object({
   username: z.string().min(1),
   displayName: z.string().min(1).optional(),
+  source: z.enum(["manual", "csv_import", "outreach_dashboard", "wiki_category"]).optional(),
 });
 
 export const BulkCreateEditorSchema = z.object({
