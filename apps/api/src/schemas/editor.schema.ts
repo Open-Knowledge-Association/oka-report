@@ -5,6 +5,10 @@ export const CreateEditorSchema = z.object({
   displayName: z.string().min(1).optional(),
 });
 
+export const BulkCreateEditorSchema = z.object({
+  usernames: z.array(z.string().min(1)).min(1),
+});
+
 export const UpdateEditorSchema = z.object({
   displayName: z.string().min(1).optional(),
   isActive: z.boolean().optional(),

@@ -43,13 +43,14 @@ export const createEditor = (data: { username: string }) =>
     body: JSON.stringify(data),
   });
 
-export const bulkImportEditors = async (usernames: string[]) => {
-  const results = await Promise.allSettled(
-    usernames.map((username) => createEditor({ username }))
-  );
-  const failed = results.filter((r) => r.status === "rejected");
-  if (failed.length > 0) {
-    console.warn(`${failed.length} editors failed to import`);
-  }
-  return results;
-};
+export const bulkImportEditors = (usernames: string[]) =>
+  apiFetch<{ created: number; skipped: number; errors: number; details: Array<{ username: string; status: string; error?: string }> }>("/editors/bulk", {
+    method: "POST",
+    body: JSON.stringify({ usernames }),
+  });
+
+export const fetchOverallStats = () =>
+  apiFetch<{ totals: { editorsCount: number; articlesCreated: number; edits: number; pageviews: number }; byWikiProject: Array<{ wikiProject: string; edits: number; articlesCreated: number; pageviews: number }> }>("/stats/overall");
+
+export const fetchEditorStats = () =>
+  apiFetch<Array<{ editorId: string; username: string; edits: number; articlesCreated: number; articlesModified: number; pageviews: number }>>("/stats/editors");

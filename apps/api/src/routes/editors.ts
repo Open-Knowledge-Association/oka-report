@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import {
+  BulkCreateEditorSchema,
   CreateEditorSchema,
   EditorQuerySchema,
   UpdateEditorSchema,
@@ -94,4 +95,45 @@ editorsRoutes.delete("/:id", async (c) => {
   });
 
   return c.body(null, 204);
+});
+
+editorsRoutes.post("/bulk", async (c) => {
+  const body = BulkCreateEditorSchema.parse(await c.req.json());
+
+  const results = {
+    created: 0,
+    skipped: 0,
+    errors: 0,
+    details: [] as Array<{ username: string; status: string; error?: string }>,
+  };
+
+  for (const username of body.usernames) {
+    try {
+      const existing = await prisma.editor.findUnique({
+        where: { username },
+      });
+
+      if (existing) {
+        results.skipped++;
+        results.details.push({ username, status: "skipped" });
+        continue;
+      }
+
+      await prisma.editor.create({
+        data: { username },
+      });
+
+      results.created++;
+      results.details.push({ username, status: "created" });
+    } catch (error) {
+      results.errors++;
+      results.details.push({
+        username,
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  return c.json({ success: true, data: results }, 201);
 });

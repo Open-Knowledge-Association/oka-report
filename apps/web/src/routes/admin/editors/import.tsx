@@ -17,7 +17,13 @@ function BulkImportPage() {
   const [usernames, setUsernames] = useState("");
 
   const mutation = useMutation({
-    mutationFn: bulkImportEditors,
+    mutationFn: () => {
+      const list = usernames
+        .split("\n")
+        .map((u) => u.trim())
+        .filter((u) => u.length > 0);
+      return bulkImportEditors(list);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["editors"] });
       navigate({ to: "/admin/editors" });
@@ -26,14 +32,7 @@ function BulkImportPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const list = usernames
-      .split("\n")
-      .map((u) => u.trim())
-      .filter((u) => u.length > 0);
-
-    if (list.length > 0) {
-      mutation.mutate(list);
-    }
+    mutation.mutate();
   };
 
   return (

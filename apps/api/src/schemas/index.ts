@@ -4,6 +4,7 @@ export {
 } from "./common.schema";
 export {
   CreateEditorSchema,
+  BulkCreateEditorSchema,
   UpdateEditorSchema,
   EditorQuerySchema,
 } from "./editor.schema";
