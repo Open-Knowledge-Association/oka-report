@@ -7,6 +7,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import Header from '../components/Header'
+import Footer from '../components/Footer'
 
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 
@@ -28,9 +29,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         name: 'viewport',
         content: 'width=device-width, initial-scale=1',
       },
-      {
-        title: 'TanStack Start Starter',
-      },
+        {
+          title: 'OKA Stats Platform',
+        },
     ],
     links: [
       {
@@ -49,9 +50,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="bg-slate-50 text-slate-900">
         <Header />
-        {children}
+        <main className="min-h-screen">{children}</main>
+        <Footer />
         <TanStackDevtools
           config={{
             position: 'bottom-right',

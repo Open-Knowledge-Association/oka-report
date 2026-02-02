@@ -1,0 +1,11 @@
+language: typescript
+tags: ["utils", "library"]
+
+tasks:
+  test:
+    command: "bun run test"
+    description: "Run utils tests with vitest"
+    inputs:
+      - "src/**/*"
+      - "index.ts"
+      - "vitest.config.ts"

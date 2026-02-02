@@ -4,8 +4,11 @@
     "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
+    "@repo/db": "workspace:*",
+    "@repo/utils": "workspace:*",
     "hono": "^4.11.4",
-    "@repo/db": "workspace:*"
+    "node-cron": "^3.0.3",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/bun": "latest"
