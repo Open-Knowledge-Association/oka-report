@@ -12,7 +12,4 @@ export type {
   OutreachCourse,
   OutreachUser,
   OutreachUpload,
-  OutreachCourseResponse,
-  OutreachUsersResponse,
-  OutreachUploadsResponse,
 } from "./types";

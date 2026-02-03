@@ -163,6 +163,10 @@ export interface OutreachUser {
   total_uploads: number;
   enrolled_at: string; // ISO 8601 timestamp
   admin: boolean;
+  // Additional fields from test data
+  name?: string;
+  real_name?: string;
+  email?: string;
 }
 
 export interface OutreachUpload {
@@ -176,27 +180,20 @@ export interface OutreachUpload {
   thumbheight: number;
   usage_count: number;
   deleted: boolean;
+  // Additional fields from test data
+  title?: string;
+  date?: string;
 }
 
-export interface OutreachCourseResponse {
+// Response wrappers as expected by the tests
+export interface CourseData {
   course: OutreachCourse;
 }
 
-export interface OutreachUsersResponse {
-  course: {
-    users: OutreachUser[];
-  };
+export interface UserData {
+  users: OutreachUser[];
 }
 
-export interface OutreachUploadsResponse {
-  course: {
-    uploads: OutreachUpload[];
-  };
+export interface UploadData {
+  uploads: OutreachUpload[];
 }
-
-/**
- * Type aliases for backward compatibility with client.ts
- */
-export type CourseData = OutreachCourseResponse;
-export type UserData = OutreachUsersResponse;
-export type UploadData = OutreachUploadsResponse;
