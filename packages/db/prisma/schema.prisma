@@ -38,9 +38,9 @@ model Editor {
   /// Example: "manual"
   source String @default("manual")
 
-  /// External ID from source system (for sync deduplication)
-  /// Example: Outreach Dashboard participant ID "12345"
-  externalId String?
+   /// External ID from source system (for sync deduplication)
+   /// Example: Outreach Dashboard participant ID "12345"
+   externalId String? @unique
 
   contributions   Contribution[]
   commonsUploads  CommonsUpload[]
