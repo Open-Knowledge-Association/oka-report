@@ -1,12 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Users,
-  FileText,
-  Eye,
-  TrendingUp,
-  ArrowRight,
-} from "lucide-react";
+import { Users, FileText, Eye, TrendingUp, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fetchOverallStats } from "@/lib/api";
@@ -21,7 +15,7 @@ function DashboardPage() {
     queryFn: fetchOverallStats,
   });
 
-  const stats = data?.data?.totals;
+  const stats = data?.totals;
 
   const statCards = [
     {
@@ -44,21 +38,17 @@ function DashboardPage() {
     },
     {
       title: "Page Views",
-      value: stats?.pageviews
-        ? `${(stats.pageviews / 1000).toFixed(1)}K`
-        : "-",
+      value: stats?.pageviews ? `${(stats.pageviews / 1000).toFixed(1)}K` : "-",
       icon: Eye,
       description: "Total article views",
     },
   ];
 
   return (
-    <div className="container mx-auto px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-600 mt-1">
-          Overview of OKA Wikipedia contributions
-        </p>
+        <p className="text-slate-600 mt-1">Overview of OKA Wikipedia contributions</p>
       </div>
 
       {isLoading ? (
@@ -69,9 +59,7 @@ function DashboardPage() {
             {statCards.map((card) => (
               <Card key={card.title}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {card.title}
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
                   <card.icon className="h-4 w-4 text-slate-500" />
                 </CardHeader>
                 <CardContent>
@@ -115,12 +103,12 @@ function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-slate-600 mb-4">
-                  This platform tracks Wikipedia editing contributions from OKA
-                  (Open Knowledge Association) members and grant recipients.
+                  This platform tracks Wikipedia editing contributions from OKA (Open Knowledge
+                  Association) members and grant recipients.
                 </p>
                 <p className="text-sm text-slate-600">
-                  Metrics include edits, words added, pageviews, articles created,
-                  and Wikimedia Commons uploads.
+                  Metrics include edits, words added, pageviews, articles created, and Wikimedia
+                  Commons uploads.
                 </p>
               </CardContent>
             </Card>

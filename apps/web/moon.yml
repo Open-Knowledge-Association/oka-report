@@ -13,7 +13,7 @@ tasks:
   build:
     command: "bun run build"
     outputs:
-      - ".output"
+      - "dist"
     description: "Build frontend for production"
 
   preview:

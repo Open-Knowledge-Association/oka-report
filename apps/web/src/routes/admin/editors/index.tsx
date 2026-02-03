@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { fetchEditors } from "@/lib/api";
+import type { Editor } from "@/lib/api";
 
-export const Route = createFileRoute("/admin/editors")({
+export const Route = createFileRoute("/admin/editors/")({
   component: AdminEditorsPage,
 });
 
@@ -23,7 +24,7 @@ function AdminEditorsPage() {
     queryFn: fetchEditors,
   });
 
-  const editors = data?.data || [];
+  const editors: Editor[] = data ?? [];
 
   const handleExport = () => {
     const csv = [
@@ -48,7 +49,7 @@ function AdminEditorsPage() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Editor Management</h1>
@@ -104,9 +105,7 @@ function AdminEditorsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="capitalize">{editor.source}</TableCell>
-                    <TableCell>
-                      {new Date(editor.createdAt).toLocaleDateString()}
-                    </TableCell>
+                    <TableCell>{new Date(editor.createdAt).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))
               )}

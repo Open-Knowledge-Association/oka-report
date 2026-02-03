@@ -36,7 +36,7 @@ function BulkImportPage() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl">
       <Button variant="ghost" asChild className="mb-6">
         <a href="/admin/editors">
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -67,9 +67,7 @@ function BulkImportPage() {
           </div>
 
           {mutation.error && (
-            <div className="text-red-600 text-sm">
-              Failed to import editors. Please try again.
-            </div>
+            <div className="text-red-600 text-sm">Failed to import editors. Please try again.</div>
           )}
 
           <div className="flex gap-3">
@@ -83,8 +81,7 @@ function BulkImportPage() {
             <Button
               type="submit"
               disabled={
-                usernames.split("\n").filter((u) => u.trim()).length === 0 ||
-                mutation.isPending
+                usernames.split("\n").filter((u) => u.trim()).length === 0 || mutation.isPending
               }
             >
               <Upload className="mr-2 h-4 w-4" />

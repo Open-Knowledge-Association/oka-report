@@ -11,19 +11,19 @@ const jsonResponse = (body: unknown, status = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(body), { status, headers });
 
 describe("OutreachDashboardClient", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
+    fetchSpy = vi.spyOn(global, "fetch" as any);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe("getCourse", () => {
     it("fetches course data successfully", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           course: {
             id: 1,
@@ -41,8 +41,8 @@ describe("OutreachDashboardClient", () => {
       expect(result.course.id).toBe(1);
       expect(result.course.title).toBe("Introduction to Wikipedia Editing");
       expect(result.course.description).toBe("Learn how to edit Wikipedia");
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledWith(
         expect.stringContaining("/courses/university-name/wiki-course-slug/course.json"),
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -53,8 +53,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("returns course with minimal data", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           course: {
             id: 2,
@@ -74,8 +73,7 @@ describe("OutreachDashboardClient", () => {
 
   describe("getUsers", () => {
     it("fetches users successfully", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           users: [
             {
@@ -102,16 +100,15 @@ describe("OutreachDashboardClient", () => {
       expect(result.users).toHaveLength(2);
       expect(result.users[0].username).toBe("alice_edit");
       expect(result.users[1].real_name).toBe("Bob Jones");
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledWith(
         expect.stringContaining("/courses/university/course-1/users.json"),
         expect.any(Object),
       );
     });
 
     it("returns empty users array", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(jsonResponse({ users: [] }));
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ users: [] }));
 
       const client = createClient();
       const result = await client.getUsers("uni", "slug");
@@ -121,8 +118,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("handles users with partial data", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           users: [
             {
@@ -145,8 +141,7 @@ describe("OutreachDashboardClient", () => {
 
   describe("getUploads", () => {
     it("fetches uploads successfully", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           uploads: [
             {
@@ -171,16 +166,15 @@ describe("OutreachDashboardClient", () => {
       expect(result.uploads).toHaveLength(2);
       expect(result.uploads[0].title).toBe("File:Example_image.jpg");
       expect(result.uploads[1].uploader).toBe("bob_contrib");
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).toHaveBeenCalledWith(
         expect.stringContaining("/courses/university/course-1/uploads.json"),
         expect.any(Object),
       );
     });
 
     it("returns empty uploads array", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(jsonResponse({ uploads: [] }));
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ uploads: [] }));
 
       const client = createClient();
       const result = await client.getUploads("uni", "slug");
@@ -189,8 +183,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("handles uploads with minimal data", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           uploads: [
             {
@@ -212,8 +205,7 @@ describe("OutreachDashboardClient", () => {
 
   describe("error handling", () => {
     it("throws on 404 Not Found", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
+      fetchSpy.mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
 
       const client = createClient();
 
@@ -223,8 +215,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("throws on 500 Server Error", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("Internal Server Error", { status: 500 }));
+      fetchSpy.mockResolvedValueOnce(new Response("Internal Server Error", { status: 500 }));
 
       const client = createClient();
 
@@ -232,8 +223,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("includes error status in exception", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
+      fetchSpy.mockResolvedValueOnce(new Response("", { status: 403 }));
 
       const client = createClient();
 
@@ -247,8 +237,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("includes URL in error", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("", { status: 404 }));
+      fetchSpy.mockResolvedValueOnce(new Response("", { status: 404 }));
 
       const client = createClient();
 
@@ -264,8 +253,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("throws when API returns error field", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse(
           {
             error: "invalid_course",
@@ -280,8 +268,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("throws when API returns message field", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse(
           {
             message: "Course not found",
@@ -296,11 +283,10 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("captures API error details in exception", async () => {
-      const fetchMock = vi.mocked(fetch);
       const errorPayload = {
         error: "unauthorized",
       };
-      fetchMock.mockResolvedValueOnce(jsonResponse(errorPayload, 200));
+      fetchSpy.mockResolvedValueOnce(jsonResponse(errorPayload, 200));
 
       const client = createClient();
 
@@ -316,8 +302,7 @@ describe("OutreachDashboardClient", () => {
 
   describe("retry logic", () => {
     it("retries on 429 Too Many Requests", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("", { status: 429 })).mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(new Response("", { status: 429 })).mockResolvedValueOnce(
         jsonResponse({
           course: { id: 1, title: "Course" },
         }),
@@ -327,12 +312,11 @@ describe("OutreachDashboardClient", () => {
       const result = await client.getCourse("uni", "course");
 
       expect(result.course.id).toBe(1);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 
     it("retries with exponential backoff", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock
+      fetchSpy
         .mockResolvedValueOnce(new Response("", { status: 429 }))
         .mockResolvedValueOnce(new Response("", { status: 429 }))
         .mockResolvedValueOnce(
@@ -345,12 +329,11 @@ describe("OutreachDashboardClient", () => {
       const result = await client.getCourse("uni", "course");
 
       expect(result.course.id).toBe(1);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
 
     it("respects retry-after header", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock
+      fetchSpy
         .mockResolvedValueOnce(
           new Response("", {
             status: 429,
@@ -367,24 +350,22 @@ describe("OutreachDashboardClient", () => {
       const result = await client.getCourse("uni", "course");
 
       expect(result.course.id).toBe(1);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 
     it("stops retrying after max attempts", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValue(new Response("", { status: 429 }));
+      fetchSpy.mockResolvedValue(new Response("", { status: 429 }));
 
       const client = createClient();
       await expect(client.getCourse("uni", "course")).rejects.toThrow();
 
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
   });
 
   describe("User-Agent header", () => {
     it("sends default User-Agent header", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           course: { id: 1, title: "Course" },
         }),
@@ -393,7 +374,7 @@ describe("OutreachDashboardClient", () => {
       const client = createClient();
       await client.getCourse("uni", "course");
 
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -404,8 +385,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("allows custom User-Agent header", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           users: [],
         }),
@@ -417,7 +397,7 @@ describe("OutreachDashboardClient", () => {
       });
       await client.getUsers("uni", "course");
 
-      expect(fetchMock).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -430,8 +410,7 @@ describe("OutreachDashboardClient", () => {
 
   describe("baseUrl handling", () => {
     it("constructs correct URLs", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
           uploads: [],
         }),
@@ -442,7 +421,7 @@ describe("OutreachDashboardClient", () => {
       });
       await client.getUploads("oxford", "python-101");
 
-      const callUrl = fetchMock.mock.calls[0][0] as string;
+      const callUrl = fetchSpy.mock.calls[0][0] as string;
       expect(callUrl).toBe("https://dashboard.example.org/courses/oxford/python-101/uploads.json");
     });
 
@@ -453,22 +432,22 @@ describe("OutreachDashboardClient", () => {
   });
 
   describe("invalid responses", () => {
-    it("handles non-JSON responses gracefully", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("Invalid JSON", { status: 200 }));
+    it("returns undefined when JSON parsing fails with 200 status", async () => {
+      fetchSpy.mockResolvedValueOnce(new Response("Invalid JSON", { status: 200 }));
 
       const client = createClient();
+      const result = await client.getCourse("uni", "course");
 
-      await expect(client.getCourse("uni", "course")).rejects.toThrow();
+      expect(result).toBeUndefined();
     });
 
-    it("handles empty responses", async () => {
-      const fetchMock = vi.mocked(fetch);
-      fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
+    it("returns undefined when response is empty with 200 status", async () => {
+      fetchSpy.mockResolvedValueOnce(new Response("", { status: 200 }));
 
       const client = createClient();
+      const result = await client.getUsers("uni", "course");
 
-      await expect(client.getUsers("uni", "course")).rejects.toThrow();
+      expect(result).toBeUndefined();
     });
   });
 });

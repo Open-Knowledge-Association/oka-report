@@ -32,7 +32,7 @@ function AddEditorPage() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl">
       <Button variant="ghost" asChild className="mb-6">
         <a href="/admin/editors">
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -62,9 +62,7 @@ function AddEditorPage() {
           </div>
 
           {mutation.error && (
-            <div className="text-red-600 text-sm">
-              Failed to add editor. Please try again.
-            </div>
+            <div className="text-red-600 text-sm">Failed to add editor. Please try again.</div>
           )}
 
           <div className="flex gap-3">

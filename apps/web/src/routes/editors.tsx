@@ -12,6 +12,14 @@ import {
 } from "@/components/ui/table";
 import { fetchEditorStats } from "@/lib/api";
 
+type EditorStats = Awaited<ReturnType<typeof fetchEditorStats>>[number];
+type EditorStatsTotals = {
+  edits: number;
+  articlesCreated: number;
+  articlesModified: number;
+  pageviews: number;
+};
+
 export const Route = createFileRoute("/editors")({
   component: EditorsStatsPage,
 });
@@ -22,25 +30,23 @@ function EditorsStatsPage() {
     queryFn: fetchEditorStats,
   });
 
-  const editors = data?.data || [];
+  const editors: EditorStats[] = data ?? [];
 
-  const totalStats = editors.reduce(
+  const totalStats = editors.reduce<EditorStatsTotals>(
     (acc, editor) => ({
       edits: acc.edits + (editor.edits || 0),
       articlesCreated: acc.articlesCreated + (editor.articlesCreated || 0),
       articlesModified: acc.articlesModified + (editor.articlesModified || 0),
       pageviews: acc.pageviews + (editor.pageviews || 0),
     }),
-    { edits: 0, articlesCreated: 0, articlesModified: 0, pageviews: 0 }
+    { edits: 0, articlesCreated: 0, articlesModified: 0, pageviews: 0 },
   );
 
   return (
-    <div className="container mx-auto px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Editor Statistics</h1>
-        <p className="text-slate-600 mt-1">
-          Detailed stats for each tracked editor
-        </p>
+        <p className="text-slate-600 mt-1">Detailed stats for each tracked editor</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -59,9 +65,7 @@ function EditorsStatsPage() {
             <TrendingUp className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {totalStats.edits.toLocaleString()}
-            </div>
+            <div className="text-2xl font-bold">{totalStats.edits.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -70,9 +74,7 @@ function EditorsStatsPage() {
             <FileText className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {totalStats.articlesCreated.toLocaleString()}
-            </div>
+            <div className="text-2xl font-bold">{totalStats.articlesCreated.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -82,9 +84,7 @@ function EditorsStatsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {totalStats.pageviews
-                ? `${(totalStats.pageviews / 1000).toFixed(1)}K`
-                : "0"}
+              {totalStats.pageviews ? `${(totalStats.pageviews / 1000).toFixed(1)}K` : "0"}
             </div>
           </CardContent>
         </Card>
@@ -110,10 +110,7 @@ function EditorsStatsPage() {
               </TableRow>
             ) : editors.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center py-8 text-slate-500"
-                >
+                <TableCell colSpan={5} className="text-center py-8 text-slate-500">
                   No editor statistics available.
                 </TableCell>
               </TableRow>
