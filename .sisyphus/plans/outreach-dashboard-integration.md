@@ -209,10 +209,10 @@ Parallel Speedup: ~30% faster than sequential
   - Prisma docs: https://www.prisma.io/docs/concepts/components/prisma-schema/data-model#unique-attributes
 
   **Acceptance Criteria**:
-  - [ ] Migration file created in `packages/db/prisma/migrations/`
-  - [ ] `externalId String? @unique` in schema
-  - [ ] `bun run db:migrate` completes successfully
-  - [ ] `bun run db:generate` creates updated client
+  - [x] Migration file created in `packages/db/prisma/migrations/`
+  - [x] `externalId String? @unique` in schema
+  - [x] `bun run db:migrate` completes successfully
+  - [x] `bun run db:generate` creates updated client
 
   **Agent-Executed QA**:
 
@@ -254,10 +254,10 @@ Parallel Speedup: ~30% faster than sequential
   - Live endpoints: https://outreachdashboard.wmflabs.org/courses/OKA/OKA/course.json
 
   **Acceptance Criteria**:
-  - [ ] File created at `docs/OUTREACH_DASHBOARD.md`
-  - [ ] Contains: API endpoints table, data mapping, course stats
-  - [ ] Contains: Related bd issues (report-bbr, report-633, etc.)
-  - [ ] File is >100 lines
+  - [x] File created at `docs/OUTREACH_DASHBOARD.md`
+  - [x] Contains: API endpoints table, data mapping, course stats
+  - [x] Contains: Related bd issues (report-bbr, report-633, etc.)
+  - [x] File is >100 lines
 
   **Agent-Executed QA**:
 
@@ -301,12 +301,12 @@ Parallel Speedup: ~30% faster than sequential
   - Endpoints: `https://outreachdashboard.wmflabs.org/courses/OKA/OKA/{course,users,uploads}.json`
 
   **Acceptance Criteria**:
-  - [ ] Client class created with constructor accepting baseUrl
-  - [ ] `getCourse(school, slug)` returns course metadata
-  - [ ] `getUsers(school, slug)` returns array of 53 users
-  - [ ] `getUploads(school, slug)` returns uploads array
-  - [ ] Proper error handling with custom error class
-  - [ ] User-Agent header included
+  - [x] Client class created with constructor accepting baseUrl
+  - [x] `getCourse(school, slug)` returns course metadata
+  - [x] `getUsers(school, slug)` returns array of 53 users
+  - [x] `getUploads(school, slug)` returns uploads array
+  - [x] Proper error handling with custom error class
+  - [x] User-Agent header included
 
   **Agent-Executed QA**:
 
@@ -351,11 +351,11 @@ Parallel Speedup: ~30% faster than sequential
   - `packages/utils/src/wikimedia/types.ts` - Pattern to follow
 
   **Acceptance Criteria**:
-  - [ ] `OutreachCourse` interface with all metadata fields
-  - [ ] `OutreachUser` interface with user fields
-  - [ ] `OutreachUpload` interface with file fields
-  - [ ] All required fields typed (no `any`)
-  - [ ] Exported from `packages/utils/src/outreach-dashboard/index.ts`
+  - [x] `OutreachCourse` interface with all metadata fields
+  - [x] `OutreachUser` interface with user fields
+  - [x] `OutreachUpload` interface with file fields
+  - [x] All required fields typed (no `any`)
+  - [x] Exported from `packages/utils/src/outreach-dashboard/index.ts`
 
   **Agent-Executed QA**:
 
@@ -395,11 +395,11 @@ Parallel Speedup: ~30% faster than sequential
   - Vitest docs for mocking fetch
 
   **Acceptance Criteria**:
-  - [ ] Test file created
-  - [ ] Tests for getCourse() with mock response
-  - [ ] Tests for getUsers() with mock response
-  - [ ] Tests for error handling (404, 500)
-  - [ ] All tests pass: `bun test`
+  - [x] Test file created
+  - [x] Tests for getCourse() with mock response
+  - [x] Tests for getUsers() with mock response
+  - [x] Tests for error handling (404, 500)
+  - [x] All tests pass: `bun test`
 
   **Agent-Executed QA**:
 
@@ -441,13 +441,13 @@ Parallel Speedup: ~30% faster than sequential
   - Prisma upsert pattern for Editor model
 
   **Acceptance Criteria**:
-  - [ ] Service class created
-  - [ ] `syncEditorsFromDashboard(school, slug)` method
-  - [ ] Username normalization: spaces → underscores
-  - [ ] Upsert logic: find by username, create or update
-  - [ ] Set source='outreach_dashboard', externalId from Dashboard
-  - [ ] Create SyncJob record with status tracking
-  - [ ] Return sync result stats (imported, updated, errors)
+  - [x] Service class created
+  - [x] `syncEditorsFromDashboard(school, slug)` method
+  - [x] Username normalization: spaces → underscores
+  - [x] Upsert logic: find by username, create or update
+  - [x] Set source='outreach_dashboard', externalId from Dashboard
+  - [x] Create SyncJob record with status tracking
+  - [x] Return sync result stats (imported, updated, errors)
 
   **Agent-Executed QA**:
 
@@ -493,12 +493,12 @@ Parallel Speedup: ~30% faster than sequential
   - `apps/api/src/routes/index.ts` - Route registration
 
   **Acceptance Criteria**:
-  - [ ] Route file created
-  - [ ] GET /api/outreach/course - returns course metadata
-  - [ ] POST /api/sync/outreach - triggers sync job
-  - [ ] Proper error handling with 400/500 status codes
-  - [ ] Zod validation for request bodies
-  - [ ] Route registered in main router
+  - [x] Route file created
+  - [x] GET /api/outreach/course - returns course metadata
+  - [x] POST /api/sync/outreach - triggers sync job
+  - [x] Proper error handling with 400/500 status codes
+  - [x] Zod validation for request bodies
+  - [x] Route registered in main router
 
   **Agent-Executed QA**:
 
@@ -545,10 +545,10 @@ Parallel Speedup: ~30% faster than sequential
   - TanStack Query for data fetching
 
   **Acceptance Criteria**:
-  - [ ] SyncButton component with loading state
-  - [ ] SyncStatusCard showing last sync info
-  - [ ] Components use TanStack Query
-  - [ ] Proper error handling and toast notifications
+  - [x] SyncButton component with loading state
+  - [x] SyncStatusCard showing last sync info
+  - [x] Components use TanStack Query
+  - [x] Proper error handling and toast notifications
 
   **Agent-Executed QA**:
 
@@ -589,12 +589,12 @@ Parallel Speedup: ~30% faster than sequential
   - RouteTree.gen.ts for type-safe routes
 
   **Acceptance Criteria**:
-  - [ ] Route file created at `admin/outreach.tsx`
-  - [ ] Page displays Outreach Dashboard info
-  - [ ] Sync button triggers API call
-  - [ ] Shows editor count from Dashboard
-  - [ ] Shows last sync timestamp
-  - [ ] Route accessible at `/admin/outreach`
+  - [x] Route file created at `admin/outreach.tsx`
+  - [x] Page displays Outreach Dashboard info
+  - [x] Sync button triggers API call
+  - [x] Shows editor count from Dashboard
+  - [x] Shows last sync timestamp
+  - [x] Route accessible at `/admin/outreach`
 
   **Agent-Executed QA**:
 
@@ -636,11 +636,11 @@ Parallel Speedup: ~30% faster than sequential
   - bd issues: report-bbr, report-633, report-umv, report-931, report-71k
 
   **Acceptance Criteria**:
-  - [ ] All 5 bd issues closed with `bd close`
-  - [ ] Integration test passes: 53 editors in database
-  - [ ] All API endpoints responding correctly
-  - [ ] Admin UI functional
-  - [ ] Documentation complete
+  - [x] All 5 bd issues closed with `bd close`
+  - [x] Integration test passes: 53 editors in database
+  - [x] All API endpoints responding correctly
+  - [x] Admin UI functional
+  - [x] Documentation complete
 
   **Agent-Executed QA**:
 
