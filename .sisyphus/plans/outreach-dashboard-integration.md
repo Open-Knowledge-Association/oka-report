@@ -82,12 +82,12 @@ Create a complete integration pipeline that imports editor roster and contributi
 
 ### Definition of Done
 
-- [ ] Can fetch course metadata from Dashboard API
-- [ ] Can import all 53 editors with deduplication
-- [ ] Sync job tracked in database with proper status
-- [ ] Admin UI shows sync status and allows manual trigger
-- [ ] All tests pass
-- [ ] Documentation complete
+- [x] Can fetch course metadata from Dashboard API
+- [x] Can import all 53 editors with deduplication
+- [x] Sync job tracked in database with proper status
+- [x] Admin UI shows sync status and allows manual trigger
+- [x] All tests pass
+- [x] Documentation complete
 
 ### Must Have
 
@@ -711,15 +711,15 @@ moon run :build
 
 ### Final Checklist
 
-- [ ] All 10 tasks completed
-- [ ] All 5 bd issues closed
-- [ ] 53 editors imported from Dashboard
-- [ ] API endpoints tested and working
-- [ ] Admin UI functional
-- [ ] Documentation complete
-- [ ] Tests passing
-- [ ] Build successful
-- [ ] No lint errors
+- [x] All 10 tasks completed
+- [x] All 5 bd issues closed
+- [x] 53 editors imported from Dashboard
+- [x] API endpoints tested and working
+- [x] Admin UI functional
+- [x] Documentation complete
+- [x] Tests passing
+- [x] Build successful
+- [x] No lint errors
 
 ---
 
@@ -751,28 +751,21 @@ Before starting execution, user must answer:
 
 **Rationale**: Preserves historical data integrity while keeping roster in sync with Dashboard.
 
-### 4. Sync Frequency
+### 4. Sync Frequency ✅ DECIDED
 
 **Question**: Dashboard updates every ~3 hours. How often should we sync?
 
-**Options**:
+**Decision**: (a) Daily (align with existing sync schedule)
 
-- [ ] (a) Daily (align with existing sync schedule)
-- [ ] (b) Every 3 hours (match Dashboard cadence)
-- [ ] (c) Manual trigger only
+**Rationale**: Aligns with existing sync schedule and is sufficient for accountability reporting.
 
-**Default if no answer**: (a) Daily
-
-### 5. Username Normalization
+### 5. Username Normalization ✅ DECIDED
 
 **Question**: Dashboard uses "Maye Fernandez", our schema expects "Maye_Fernandez". Should we normalize on import?
 
-**Options**:
+**Decision**: (a) Yes, normalize spaces to underscores
 
-- [ ] (a) Yes, normalize spaces to underscores (recommended)
-- [ ] (b) No, store as-is
-
-**Default if no answer**: (a) Yes, normalize
+**Rationale**: Matches our schema expectations and Wikipedia username conventions.
 
 ---
 
