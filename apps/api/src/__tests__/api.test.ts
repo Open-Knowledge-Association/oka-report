@@ -121,6 +121,108 @@ describe("API Integration Tests", () => {
       expect(json.success).toBe(false);
     });
 
+    it("POST /api/outreach/articles/sync should sync articles end-to-end with mocked client", async () => {
+      const mockArticlesData = {
+        course: {
+          articles: [
+            {
+              id: 12345,
+              title: "Test_Integration_Article",
+              language: "en",
+              project: "wikipedia",
+              view_count: 1000,
+              average_views: 50,
+              character_sum: 5000,
+              references_count: 10,
+              new_article: true,
+              rating: "B-class",
+              url: "https://en.wikipedia.org/wiki/Test_Integration_Article",
+              user_ids: [67890],
+            },
+            {
+              id: 12346,
+              title: "Another_Test_Article",
+              language: "en",
+              project: "wikipedia",
+              view_count: 2000,
+              average_views: 100,
+              character_sum: 8000,
+              references_count: 15,
+              new_article: false,
+              rating: "C-class",
+              url: "https://en.wikipedia.org/wiki/Another_Test_Article",
+              user_ids: [67890, 67891],
+            },
+          ],
+        },
+      };
+
+      const { OutreachDashboardClient } = await import("@repo/utils");
+      const originalGetArticles = OutreachDashboardClient.prototype.getArticles;
+
+      OutreachDashboardClient.prototype.getArticles = async () => mockArticlesData;
+
+      try {
+        const syncRes = await app.request("/api/outreach/articles/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            school: "OKA",
+            slug: "OKA",
+          }),
+        });
+
+        expect(syncRes.status).toBe(202);
+        const syncJson = await syncRes.json();
+        expect(syncJson.success).toBe(true);
+        expect(syncJson.data.jobId).toBeDefined();
+
+        let attempts = 0;
+        const maxAttempts = 10;
+        let jobCompleted = false;
+
+        while (attempts < maxAttempts && !jobCompleted) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempts)));
+
+          const articlesRes = await app.request("/api/outreach/articles/db");
+          const articlesJson = await articlesRes.json();
+
+          if (articlesJson.success && articlesJson.data.articles.length >= 2) {
+            jobCompleted = true;
+            break;
+          }
+
+          attempts++;
+        }
+
+        expect(jobCompleted).toBe(true);
+
+        const dbRes = await app.request("/api/outreach/articles/db");
+        expect(dbRes.status).toBe(200);
+        const dbJson = await dbRes.json();
+        expect(dbJson.success).toBe(true);
+
+        const testArticle1 = dbJson.data.articles.find((a: any) => a.outreachId === 12345);
+        const testArticle2 = dbJson.data.articles.find((a: any) => a.outreachId === 12346);
+
+        expect(testArticle1).toBeDefined();
+        expect(testArticle1.title).toBe("Test_Integration_Article");
+        expect(testArticle1.language).toBe("en");
+        expect(testArticle1.project).toBe("wikipedia");
+        expect(testArticle1.characterSum).toBe(5000);
+        expect(testArticle1.referencesCount).toBe(10);
+        expect(testArticle1.isNewArticle).toBe(true);
+        expect(testArticle1.rating).toBe("B-class");
+
+        expect(testArticle2).toBeDefined();
+        expect(testArticle2.title).toBe("Another_Test_Article");
+        expect(testArticle2.isNewArticle).toBe(false);
+        expect(testArticle2.rating).toBe("C-class");
+      } finally {
+        OutreachDashboardClient.prototype.getArticles = originalGetArticles;
+      }
+    });
+
     it("GET /api/outreach/articles/db should return paginated articles", async () => {
       const res = await app.request("/api/outreach/articles/db");
       expect(res.status).toBe(200);
