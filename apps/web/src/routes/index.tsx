@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { OutreachStats } from "@/components/outreach";
-import { fetchOverallStats, fetchOutreachCourse } from "@/lib/api";
+import { fetchOutreachCourse } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
