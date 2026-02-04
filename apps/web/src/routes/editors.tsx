@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Users, FileText, TrendingUp, Eye } from "lucide-react";
+import { Users, FileText, BookOpen, HardDrive } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,14 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchEditorStats } from "@/lib/api";
+import { fetchOutreachUsers, type OutreachUser } from "@/lib/api";
 
-type EditorStats = Awaited<ReturnType<typeof fetchEditorStats>>[number];
-type EditorStatsTotals = {
-  edits: number;
-  articlesCreated: number;
-  articlesModified: number;
-  pageviews: number;
+type OutreachUserStats = OutreachUser;
+type OutreachStatsTotals = {
+  characters: number;
+  references: number;
+  uploads: number;
 };
 
 export const Route = createFileRoute("/editors")({
@@ -27,19 +26,18 @@ export const Route = createFileRoute("/editors")({
 function EditorsStatsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["stats", "editors"],
-    queryFn: fetchEditorStats,
+    queryFn: fetchOutreachUsers,
   });
 
-  const editors: EditorStats[] = data ?? [];
+  const editors: OutreachUserStats[] = data ?? [];
 
-  const totalStats = editors.reduce<EditorStatsTotals>(
+  const totalStats = editors.reduce<OutreachStatsTotals>(
     (acc, editor) => ({
-      edits: acc.edits + (editor.edits || 0),
-      articlesCreated: acc.articlesCreated + (editor.articlesCreated || 0),
-      articlesModified: acc.articlesModified + (editor.articlesModified || 0),
-      pageviews: acc.pageviews + (editor.pageviews || 0),
+      characters: acc.characters + (editor.character_sum_ms || 0),
+      references: acc.references + (editor.references_count || 0),
+      uploads: acc.uploads + (editor.total_uploads || 0),
     }),
-    { edits: 0, articlesCreated: 0, articlesModified: 0, pageviews: 0 },
+    { characters: 0, references: 0, uploads: 0 },
   );
 
   return (
@@ -61,31 +59,29 @@ function EditorsStatsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Edits</CardTitle>
-            <TrendingUp className="h-4 w-4 text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStats.edits.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Articles Created</CardTitle>
+            <CardTitle className="text-sm font-medium">Characters Added</CardTitle>
             <FileText className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStats.articlesCreated.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{totalStats.characters.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Page Views</CardTitle>
-            <Eye className="h-4 w-4 text-slate-500" />
+            <CardTitle className="text-sm font-medium">References Added</CardTitle>
+            <BookOpen className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {totalStats.pageviews ? `${(totalStats.pageviews / 1000).toFixed(1)}K` : "0"}
-            </div>
+            <div className="text-2xl font-bold">{totalStats.references.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Uploads</CardTitle>
+            <HardDrive className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalStats.uploads.toLocaleString()}</div>
           </CardContent>
         </Card>
       </div>
@@ -95,40 +91,45 @@ function EditorsStatsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Username</TableHead>
-              <TableHead className="text-right">Edits</TableHead>
-              <TableHead className="text-right">Articles Created</TableHead>
-              <TableHead className="text-right">Articles Modified</TableHead>
-              <TableHead className="text-right">Page Views</TableHead>
+              <TableHead className="text-right">Characters Added</TableHead>
+              <TableHead className="text-right">References Added</TableHead>
+              <TableHead className="text-right">Total Uploads</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={4} className="text-center py-8">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : editors.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                <TableCell colSpan={4} className="text-center py-8 text-slate-500">
                   No editor statistics available.
                 </TableCell>
               </TableRow>
             ) : (
               editors.map((editor) => (
-                <TableRow key={editor.editorId}>
-                  <TableCell className="font-medium">{editor.username}</TableCell>
-                  <TableCell className="text-right">
-                    {editor.edits?.toLocaleString() || 0}
+                <TableRow key={editor.id}>
+                  <TableCell className="font-medium">
+                    <a
+                      href={editor.contribution_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {editor.username}
+                    </a>
                   </TableCell>
                   <TableCell className="text-right">
-                    {editor.articlesCreated?.toLocaleString() || 0}
+                    {editor.character_sum_ms.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {editor.articlesModified?.toLocaleString() || 0}
+                    {editor.references_count.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {editor.pageviews?.toLocaleString() || 0}
+                    {editor.total_uploads.toLocaleString()}
                   </TableCell>
                 </TableRow>
               ))

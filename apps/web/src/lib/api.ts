@@ -80,5 +80,22 @@ export const fetchEditorStats = () =>
 export const fetchOutreachCourse = () =>
   apiFetch<{ course: any }>("/outreach/course?school=OKA&slug=OKA");
 
-export const fetchOutreachUsers = () =>
-  apiFetch<{ users: any[] }>("/outreach/users?school=OKA&slug=OKA");
+export type OutreachUser = {
+  id: number;
+  username: string;
+  character_sum_ms: number;
+  character_sum_us: number;
+  character_sum_draft: number;
+  references_count: number;
+  total_uploads: number;
+  contribution_url: string;
+  role: number;
+  enrolled_at: string;
+};
+
+export const fetchOutreachUsers = async () => {
+  const data = await apiFetch<{ course: { users: OutreachUser[] } }>(
+    "/outreach/users?school=OKA&slug=OKA",
+  );
+  return data.course.users;
+};
