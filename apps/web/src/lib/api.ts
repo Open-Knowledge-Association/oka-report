@@ -115,8 +115,14 @@ export type OutreachArticle = {
 };
 
 export const fetchOutreachArticles = async () => {
-  const data = await apiFetch<{ course: { articles: OutreachArticle[] } }>(
-    "/outreach/articles?school=OKA&slug=OKA",
-  );
-  return data.course.articles;
+  const data = await apiFetch<{
+    articles: OutreachArticle[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }>("/outreach/articles/db");
+  return data.articles;
 };
