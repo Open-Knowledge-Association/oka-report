@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { OutreachSyncService } from "../services/outreach-sync.service";
+import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 import {
   OutreachSyncSchema,
   OutreachArticleStatsResponseSchema,
@@ -16,6 +17,8 @@ const dashboardClient = new OutreachDashboardClient({
 const outreachSyncService = new OutreachSyncService(prisma, {
   baseUrl: "https://outreachdashboard.wmflabs.org",
 });
+
+const outreachArticleSyncService = new OutreachArticleSyncService(prisma, dashboardClient);
 
 export const outreachRoutes = new Hono();
 
@@ -188,7 +191,10 @@ outreachRoutes.post("/articles/sync", async (c) => {
     // Trigger async sync
     setTimeout(async () => {
       try {
-        const result = await outreachSyncService.syncArticlesFromDashboard(body.school, body.slug);
+        const result = await outreachArticleSyncService.syncArticlesFromDashboard(
+          body.school,
+          body.slug,
+        );
 
         // Update job with results
         await prisma.syncJob.update({
@@ -196,7 +202,7 @@ outreachRoutes.post("/articles/sync", async (c) => {
           data: {
             status: "completed",
             completedAt: new Date(),
-            metadata: result,
+            metadata: result as any,
           },
         });
       } catch (error) {
@@ -283,7 +289,7 @@ outreachRoutes.get("/articles/db", async (c) => {
     const offset = (query.page - 1) * query.limit;
 
     // Build dynamic where clause based on query parameters
-    const where: Parameters<typeof prisma.outreachArticle.findMany>[0]["where"] = {
+    const where: any = {
       ...(query.search ? { title: { contains: query.search, mode: "insensitive" } } : {}),
       ...(query.wiki
         ? (() => {
