@@ -79,12 +79,12 @@ Optimize the article sync service to handle 46K+ articles efficiently with batch
 
 ### Definition of Done
 
-- [ ] Sync completes in < 30 minutes for 46K articles
-- [ ] Progress visible via `/api/sync/history` during sync
-- [ ] Duplicate sync returns 409 Conflict
-- [ ] Scheduled sync runs daily at 03:00 UTC
-- [ ] Article count via `/api/outreach/articles/stats` shows >= 46,000
-- [ ] All tests pass
+- [x] Sync completes in < 30 minutes for 46K articles
+- [x] Progress visible via `/api/sync/history` during sync
+- [x] Duplicate sync returns 409 Conflict
+- [x] Scheduled sync runs daily at 03:00 UTC
+- [x] Article count via `/api/outreach/articles/stats` shows >= 46,000
+- [x] All tests pass
 
 ### Must Have
 
@@ -164,7 +164,7 @@ Critical Path: Task 1 → Task 2 → Task 4 → Task 6
 
 ### Task 1: Add Environment Variables and Types
 
-- [ ] 1. Configure environment variables and progress types
+- [x] 1. Configure environment variables and progress types
 
   **What to do**:
   - Add environment variables to `.env.example` (if exists) or document:
@@ -223,7 +223,7 @@ Critical Path: Task 1 → Task 2 → Task 4 → Task 6
 
 ### Task 2: Refactor OutreachArticleSyncService with Batching and Progress
 
-- [ ] 2. Optimize sync service with batching, concurrency, and progress tracking
+- [x] 2. Optimize sync service with batching, concurrency, and progress tracking
 
   **What to do**:
   - Import `pLimit` from `p-limit`
@@ -308,7 +308,7 @@ Critical Path: Task 1 → Task 2 → Task 4 → Task 6
 
 ### Task 3: Add Duplicate Job Prevention
 
-- [ ] 3. Prevent concurrent syncs by checking for running jobs
+- [x] 3. Prevent concurrent syncs by checking for running jobs
 
   **What to do**:
   - At the start of `syncArticlesFromDashboard`, check for existing running job:
@@ -392,7 +392,7 @@ Critical Path: Task 1 → Task 2 → Task 4 → Task 6
 
 ### Task 4: Add Scheduled Article Sync to Scheduler
 
-- [ ] 4. Configure scheduler to run article sync daily
+- [x] 4. Configure scheduler to run article sync daily
 
   **What to do**:
   - Import `OutreachArticleSyncService` in scheduler.ts
@@ -476,7 +476,7 @@ Critical Path: Task 1 → Task 2 → Task 4 → Task 6
 
 ### Task 5: Add/Update Tests
 
-- [ ] 5. Add tests for optimized sync service
+- [x] 5. Add tests for optimized sync service
 
   **What to do**:
   - Update existing test file `apps/api/src/__tests__/api.test.ts`:
@@ -529,7 +529,7 @@ Critical Path: Task 1 → Task 2 → Task 4 → Task 6
 
 ### Task 6: Execute Full Sync and Verify
 
-- [ ] 6. Trigger full article sync and verify completion
+- [x] 6. Trigger full article sync and verify completion
 
   **What to do**:
   - Start the API server if not running
@@ -671,20 +671,20 @@ cd apps/api && bun test
 
 ### Final Checklist
 
-- [ ] All "Must Have" present:
-  - [ ] Batch processing with configurable batch size
-  - [ ] Concurrency control with p-limit
-  - [ ] Progress tracking in metadata
-  - [ ] Duplicate job prevention
-  - [ ] Editor pre-fetch optimization
-  - [ ] Scheduled cron job
-  - [ ] Environment variable configuration
-- [ ] All "Must NOT Have" absent:
-  - [ ] No new npm dependencies
-  - [ ] No new API endpoints
-  - [ ] No database schema changes
-  - [ ] No WebSocket/SSE
-- [ ] Sync completes in < 30 minutes
-- [ ] Article count >= 46,000
-- [ ] All tests pass
-- [ ] Build succeeds
+- [x] All "Must Have" present:
+  - [x] Batch processing with configurable batch size
+  - [x] Concurrency control with p-limit
+  - [x] Progress tracking in metadata
+  - [x] Duplicate job prevention
+  - [x] Editor pre-fetch optimization
+  - [x] Scheduled cron job
+  - [x] Environment variable configuration
+- [x] All "Must NOT Have" absent:
+  - [x] No new npm dependencies
+  - [x] No new API endpoints
+  - [x] No database schema changes
+  - [x] No WebSocket/SSE
+- [x] Sync completes in < 30 minutes
+- [x] Article count >= 46,000
+- [x] All tests pass
+- [x] Build succeeds
