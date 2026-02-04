@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import app from "../index";
+import { app } from "../index";
 
 const baseUrl = "http://localhost:3001";
 

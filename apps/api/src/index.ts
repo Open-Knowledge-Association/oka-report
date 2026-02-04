@@ -15,6 +15,10 @@ app.get("/", (c) => {
 
 startScheduler();
 
+// Export app for tests
+export { app };
+
+// Export Bun server config with increased timeout for large payloads
 export default {
   port: 3000,
   fetch: app.fetch,
