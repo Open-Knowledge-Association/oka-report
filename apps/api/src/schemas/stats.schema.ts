@@ -10,3 +10,16 @@ export const StatsFilterSchema = z.object({
 export const TimeSeriesSchema = StatsFilterSchema.extend({
   granularity: z.enum(["daily", "weekly", "monthly"]).optional(),
 });
+
+export const WikiStatSchema = z.object({
+  wiki: z.string(),
+  count: z.number().int(),
+  pageviews: z.number().int(),
+});
+
+export const OutreachArticleStatsResponseSchema = z.object({
+  totalArticles: z.number().int(),
+  totalPageviews: z.number().int(),
+  uniqueWikis: z.number().int(),
+  wikiStats: z.array(WikiStatSchema),
+});

@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { OutreachSyncService } from "../services/outreach-sync.service";
-import { OutreachSyncSchema } from "../schemas";
+import {
+  OutreachSyncSchema,
+  OutreachArticleStatsResponseSchema,
+  OutreachArticlesQuerySchema,
+} from "../schemas";
 
 // Initialize Outreach Dashboard client
 const dashboardClient = new OutreachDashboardClient({
@@ -246,24 +250,33 @@ outreachRoutes.post("/articles/sync", async (c) => {
 
 /**
  * GET /api/outreach/articles/db
- * Fetch articles from database with pagination
- * Query params: page (default 1), limit (default 50)
+ * Fetch articles from database with pagination, search, and wiki filtering
+ * Query params: page (default 1), limit (default 50), search (optional), wiki (optional, format: "en.wikipedia")
  * Returns: { success: boolean, data: { articles: [...], pagination: {...} } }
  */
 outreachRoutes.get("/articles/db", async (c) => {
   try {
-    const pageParam = c.req.query("page") || "1";
-    const limitParam = c.req.query("limit") || "50";
+    const query = OutreachArticlesQuerySchema.parse(c.req.query());
 
-    const page = Math.max(1, parseInt(pageParam, 10) || 1);
-    const limit = Math.max(1, Math.min(100, parseInt(limitParam, 10) || 50));
-    const offset = (page - 1) * limit;
+    const offset = (query.page - 1) * query.limit;
 
-    const total = await prisma.outreachArticle.count();
+    // Build dynamic where clause based on query parameters
+    const where: Parameters<typeof prisma.outreachArticle.findMany>[0]["where"] = {
+      ...(query.search ? { title: { contains: query.search, mode: "insensitive" } } : {}),
+      ...(query.wiki
+        ? (() => {
+            const [language, project] = query.wiki.split(".");
+            return language && project ? { language, project } : {};
+          })()
+        : {}),
+    };
+
+    const total = await prisma.outreachArticle.count({ where });
 
     const articles = await prisma.outreachArticle.findMany({
+      where,
       skip: offset,
-      take: limit,
+      take: query.limit,
       include: {
         pageviews: true,
         editors: {
@@ -277,7 +290,7 @@ outreachRoutes.get("/articles/db", async (c) => {
       },
     });
 
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = Math.ceil(total / query.limit);
 
     return c.json(
       {
@@ -286,8 +299,8 @@ outreachRoutes.get("/articles/db", async (c) => {
           articles,
           pagination: {
             total,
-            page,
-            limit,
+            page: query.page,
+            limit: query.limit,
             totalPages,
           },
         },
@@ -302,6 +315,91 @@ outreachRoutes.get("/articles/db", async (c) => {
       {
         success: false,
         error: "Failed to fetch articles",
+        details: message,
+      },
+      500,
+    );
+  }
+});
+
+/**
+ * GET /api/outreach/articles/stats
+ * Get global aggregation stats for all Outreach articles
+ * Returns: { success: boolean, data: { totalArticles, totalPageviews, uniqueWikis, wikiStats } }
+ */
+outreachRoutes.get("/articles/stats", async (c) => {
+  try {
+    // Total article count
+    const totalArticles = await prisma.outreachArticle.count();
+
+    // Get all articles with their latest pageview snapshot
+    const articles = await prisma.outreachArticle.findMany({
+      include: {
+        pageviews: {
+          orderBy: { snapshotDate: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    // Calculate total pageviews from latest snapshots
+    let totalPageviews = 0;
+    for (const article of articles) {
+      if (article.pageviews.length > 0) {
+        totalPageviews += article.pageviews[0].cumulativeViews;
+      }
+    }
+
+    // Group by wiki (language + project) to get stats
+    const wikiMap = new Map<string, { count: number; pageviews: number }>();
+
+    for (const article of articles) {
+      const wikiKey = `${article.language}.${article.project}`;
+
+      if (!wikiMap.has(wikiKey)) {
+        wikiMap.set(wikiKey, { count: 0, pageviews: 0 });
+      }
+
+      const stats = wikiMap.get(wikiKey)!;
+      stats.count += 1;
+
+      if (article.pageviews.length > 0) {
+        stats.pageviews += article.pageviews[0].cumulativeViews;
+      }
+    }
+
+    // Convert map to array and sort by wiki name
+    const wikiStats = Array.from(wikiMap.entries())
+      .map(([wiki, stats]) => ({
+        wiki,
+        count: stats.count,
+        pageviews: stats.pageviews,
+      }))
+      .sort((a, b) => a.wiki.localeCompare(b.wiki));
+
+    // Validate response schema
+    const responseData = OutreachArticleStatsResponseSchema.parse({
+      totalArticles,
+      totalPageviews,
+      uniqueWikis: wikiMap.size,
+      wikiStats,
+    });
+
+    return c.json(
+      {
+        success: true,
+        data: responseData,
+      },
+      200,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching outreach articles stats:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to fetch statistics",
         details: message,
       },
       500,
