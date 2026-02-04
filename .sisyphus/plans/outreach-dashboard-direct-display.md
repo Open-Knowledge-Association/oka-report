@@ -72,11 +72,11 @@ Display Outreach Dashboard statistics on the OKA Stats Platform homepage and edi
 
 ### Definition of Done
 
-- [ ] `http://localhost:3001/api/outreach/course?school=OKA&slug=OKA` returns JSON (not HTML)
-- [ ] `http://localhost:3001/api/outreach/users?school=OKA&slug=OKA` returns JSON with users array
-- [ ] Dashboard (`/`) displays editors count, edits, articles, word count from Outreach
-- [ ] Editors page (`/editors`) shows table with Outreach user data
-- [ ] No console errors on any page
+- [x] `http://localhost:3001/api/outreach/course?school=OKA&slug=OKA` returns JSON (not HTML)
+- [x] `http://localhost:3001/api/outreach/users?school=OKA&slug=OKA` returns JSON with users array
+- [x] Dashboard (`/`) displays editors count, edits, articles, word count from Outreach
+- [x] Editors page (`/editors`) shows table with Outreach user data
+- [x] No console errors on any page
 
 ### Must Have
 
