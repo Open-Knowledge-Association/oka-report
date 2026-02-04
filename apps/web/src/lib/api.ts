@@ -44,13 +44,41 @@ export const createEditor = (data: { username: string }) =>
   });
 
 export const bulkImportEditors = (usernames: string[]) =>
-  apiFetch<{ created: number; skipped: number; errors: number; details: Array<{ username: string; status: string; error?: string }> }>("/editors/bulk", {
+  apiFetch<{
+    created: number;
+    skipped: number;
+    errors: number;
+    details: Array<{ username: string; status: string; error?: string }>;
+  }>("/editors/bulk", {
     method: "POST",
     body: JSON.stringify({ usernames }),
   });
 
 export const fetchOverallStats = () =>
-  apiFetch<{ totals: { editorsCount: number; articlesCreated: number; edits: number; pageviews: number }; byWikiProject: Array<{ wikiProject: string; edits: number; articlesCreated: number; pageviews: number }> }>("/stats/overall");
+  apiFetch<{
+    totals: { editorsCount: number; articlesCreated: number; edits: number; pageviews: number };
+    byWikiProject: Array<{
+      wikiProject: string;
+      edits: number;
+      articlesCreated: number;
+      pageviews: number;
+    }>;
+  }>("/stats/overall");
 
 export const fetchEditorStats = () =>
-  apiFetch<Array<{ editorId: string; username: string; edits: number; articlesCreated: number; articlesModified: number; pageviews: number }>>("/stats/editors");
+  apiFetch<
+    Array<{
+      editorId: string;
+      username: string;
+      edits: number;
+      articlesCreated: number;
+      articlesModified: number;
+      pageviews: number;
+    }>
+  >("/stats/editors");
+
+export const fetchOutreachCourse = () =>
+  apiFetch<{ course: any }>("/outreach/course?school=OKA&slug=OKA");
+
+export const fetchOutreachUsers = () =>
+  apiFetch<{ users: any[] }>("/outreach/users?school=OKA&slug=OKA");
