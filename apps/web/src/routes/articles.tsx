@@ -1,7 +1,7 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { FileText, Eye, Globe, Search } from "lucide-react";
+import { FilePlus, FileEdit, Edit, Users, Type, BookOpen, Eye, Upload, Search } from "lucide-react";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
-import { fetchOutreachArticles, fetchArticleStats } from "@/lib/api";
+import { fetchOutreachArticles, fetchArticleStats, fetchOutreachCourse } from "@/lib/api";
 
 export const Route = createFileRoute("/articles")({
   component: ArticlesPage,
@@ -64,7 +64,7 @@ function ArticlesPage() {
   }, [searchInput, searchTerm, wikiFilter, navigate]);
 
   // Stats query (global totals)
-  const { data: statsData, isLoading: statsLoading } = useQuery({
+  const { data: statsData } = useQuery({
     queryKey: ["stats", "articles", "global"],
     queryFn: fetchArticleStats,
   });
@@ -81,12 +81,17 @@ function ArticlesPage() {
       }),
   });
 
+  // Course stats query (from Outreach Dashboard)
+  const { data: courseData, isLoading: courseLoading } = useQuery({
+    queryKey: ["outreach", "course"],
+    queryFn: fetchOutreachCourse,
+  });
+
+  const course = courseData?.course;
+
   const articles = articlesData?.articles ?? [];
   const pagination = articlesData?.pagination;
 
-  const totalArticles = statsData?.totalArticles ?? 0;
-  const totalPageviews = statsData?.totalPageviews ?? 0;
-  const uniqueWikis = statsData?.uniqueWikis ?? 0;
   const wikiStats = statsData?.wikiStats ?? [];
 
   const handlePageChange = (newPage: number) => {
@@ -109,8 +114,6 @@ function ArticlesPage() {
     });
   };
 
-  const isLoading = statsLoading || articlesLoading;
-
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="mb-8">
@@ -118,37 +121,101 @@ function ArticlesPage() {
         <p className="text-slate-600 mt-1">Articles by wiki language with pageview metrics</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      {/* Summary Cards - 8 stats from Outreach Dashboard */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Articles</CardTitle>
-            <FileText className="h-4 w-4 text-slate-500" />
+            <CardTitle className="text-sm font-medium">Articles Created</CardTitle>
+            <FilePlus className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsLoading ? "..." : totalArticles.toLocaleString()}
+              {courseLoading ? "..." : (course?.created_count ?? "-")}
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pageviews</CardTitle>
+            <CardTitle className="text-sm font-medium">Articles Edited</CardTitle>
+            <FileEdit className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {courseLoading ? "..." : (course?.edited_count ?? "-")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Edits</CardTitle>
+            <Edit className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {courseLoading ? "..." : (course?.edit_count ?? "-")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Editors</CardTitle>
+            <Users className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {courseLoading ? "..." : (course?.student_count ?? "-")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Words Added</CardTitle>
+            <Type className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {courseLoading ? "..." : (course?.word_count ?? "-")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">References Added</CardTitle>
+            <BookOpen className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {courseLoading ? "..." : (course?.references_count ?? "-")}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Article Views</CardTitle>
             <Eye className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statsLoading ? "..." : totalPageviews.toLocaleString()}
+              {courseLoading ? "..." : (course?.view_count ?? "-")}
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Wiki Projects</CardTitle>
-            <Globe className="h-4 w-4 text-slate-500" />
+            <CardTitle className="text-sm font-medium">Commons Uploads</CardTitle>
+            <Upload className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{statsLoading ? "..." : uniqueWikis}</div>
+            <div className="text-2xl font-bold">
+              {courseLoading ? "..." : (course?.upload_count?.toLocaleString() ?? "-")}
+            </div>
           </CardContent>
         </Card>
       </div>
