@@ -1,4 +1,4 @@
-import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useSearch, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { FilePlus, FileEdit, Edit, Users, Type, BookOpen, Eye, Upload, Search } from "lucide-react";
@@ -317,14 +317,17 @@ function ArticlesPage() {
               articles.map((article) => (
                 <TableRow key={article.id}>
                   <TableCell className="font-medium">
-                    <a
-                      href={article.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      {article.title}
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {article.title}
+                      </a>
+                      {article.isNewArticle && <Badge variant="secondary">Created</Badge>}
+                    </div>
                   </TableCell>
                   <TableCell>{`${article.language}.${article.project}`}</TableCell>
                   <TableCell>
@@ -332,21 +335,54 @@ function ArticlesPage() {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Badge variant="secondary" className="cursor-pointer">
-                              {article.editors.length}
-                            </Badge>
+                            <div className="cursor-pointer flex items-center gap-1 flex-wrap">
+                              {(() => {
+                                const sorted = [...article.editors].sort(
+                                  (a, b) => (b.isAuthor ? 1 : 0) - (a.isAuthor ? 1 : 0),
+                                );
+                                const displayed = sorted.slice(0, 3);
+                                const remaining = sorted.length - 3;
+
+                                return (
+                                  <>
+                                    {displayed.map((editor, idx) => (
+                                      <span
+                                        key={editor.id}
+                                        className="inline-flex items-center gap-1"
+                                      >
+                                        <Link
+                                          to="/editors/$editorId"
+                                          params={{ editorId: editor.editor.id }}
+                                          className="hover:underline"
+                                        >
+                                          {editor.editor.username}
+                                        </Link>
+                                        {editor.isAuthor && (
+                                          <Badge variant="outline" className="text-xs px-1 py-0">
+                                            Author
+                                          </Badge>
+                                        )}
+                                        {idx < displayed.length - 1 || remaining > 0 ? ", " : ""}
+                                      </span>
+                                    ))}
+                                    {remaining > 0 && <span>+{remaining} more</span>}
+                                  </>
+                                );
+                              })()}
+                            </div>
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs">
                             <div className="space-y-1">
                               {article.editors.slice(0, 5).map((editor) => (
                                 <div key={editor.id} className="flex items-center gap-2">
                                   <Users className="h-3 w-3 text-slate-500" />
-                                  <a
-                                    href={`/editors/${editor.editor.id}`}
+                                  <Link
+                                    to="/editors/$editorId"
+                                    params={{ editorId: editor.editor.id }}
                                     className="text-sm hover:underline"
                                   >
                                     {editor.editor.username}
-                                  </a>
+                                  </Link>
                                   {editor.isAuthor && (
                                     <Badge variant="outline" className="text-xs px-1 py-0">
                                       Author
