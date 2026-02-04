@@ -46,7 +46,7 @@ export class OutreachSyncService {
 
       // Fetch users from Outreach Dashboard
       const userData = await this.dashboardClient.getUsers(school, slug);
-      const users = userData.users;
+      const users = userData.course?.users ?? userData.users ?? [];
 
       let imported = 0;
       let updated = 0;

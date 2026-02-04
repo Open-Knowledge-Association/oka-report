@@ -1,6 +1,6 @@
 /**
  * Outreach Dashboard API Type Definitions
- * 
+ *
  * Types for Outreach Dashboard API responses from:
  * https://outreachdashboard.wmflabs.org/courses/
  */
@@ -61,14 +61,17 @@ export interface OutreachCourse {
       enrollment_edits_enabled: boolean;
     };
     unfinished_update_logs: Record<string, unknown>;
-    update_logs: Record<string, {
-      start_time: string; // ISO 8601 timestamp
-      end_time: string; // ISO 8601 timestamp
-      sentry_tag_uuid: string;
-      error_count: number;
-      processed: number;
-      reprocessed: number;
-    }>;
+    update_logs: Record<
+      string,
+      {
+        start_time: string; // ISO 8601 timestamp
+        end_time: string; // ISO 8601 timestamp
+        sentry_tag_uuid: string;
+        error_count: number;
+        processed: number;
+        reprocessed: number;
+      }
+    >;
     average_update_delay: number;
   };
   level: string;
@@ -110,15 +113,18 @@ export interface OutreachCourse {
   returning_instructor: boolean;
   course_stats: {
     id: number;
-    stats_hash: Record<string, {
-      edited_count: string;
-      new_count: string;
-      revision_count: string;
-      user_count: string;
-      word_count: string;
-      reference_count: string;
-      view_count: string;
-    }>;
+    stats_hash: Record<
+      string,
+      {
+        edited_count: string;
+        new_count: string;
+        revision_count: string;
+        user_count: string;
+        word_count: string;
+        reference_count: string;
+        view_count: string;
+      }
+    >;
   };
   created_count: string;
   edited_count: string;
@@ -191,7 +197,10 @@ export interface CourseData {
 }
 
 export interface UserData {
-  users: OutreachUser[];
+  course?: {
+    users: OutreachUser[];
+  };
+  users?: OutreachUser[];
 }
 
 export interface UploadData {
