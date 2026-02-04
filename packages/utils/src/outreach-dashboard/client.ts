@@ -1,4 +1,4 @@
-import type { CourseData, UserData, UploadData } from "./types";
+import type { CourseData, UserData, UploadData, ArticleData } from "./types";
 
 const DEFAULT_USER_AGENT = "OKAStatsBot/1.0 (https://oka.wiki/stats; tech@oka.wiki)";
 const DEFAULT_MAX_RETRIES = 3;
@@ -92,6 +92,10 @@ export class OutreachDashboardClient {
 
   async getUploads(school: string, slug: string): Promise<UploadData> {
     return this.request<UploadData>(`/courses/${school}/${slug}/uploads.json`);
+  }
+
+  async getArticles(school: string, slug: string): Promise<ArticleData> {
+    return this.request<ArticleData>(`/courses/${school}/${slug}/articles.json`);
   }
 
   getBaseUrl() {
