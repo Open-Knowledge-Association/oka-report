@@ -42,9 +42,10 @@ model Editor {
    /// Example: Outreach Dashboard participant ID "12345"
    externalId String? @unique
 
-  contributions   Contribution[]
-  commonsUploads  CommonsUpload[]
-  createdArticles Article[]       @relation("CreatedArticles")
+   contributions    Contribution[]
+   commonsUploads   CommonsUpload[]
+   createdArticles  Article[]       @relation("CreatedArticles")
+   outreachArticles OutreachArticleEditor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -230,6 +231,104 @@ model SyncJob {
   @@index([status])
   @@index([jobType])
   @@map("sync_jobs")
+}
+
+/// Outreach Dashboard articles
+/// Stores article metadata and metadata from Outreach Dashboard campaigns
+model OutreachArticle {
+  id              String   @id @default(cuid())
+
+  /// Outreach Dashboard article ID (unique identifier from Outreach)
+  /// Example: 12345678
+  outreachId      Int      @unique
+
+  /// Article title as it appears in the URL (with underscores)
+  /// Format: "Article_Title" not "Article Title"
+  /// Example: "Borobudur_Temple"
+  title           String
+
+  /// Wikipedia language code
+  /// Format: "en", "id", "es", etc.
+  /// Example: "en"
+  language        String
+
+  /// Project name for organization
+  /// Example: "wikipedia"
+  project         String
+
+  /// Full URL to the article on Wikipedia
+  /// Example: "https://en.wikipedia.org/wiki/Borobudur_Temple"
+  url             String
+
+  /// Sum of character changes across all edits
+  /// Example: 5000
+  characterSum    Int      @default(0)
+
+  /// Number of references in the article
+  /// Example: 25
+  referencesCount Int      @default(0)
+
+  /// Whether this is a newly created article
+  /// Example: true (newly created), false (existing article with edits)
+  isNewArticle    Boolean  @default(false)
+
+  /// Quality rating from Outreach Dashboard
+  /// Example: "B-class", "C-class", etc.
+  rating          String?
+
+  pageviews       OutreachArticlePageview[]
+  editors         OutreachArticleEditor[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([language, project])
+  @@map("outreach_articles")
+}
+
+/// Daily pageview snapshots for Outreach articles
+/// Stores cumulative view counts from the Outreach Dashboard API
+model OutreachArticlePageview {
+  id                 String   @id @default(cuid())
+
+  /// Reference to the Outreach article
+  outreachArticle    OutreachArticle @relation(fields: [outreachArticleId], references: [id], onDelete: Cascade)
+  outreachArticleId  String
+
+  /// Date for this pageview snapshot
+  /// Format: Date only, no time component
+  /// Example: "2026-01-15"
+  snapshotDate       DateTime @db.Date
+
+  /// Cumulative view count as of snapshot date
+  /// Represents total views from article creation to snapshotDate
+  /// Example: 15000
+  cumulativeViews    Int
+
+  createdAt          DateTime @default(now())
+
+  @@unique([outreachArticleId, snapshotDate])
+  @@index([snapshotDate])
+  @@map("outreach_article_pageviews")
+}
+
+/// Join table linking Outreach articles to editors
+/// Tracks which editors worked on which Outreach Dashboard articles
+model OutreachArticleEditor {
+  id                 String   @id @default(cuid())
+
+  /// Reference to the Outreach article
+  outreachArticle    OutreachArticle @relation(fields: [outreachArticleId], references: [id], onDelete: Cascade)
+  outreachArticleId  String
+
+  /// Reference to the tracked editor
+  editor             Editor   @relation(fields: [editorId], references: [id], onDelete: Cascade)
+  editorId           String
+
+  createdAt          DateTime @default(now())
+
+  @@unique([outreachArticleId, editorId])
+  @@map("outreach_article_editors")
 }
 
 /// Application users for admin access
