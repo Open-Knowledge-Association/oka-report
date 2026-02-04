@@ -99,3 +99,24 @@ export const fetchOutreachUsers = async () => {
   );
   return data.course.users;
 };
+
+export type OutreachArticle = {
+  id: number;
+  title: string;
+  language: string;
+  project: string;
+  view_count: number;
+  average_views: number;
+  character_sum: number;
+  references_count: number;
+  new_article: boolean;
+  rating: string;
+  url: string;
+};
+
+export const fetchOutreachArticles = async () => {
+  const data = await apiFetch<{ course: { articles: OutreachArticle[] } }>(
+    "/outreach/articles?school=OKA&slug=OKA",
+  );
+  return data.course.articles;
+};
