@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
-import { FileText, Eye, Globe } from "lucide-react";
+import { useState, useEffect } from "react";
+import { FileText, Eye, Globe, Search } from "lucide-react";
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -18,68 +19,97 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchOutreachArticles, type OutreachArticle } from "@/lib/api";
-
-type WikiStats = {
-  wiki: string;
-  count: number;
-  pageviews: number;
-};
+import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
+import { fetchOutreachArticles, fetchArticleStats } from "@/lib/api";
 
 export const Route = createFileRoute("/articles")({
   component: ArticlesPage,
+  validateSearch: z.object({
+    page: z.number().optional().default(1),
+    search: z.string().optional(),
+    wiki: z.string().optional(),
+  }),
 });
 
 function ArticlesPage() {
-  const [selectedWiki, setSelectedWiki] = useState<string>("all");
+  const search = useSearch({ from: "/articles" });
+  const navigate = useNavigate({ from: "/articles" });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["stats", "articles"],
-    queryFn: fetchOutreachArticles,
+  const page = search.page ?? 1;
+  const searchTerm = search.search ?? "";
+  const wikiFilter = search.wiki ?? "all";
+
+  // Local state for search input (before debounce)
+  const [searchInput, setSearchInput] = useState(searchTerm);
+
+  // Debounced search value
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      // Update URL when search changes
+      if (searchInput !== searchTerm) {
+        navigate({
+          search: {
+            page: 1,
+            search: searchInput || undefined,
+            wiki: wikiFilter !== "all" ? wikiFilter : undefined,
+          },
+        });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, searchTerm, wikiFilter, navigate]);
+
+  // Stats query (global totals)
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ["stats", "articles", "global"],
+    queryFn: fetchArticleStats,
   });
 
-  const articles: OutreachArticle[] = data ?? [];
+  // Articles query (paginated with filters)
+  const { data: articlesData, isLoading: articlesLoading } = useQuery({
+    queryKey: ["stats", "articles", "list", page, debouncedSearch, wikiFilter],
+    queryFn: () =>
+      fetchOutreachArticles({
+        page,
+        limit: 50,
+        search: debouncedSearch || undefined,
+        wiki: wikiFilter !== "all" ? wikiFilter : undefined,
+      }),
+  });
 
-  // Compute aggregates
-  const { totalArticles, totalPageviews, wikiStats, uniqueWikis } = useMemo(() => {
-    const totalArticles = articles.length;
-    const totalPageviews = articles.reduce((sum, a) => sum + (a.view_count || 0), 0);
+  const articles = articlesData?.articles ?? [];
+  const pagination = articlesData?.pagination;
 
-    // Group by wiki
-    const wikiMap = new Map<string, { count: number; pageviews: number }>();
-    articles.forEach((article) => {
-      const wiki = `${article.language}.${article.project}`;
-      const existing = wikiMap.get(wiki) || { count: 0, pageviews: 0 };
-      wikiMap.set(wiki, {
-        count: existing.count + 1,
-        pageviews: existing.pageviews + (article.view_count || 0),
-      });
+  const totalArticles = statsData?.totalArticles ?? 0;
+  const totalPageviews = statsData?.totalPageviews ?? 0;
+  const uniqueWikis = statsData?.uniqueWikis ?? 0;
+  const wikiStats = statsData?.wikiStats ?? [];
+
+  const handlePageChange = (newPage: number) => {
+    navigate({
+      search: {
+        page: newPage,
+        search: debouncedSearch || undefined,
+        wiki: wikiFilter !== "all" ? wikiFilter : undefined,
+      },
     });
+  };
 
-    const wikiStats: WikiStats[] = Array.from(wikiMap.entries())
-      .map(([wiki, stats]) => ({
-        wiki,
-        count: stats.count,
-        pageviews: stats.pageviews,
-      }))
-      .sort((a, b) => b.pageviews - a.pageviews);
+  const handleWikiChange = (value: string) => {
+    navigate({
+      search: {
+        page: 1,
+        search: debouncedSearch || undefined,
+        wiki: value !== "all" ? value : undefined,
+      },
+    });
+  };
 
-    const uniqueWikis = wikiStats.length;
-
-    return { totalArticles, totalPageviews, wikiStats, uniqueWikis };
-  }, [articles]);
-
-  // Filter and sort articles
-  const filteredArticles = useMemo(() => {
-    let filtered = articles;
-
-    if (selectedWiki !== "all") {
-      filtered = articles.filter((a) => `${a.language}.${a.project}` === selectedWiki);
-    }
-
-    // Sort by pageviews descending
-    return filtered.sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
-  }, [articles, selectedWiki]);
+  const isLoading = statsLoading || articlesLoading;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -96,7 +126,9 @@ function ArticlesPage() {
             <FileText className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalArticles.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {statsLoading ? "..." : totalArticles.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -105,7 +137,9 @@ function ArticlesPage() {
             <Eye className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalPageviews.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {statsLoading ? "..." : totalPageviews.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -114,7 +148,7 @@ function ArticlesPage() {
             <Globe className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{uniqueWikis}</div>
+            <div className="text-2xl font-bold">{statsLoading ? "..." : uniqueWikis}</div>
           </CardContent>
         </Card>
       </div>
@@ -146,9 +180,18 @@ function ArticlesPage() {
         </div>
       )}
 
-      {/* Wiki Filter */}
-      <div className="mb-6">
-        <Select value={selectedWiki} onValueChange={setSelectedWiki}>
+      {/* Search and Filter */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search articles..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={wikiFilter} onValueChange={handleWikiChange}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by wiki" />
           </SelectTrigger>
@@ -164,10 +207,15 @@ function ArticlesPage() {
       </div>
 
       {/* Articles Table */}
-      <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="rounded-lg border border-slate-200 bg-white mb-6">
         <div className="px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">
-            Articles {selectedWiki !== "all" && `(${selectedWiki})`}
+            Articles {wikiFilter !== "all" && `(${wikiFilter})`}
+            {pagination && (
+              <span className="text-sm font-normal text-slate-500 ml-2">
+                ({pagination.total.toLocaleString()} total)
+              </span>
+            )}
           </h2>
         </div>
         <Table>
@@ -181,20 +229,22 @@ function ArticlesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {articlesLoading ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8">
                   Loading...
                 </TableCell>
               </TableRow>
-            ) : filteredArticles.length === 0 ? (
+            ) : articles.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                  No articles available.
+                  {debouncedSearch
+                    ? `No articles match "${debouncedSearch}"`
+                    : "No articles available."}
                 </TableCell>
               </TableRow>
             ) : (
-              filteredArticles.map((article) => (
+              articles.map((article) => (
                 <TableRow key={article.id}>
                   <TableCell className="font-medium">
                     <a
@@ -222,6 +272,15 @@ function ArticlesPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={pagination.totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
     </div>
   );
 }
