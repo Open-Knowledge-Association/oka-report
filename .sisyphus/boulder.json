@@ -1,8 +1,8 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/fix-article-sync-field-names.md",
-  "started_at": "2026-02-04T05:05:42.636Z",
-  "completed_at": "2026-02-04T05:15:00.000Z",
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/articles-pagination-search.md",
+  "started_at": "2026-02-04T05:55:27.064Z",
+  "completed_at": "2026-02-04T06:30:00.000Z",
   "session_ids": ["ses_3dc0d08abffeq14CPkWDntyrdn"],
-  "plan_name": "fix-article-sync-field-names",
+  "plan_name": "articles-pagination-search",
   "status": "completed"
 }
