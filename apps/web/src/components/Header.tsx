@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/editors", label: "Editors" },
+  { to: "/articles", label: "Articles" },
   { to: "/admin/editors", label: "Admin" },
 ];
 
