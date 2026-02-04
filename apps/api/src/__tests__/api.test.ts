@@ -90,4 +90,66 @@ describe("API Integration Tests", () => {
       expect(json.success).toBe(true);
     });
   });
+
+  describe("Outreach Articles API", () => {
+    it("POST /api/outreach/articles/sync should trigger article sync", async () => {
+      const res = await app.request("/api/outreach/articles/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          school: "OKA",
+          slug: "OKA",
+        }),
+      });
+      expect(res.status).toBe(202);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.jobId).toBeDefined();
+      expect(json.data.status).toBe("accepted");
+    });
+
+    it("POST /api/outreach/articles/sync should reject missing school", async () => {
+      const res = await app.request("/api/outreach/articles/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: "OKA",
+        }),
+      });
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.success).toBe(false);
+    });
+
+    it("GET /api/outreach/articles/db should return paginated articles", async () => {
+      const res = await app.request("/api/outreach/articles/db");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(Array.isArray(json.data.articles)).toBe(true);
+      expect(json.data.pagination).toBeDefined();
+      expect(json.data.pagination.total).toBeDefined();
+      expect(json.data.pagination.page).toBeDefined();
+      expect(json.data.pagination.limit).toBeDefined();
+      expect(json.data.pagination.totalPages).toBeDefined();
+    });
+
+    it("GET /api/outreach/articles/db should support pagination", async () => {
+      const res = await app.request("/api/outreach/articles/db?page=2&limit=10");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.pagination.page).toBe(2);
+      expect(json.data.pagination.limit).toBe(10);
+    });
+
+    it("GET /api/outreach/articles/db should use default pagination", async () => {
+      const res = await app.request("/api/outreach/articles/db");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.pagination.page).toBe(1);
+      expect(json.data.pagination.limit).toBe(50);
+    });
+  });
 });

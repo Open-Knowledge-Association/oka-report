@@ -105,7 +105,7 @@ export class OutreachSyncService {
         data: {
           status: "completed",
           completedAt: new Date(),
-          metadata: result,
+          metadata: result as any,
         },
       });
 
@@ -120,6 +120,79 @@ export class OutreachSyncService {
           error: errorMessage,
         },
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Sync articles from Outreach Dashboard
+   * Fetches article list and upserts into database
+   *
+   * @param school - Outreach Dashboard school code (e.g., "OKA")
+   * @param slug - Outreach Dashboard course slug (e.g., "OKA")
+   * @returns Sync result with import/update/error counts
+   */
+  async syncArticlesFromDashboard(school: string, slug: string): Promise<SyncResult> {
+    try {
+      const articleData = await this.dashboardClient.getArticles(school, slug);
+      const articles = articleData.course?.articles ?? [];
+
+      let imported = 0;
+      let updated = 0;
+      const errorDetails: Array<{ username: string; error: string }> = [];
+
+      for (const article of articles) {
+        try {
+          const result = await this.prisma.outreachArticle.upsert({
+            where: { outreachId: article.id || 0 },
+            create: {
+              outreachId: article.id || 0,
+              title: article.title || "",
+              language: article.language || "en",
+              project: article.project || "wikipedia",
+              url: article.url || "",
+              character_sum: article.character_sum || 0,
+              references_count: article.references_count || 0,
+              new_article: article.new_article || false,
+              rating: article.rating || null,
+            },
+            update: {
+              title: article.title || "",
+              language: article.language || "en",
+              project: article.project || "wikipedia",
+              url: article.url || "",
+              character_sum: article.character_sum || 0,
+              references_count: article.references_count || 0,
+              new_article: article.new_article || false,
+              rating: article.rating || null,
+              updatedAt: new Date(),
+            },
+          });
+
+          const createdJustNow = result.createdAt.getTime() > Date.now() - 5000;
+          if (createdJustNow) {
+            imported++;
+          } else {
+            updated++;
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          errorDetails.push({
+            username: article.title || "Unknown",
+            error: errorMessage,
+          });
+        }
+      }
+
+      const syncResult: SyncResult = {
+        imported,
+        updated,
+        errors: errorDetails.length,
+        errorDetails,
+      };
+
+      return syncResult;
+    } catch (error) {
       throw error;
     }
   }
