@@ -191,6 +191,21 @@ export interface OutreachUpload {
   date?: string;
 }
 
+export interface OutreachArticle {
+  id: number;
+  title: string;
+  language: string;
+  project: string;
+  view_count: number;
+  average_views: number;
+  character_sum: number;
+  references_count: number;
+  new_article: boolean;
+  rating: string;
+  url: string;
+  user_ids: number[];
+}
+
 // Response wrappers as expected by the tests
 export interface CourseData {
   course: OutreachCourse;
@@ -205,4 +220,10 @@ export interface UserData {
 
 export interface UploadData {
   uploads: OutreachUpload[];
+}
+
+export interface ArticleData {
+  course: {
+    articles: OutreachArticle[];
+  };
 }
