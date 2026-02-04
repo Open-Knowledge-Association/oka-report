@@ -121,6 +121,38 @@ describe("API Integration Tests", () => {
       expect(json.success).toBe(false);
     });
 
+    it("POST /api/outreach/articles/sync should return 409 when sync already running", async () => {
+      const { prisma } = await import("@repo/db");
+
+      // First, create a running sync job
+      await prisma.syncJob.create({
+        data: {
+          jobType: "outreach_articles",
+          status: "running",
+          startedAt: new Date(),
+        },
+      });
+
+      try {
+        // Try to start another sync
+        const res = await app.request("/api/outreach/articles/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ school: "OKA", slug: "OKA" }),
+        });
+
+        expect(res.status).toBe(409);
+        const json = await res.json();
+        expect(json.success).toBe(false);
+        expect(json.error).toContain("Sync already in progress");
+      } finally {
+        // Clean up: remove the test sync job
+        await prisma.syncJob.deleteMany({
+          where: { jobType: "outreach_articles", status: "running" },
+        });
+      }
+    });
+
     it("POST /api/outreach/articles/sync should sync articles end-to-end with mocked client", async () => {
       const mockArticlesData = {
         course: {

@@ -165,6 +165,18 @@ outreachRoutes.post("/articles/sync", async (c) => {
   try {
     const body = OutreachSyncSchema.parse(await c.req.json());
 
+    // Check if a sync is already running
+    const runningSync = await prisma.syncJob.findFirst({
+      where: {
+        jobType: "outreach_articles",
+        status: "running",
+      },
+    });
+
+    if (runningSync) {
+      throw new Error("Sync already in progress");
+    }
+
     // Create sync job
     const job = await prisma.syncJob.create({
       data: {
@@ -231,6 +243,16 @@ outreachRoutes.post("/articles/sync", async (c) => {
           details: error.message,
         },
         400,
+      );
+    }
+
+    if (error instanceof Error && error.message?.includes("Sync already in progress")) {
+      return c.json(
+        {
+          success: false,
+          error: error.message,
+        },
+        409,
       );
     }
 

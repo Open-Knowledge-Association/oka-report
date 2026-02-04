@@ -17,6 +17,7 @@ describe("OutreachArticleSyncService", () => {
       syncJob: {
         create: mock(() => Promise.resolve({ id: "job-123", createdAt: jobCreatedAt })),
         update: mock(() => Promise.resolve({ id: "job-123" })),
+        findFirst: mock(() => Promise.resolve(null)),
       },
       outreachArticle: {
         upsert: mock(() =>
@@ -45,6 +46,7 @@ describe("OutreachArticleSyncService", () => {
         ),
       },
       editor: {
+        findMany: mock(() => Promise.resolve([])),
         findUnique: mock(() => Promise.resolve(null)),
       },
     } as unknown as PrismaClient;
@@ -222,16 +224,13 @@ describe("OutreachArticleSyncService", () => {
         } as ArticleData),
       );
 
-      mockPrisma.editor.findUnique = mock((args: any) => {
-        if (args.where.externalId === "42") {
-          return Promise.resolve({ id: "editor-42", externalId: "42" });
-        }
-        return Promise.resolve(null);
-      });
+      mockPrisma.editor.findMany = mock(() =>
+        Promise.resolve([{ id: "editor-42", externalId: "42" }]),
+      );
 
       await service.syncArticlesFromDashboard("OKA", "oka");
 
-      expect(mockPrisma.editor.findUnique).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.editor.findMany).toHaveBeenCalledTimes(1);
       expect(mockPrisma.outreachArticleEditor.upsert).toHaveBeenCalledTimes(1);
       expect(mockPrisma.outreachArticleEditor.upsert).toHaveBeenCalledWith({
         where: {
