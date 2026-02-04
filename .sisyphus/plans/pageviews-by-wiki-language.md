@@ -663,15 +663,15 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/articles
 
 ### Final Checklist
 
-- [ ] All "Must Have" features present:
-  - [ ] Articles table with Title, Wiki, Pageviews, Characters, References
-  - [ ] Wiki filter dropdown
-  - [ ] Summary cards (Total Articles, Total Pageviews, Wiki count)
-  - [ ] Loading state
-- [ ] All "Must NOT Have" enforced:
-  - [ ] No database storage (direct API fetch)
-  - [ ] No pagination
-  - [ ] No separate component files
-  - [ ] No search/text filter
-- [ ] All TypeScript compiles
-- [ ] Navigation link works
+- [x] All "Must Have" features present:
+  - [x] Articles table with Title, Wiki, Pageviews, Characters, References
+  - [x] Wiki filter dropdown
+  - [x] Summary cards (Total Articles, Total Pageviews, Wiki count)
+  - [x] Loading state
+- [x] All "Must NOT Have" enforced:
+  - [x] No database storage (direct API fetch)
+  - [x] No pagination
+  - [x] No separate component files
+  - [x] No search/text filter
+- [x] All TypeScript compiles
+- [x] Navigation link works
