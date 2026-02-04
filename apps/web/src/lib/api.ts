@@ -18,6 +18,13 @@ export type Editor = {
   updatedAt: string;
 };
 
+export type OutreachArticleEditor = {
+  id: string;
+  isAuthor: boolean;
+  createdAt: string;
+  editor: Editor;
+};
+
 export const apiFetch = async <T>(path: string, init?: RequestInit) => {
   const response = await fetch(`/api${path}`, {
     headers: {
@@ -114,6 +121,7 @@ export type OutreachArticle = {
     cumulativeViews: number;
     snapshotDate: string;
   }>;
+  editors?: OutreachArticleEditor[];
 };
 
 export type PaginationMetadata = {
