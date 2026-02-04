@@ -101,17 +101,19 @@ export const fetchOutreachUsers = async () => {
 };
 
 export type OutreachArticle = {
-  id: number;
+  id: string;
   title: string;
   language: string;
   project: string;
-  view_count: number;
-  average_views: number;
-  character_sum: number;
-  references_count: number;
-  new_article: boolean;
-  rating: string;
   url: string;
+  characterSum: number;
+  referencesCount: number;
+  isNewArticle: boolean;
+  rating: string | null;
+  pageviews: Array<{
+    cumulativeViews: number;
+    snapshotDate: string;
+  }>;
 };
 
 export type PaginationMetadata = {

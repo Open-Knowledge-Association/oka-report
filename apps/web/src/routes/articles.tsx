@@ -258,13 +258,13 @@ function ArticlesPage() {
                   </TableCell>
                   <TableCell>{`${article.language}.${article.project}`}</TableCell>
                   <TableCell className="text-right">
-                    {(article.view_count || 0).toLocaleString()}
+                    {(article.pageviews?.[0]?.cumulativeViews || 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {(article.character_sum || 0).toLocaleString()}
+                    {(article.characterSum || 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {(article.references_count || 0).toLocaleString()}
+                    {(article.referencesCount || 0).toLocaleString()}
                   </TableCell>
                 </TableRow>
               ))
