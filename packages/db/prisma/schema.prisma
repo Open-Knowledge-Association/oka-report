@@ -325,6 +325,9 @@ model OutreachArticleEditor {
   editor             Editor   @relation(fields: [editorId], references: [id], onDelete: Cascade)
   editorId           String
 
+  /// Whether this editor is the original article creator
+  isAuthor           Boolean  @default(false)
+
   createdAt          DateTime @default(now())
 
   @@unique([outreachArticleId, editorId])
