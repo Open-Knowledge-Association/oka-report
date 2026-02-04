@@ -12,6 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -290,6 +292,7 @@ function ArticlesPage() {
             <TableRow>
               <TableHead>Title</TableHead>
               <TableHead>Wiki</TableHead>
+              <TableHead>Editors</TableHead>
               <TableHead className="text-right">Pageviews</TableHead>
               <TableHead className="text-right">Characters</TableHead>
               <TableHead className="text-right">References</TableHead>
@@ -298,13 +301,13 @@ function ArticlesPage() {
           <TableBody>
             {articlesLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : articles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                <TableCell colSpan={6} className="text-center py-8 text-slate-500">
                   {debouncedSearch
                     ? `No articles match "${debouncedSearch}"`
                     : "No articles available."}
@@ -324,6 +327,46 @@ function ArticlesPage() {
                     </a>
                   </TableCell>
                   <TableCell>{`${article.language}.${article.project}`}</TableCell>
+                  <TableCell>
+                    {article.editors && article.editors.length > 0 ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="cursor-pointer">
+                              {article.editors.length}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <div className="space-y-1">
+                              {article.editors.slice(0, 5).map((editor) => (
+                                <div key={editor.id} className="flex items-center gap-2">
+                                  <Users className="h-3 w-3 text-slate-500" />
+                                  <a
+                                    href={`/editors/${editor.editor.id}`}
+                                    className="text-sm hover:underline"
+                                  >
+                                    {editor.editor.username}
+                                  </a>
+                                  {editor.isAuthor && (
+                                    <Badge variant="outline" className="text-xs px-1 py-0">
+                                      Author
+                                    </Badge>
+                                  )}
+                                </div>
+                              ))}
+                              {article.editors.length > 5 && (
+                                <div className="text-sm text-slate-500">
+                                  +{article.editors.length - 5} more
+                                </div>
+                              )}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     {(article.pageviews?.[0]?.cumulativeViews || 0).toLocaleString()}
                   </TableCell>
