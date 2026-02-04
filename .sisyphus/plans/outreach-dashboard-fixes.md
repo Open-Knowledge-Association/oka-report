@@ -34,7 +34,7 @@ The Outreach Dashboard Integration plan (`.sisyphus/plans/outreach-dashboard-int
 
 ## TODOs
 
-- [ ] 1. Fix TanStack Router Route Export
+- [x] 1. Fix TanStack Router Route Export
 
   **What to do**:
   - Modify `apps/web/src/routes/admin/outreach.tsx`
@@ -51,27 +51,27 @@ The Outreach Dashboard Integration plan (`.sisyphus/plans/outreach-dashboard-int
   - Current file: `apps/web/src/routes/admin/outreach.tsx` - needs fix
 
   **Acceptance Criteria**:
-  - [ ] `grep -q "createFileRoute" apps/web/src/routes/admin/outreach.tsx` → PASS
-  - [ ] `grep -q "export const Route" apps/web/src/routes/admin/outreach.tsx` → PASS
-  - [ ] `moon run web:build` → No errors
+  - [x] `grep -q "createFileRoute" apps/web/src/routes/admin/outreach.tsx` → PASS
+  - [x] `grep -q "export const Route" apps/web/src/routes/admin/outreach.tsx` → PASS
+  - [x] `moon run web:build` → No errors
 
   **Commit**: YES
   - Message: `fix(web): add TanStack Router Route export to admin/outreach`
   - Files: `apps/web/src/routes/admin/outreach.tsx`
 
-- [ ] 2. Verify Build Succeeds
+- [x] 2. Verify Build Succeeds
 
   **What to do**:
   - Run `moon run web:build` to verify no TypeScript or build errors
   - Verify the route tree is regenerated correctly
 
   **Acceptance Criteria**:
-  - [ ] `moon run web:build` exits with code 0
-  - [ ] `grep -q "outreach" apps/web/src/routeTree.gen.ts` → PASS
+  - [x] `moon run web:build` exits with code 0
+  - [x] `grep -q "outreach" apps/web/src/routeTree.gen.ts` → PASS
 
   **Commit**: NO (verification only)
 
-- [ ] 3. Import Editors from Outreach Dashboard
+- [x] 3. Import Editors from Outreach Dashboard
 
   **What to do**:
   - Start the API server
@@ -83,13 +83,13 @@ The Outreach Dashboard Integration plan (`.sisyphus/plans/outreach-dashboard-int
   - Sync service: `apps/api/src/services/outreach-sync.service.ts`
 
   **Acceptance Criteria**:
-  - [ ] `curl -X POST http://localhost:3000/api/sync/outreach -H "Content-Type: application/json" -d '{"school":"OKA","slug":"OKA"}'` → 200/202
-  - [ ] `curl http://localhost:3000/api/editors?source=outreach_dashboard | jq 'length'` → 53 (or close)
-  - [ ] Database contains editors with source='outreach_dashboard'
+  - [x] `curl -X POST http://localhost:3000/api/sync/outreach -H "Content-Type: application/json" -d '{"school":"OKA","slug":"OKA"}'` → 200/202
+  - [x] `curl http://localhost:3000/api/editors?source=outreach_dashboard | jq 'length'` → 54 (53 students + 1 instructor)
+  - [x] Database contains editors with source='outreach_dashboard'
 
   **Commit**: NO (data import, no code changes)
 
-- [ ] 4. Verify Full Integration
+- [x] 4. Verify Full Integration
 
   **What to do**:
   - Start both API and web dev servers
@@ -97,15 +97,15 @@ The Outreach Dashboard Integration plan (`.sisyphus/plans/outreach-dashboard-int
   - Verify page loads and shows data
 
   **Acceptance Criteria**:
-  - [ ] `moon run api:dev` starts successfully
-  - [ ] `moon run web:dev` starts successfully
-  - [ ] `/admin/outreach` page loads without errors
-  - [ ] Page shows course stats (Course ID: 33560)
-  - [ ] Page shows imported editor count
+  - [x] `moon run api:dev` starts successfully
+  - [x] `moon run web:dev` starts successfully
+  - [x] `/admin/outreach` page loads without errors
+  - [x] Page shows course stats (Course ID: 33560)
+  - [x] Page shows imported editor count
 
   **Commit**: NO (verification only)
 
-- [ ] 5. Push All Commits to Remote
+- [x] 5. Push All Commits to Remote
 
   **What to do**:
   - Git pull --rebase to sync with remote
@@ -113,8 +113,8 @@ The Outreach Dashboard Integration plan (`.sisyphus/plans/outreach-dashboard-int
   - Verify push succeeds
 
   **Acceptance Criteria**:
-  - [ ] `git push` succeeds
-  - [ ] `git status` shows "up to date with origin"
+  - [x] `git push` succeeds
+  - [x] `git status` shows "up to date with origin"
 
   **Commit**: NO (push existing commits)
 
@@ -132,8 +132,8 @@ The Outreach Dashboard Integration plan (`.sisyphus/plans/outreach-dashboard-int
 
 ### Final Checklist
 
-- [ ] TanStack Router Route export added
-- [ ] Build succeeds
-- [ ] 53 editors imported to database
-- [ ] Admin outreach page accessible at /admin/outreach
-- [ ] All commits pushed to remote
+- [x] TanStack Router Route export added
+- [x] Build succeeds
+- [x] 54 editors imported to database (53 students + 1 instructor)
+- [x] Admin outreach page accessible at /admin/outreach
+- [x] All commits pushed to remote
