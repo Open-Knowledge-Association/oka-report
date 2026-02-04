@@ -14,9 +14,7 @@ editorsRoutes.get("/", async (c) => {
   const editors = await prisma.editor.findMany({
     where: {
       ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
-      ...(query.search
-        ? { username: { contains: query.search, mode: "insensitive" } }
-        : {}),
+      ...(query.search ? { username: { contains: query.search, mode: "insensitive" } } : {}),
     },
     orderBy: { username: "asc" },
   });
@@ -32,10 +30,7 @@ editorsRoutes.post("/", async (c) => {
   });
 
   if (existing) {
-    return c.json(
-      { success: false, error: { code: "duplicate", message: "Editor exists" } },
-      409,
-    );
+    return c.json({ success: false, error: { code: "duplicate", message: "Editor exists" } }, 409);
   }
 
   const editor = await prisma.editor.create({
@@ -137,4 +132,119 @@ editorsRoutes.post("/bulk", async (c) => {
   }
 
   return c.json({ success: true, data: results }, 201);
+});
+
+editorsRoutes.get("/:id/profile", async (c) => {
+  const id = c.req.param("id");
+
+  const editor = await prisma.editor.findUnique({
+    where: { id },
+    include: {
+      outreachArticles: {
+        include: {
+          outreachArticle: {
+            include: {
+              pageviews: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!editor) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "not_found", message: "Editor not found" },
+      },
+      404,
+    );
+  }
+
+  const articles = editor.outreachArticles.map((oa) => oa.outreachArticle);
+  const articlesCount = articles.length;
+  const totalEdits = articles.reduce((sum, article) => sum + (article.characterSum > 0 ? 1 : 0), 0);
+  const charactersAdded = articles.reduce((sum, article) => sum + article.characterSum, 0);
+  const referencesAdded = articles.reduce((sum, article) => sum + article.referencesCount, 0);
+  const pageviews = articles.reduce((sum, article) => {
+    const latestPageview = article.pageviews.sort(
+      (a, b) => b.snapshotDate.getTime() - a.snapshotDate.getTime(),
+    )[0];
+    return sum + (latestPageview?.cumulativeViews || 0);
+  }, 0);
+
+  const outreachStats = {
+    articlesCount,
+    totalEdits,
+    charactersAdded,
+    referencesAdded,
+    pageviews,
+  };
+
+  let wikimediaProfile = null;
+  try {
+    const firstArticle = articles[0];
+    const wikiBase = firstArticle
+      ? `https://${firstArticle.language}.${firstArticle.project}.org`
+      : "https://en.wikipedia.org";
+
+    const { WikimediaClient } = await import("@repo/utils");
+    const client = new WikimediaClient({ baseUrl: `${wikiBase}/w/api.php` });
+
+    interface UserQueryResponse {
+      query?: {
+        users?: Array<{
+          userid?: number;
+          name?: string;
+          registration?: string;
+          editcount?: number;
+          gender?: string;
+          missing?: boolean;
+        }>;
+      };
+    }
+
+    const response = (await client.request("", {
+      action: "query",
+      list: "users",
+      ususers: editor.username,
+      usprop: "registration|editcount|gender",
+      format: "json",
+    })) as UserQueryResponse;
+
+    const user = response.query?.users?.[0];
+    if (user && !user.missing) {
+      wikimediaProfile = {
+        registrationDate: user.registration || null,
+        editCount: user.editcount || 0,
+        gender: user.gender || null,
+      };
+    }
+  } catch (error) {
+    console.error("Failed to fetch MediaWiki profile:", error);
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      editor: {
+        id: editor.id,
+        username: editor.username,
+      },
+      outreachStats,
+      wikimediaProfile,
+      articles: articles.map((article) => ({
+        id: article.id,
+        title: article.title,
+        language: article.language,
+        project: article.project,
+        url: article.url,
+        characterSum: article.characterSum,
+        referencesCount: article.referencesCount,
+        isNewArticle: article.isNewArticle,
+        rating: article.rating,
+      })),
+    },
+  });
 });
