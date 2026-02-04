@@ -1,8 +1,8 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/pageviews-by-wiki-language.md",
-  "started_at": "2026-02-04T02:57:28.333Z",
-  "completed_at": "2026-02-04T10:15:00.000Z",
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/fix-article-sync-field-names.md",
+  "started_at": "2026-02-04T05:05:42.636Z",
+  "completed_at": "2026-02-04T05:15:00.000Z",
   "session_ids": ["ses_3dc0d08abffeq14CPkWDntyrdn"],
-  "plan_name": "pageviews-by-wiki-language",
+  "plan_name": "fix-article-sync-field-names",
   "status": "completed"
 }
