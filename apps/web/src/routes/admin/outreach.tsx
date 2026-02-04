@@ -1,8 +1,13 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { OutreachStats, SyncButton, SyncStatusCard } from "@/components/outreach";
 import { useToast } from "@/hooks/use-toast";
 
-export default function OutreachAdminPage() {
+export const Route = createFileRoute("/admin/outreach")({
+  component: OutreachAdminPage,
+});
+
+function OutreachAdminPage() {
   const { toast } = useToast();
 
   const {
