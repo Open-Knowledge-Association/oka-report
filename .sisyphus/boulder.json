@@ -1,8 +1,8 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/outreach-dashboard-direct-display.md",
-  "started_at": "2026-02-04T02:03:19.255Z",
-  "completed_at": "2026-02-04T02:30:00.000Z",
-  "session_ids": ["ses_3dc0d08abffeq14CPkWDntyrdn", "ses_3d98bc139ffe3l7uU0541s85kv"],
-  "plan_name": "outreach-dashboard-direct-display",
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/pageviews-by-wiki-language.md",
+  "started_at": "2026-02-04T02:57:28.333Z",
+  "completed_at": "2026-02-04T10:15:00.000Z",
+  "session_ids": ["ses_3dc0d08abffeq14CPkWDntyrdn"],
+  "plan_name": "pageviews-by-wiki-language",
   "status": "completed"
 }
