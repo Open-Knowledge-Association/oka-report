@@ -1,48 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Users, FileText, Eye, TrendingUp, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { fetchOverallStats } from "@/lib/api";
+import { OutreachStats } from "@/components/outreach";
+import { fetchOverallStats, fetchOutreachCourse } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
 });
 
 function DashboardPage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["stats", "overall"],
-    queryFn: fetchOverallStats,
+  const {
+    data: outreachData,
+    isLoading: isLoadingOutreach,
+    error,
+  } = useQuery({
+    queryKey: ["outreach", "course"],
+    queryFn: fetchOutreachCourse,
   });
-
-  const stats = data?.totals;
-
-  const statCards = [
-    {
-      title: "Total Editors",
-      value: stats?.editorsCount ?? "-",
-      icon: Users,
-      description: "Active Wikipedia editors",
-    },
-    {
-      title: "Articles Created",
-      value: stats?.articlesCreated ?? "-",
-      icon: FileText,
-      description: "By tracked editors",
-    },
-    {
-      title: "Total Edits",
-      value: stats?.edits ?? "-",
-      icon: TrendingUp,
-      description: "Contributions tracked",
-    },
-    {
-      title: "Page Views",
-      value: stats?.pageviews ? `${(stats.pageviews / 1000).toFixed(1)}K` : "-",
-      icon: Eye,
-      description: "Total article views",
-    },
-  ];
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -51,23 +27,16 @@ function DashboardPage() {
         <p className="text-slate-600 mt-1">Overview of OKA Wikipedia contributions</p>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-12">Loading dashboard...</div>
+      {isLoadingOutreach ? (
+        <div className="text-center py-12">Loading Outreach statistics...</div>
+      ) : error ? (
+        <div className="text-center py-12 text-red-600">
+          Error loading statistics: {error instanceof Error ? error.message : "Unknown error"}
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {statCards.map((card) => (
-              <Card key={card.title}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                  <card.icon className="h-4 w-4 text-slate-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{card.value}</div>
-                  <p className="text-xs text-slate-500">{card.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="mb-8">
+            <OutreachStats course={outreachData?.course} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
