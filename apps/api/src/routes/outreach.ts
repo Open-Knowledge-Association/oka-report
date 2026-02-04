@@ -106,6 +106,51 @@ outreachRoutes.get("/users", async (c) => {
 });
 
 /**
+ * GET /api/outreach/articles
+ * Fetch article data from Outreach Dashboard
+ * Query params: school, slug
+ * Returns: { success: boolean, data: ArticleData }
+ */
+outreachRoutes.get("/articles", async (c) => {
+  try {
+    const school = c.req.query("school");
+    const slug = c.req.query("slug");
+
+    if (!school || !slug) {
+      return c.json(
+        {
+          success: false,
+          error: "Missing required query parameters: school, slug",
+        },
+        400,
+      );
+    }
+
+    const articleData = await dashboardClient.getArticles(school, slug);
+
+    return c.json(
+      {
+        success: true,
+        data: articleData,
+      },
+      200,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching articles:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to fetch articles data",
+        details: message,
+      },
+      500,
+    );
+  }
+});
+
+/**
  * POST /api/sync/outreach
  * Trigger sync of editors from Outreach Dashboard
  * Body: { school, slug }
