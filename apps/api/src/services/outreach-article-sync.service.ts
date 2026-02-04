@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@repo/db/generated/prisma/client";
 import type { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard/client";
+import { WikimediaClient } from "@repo/utils";
 import pLimit from "p-limit";
 
 // Configuration constants for batch processing
@@ -136,7 +137,7 @@ export class OutreachArticleSyncService {
                 const editor = editorMap.get(String(userId));
 
                 if (editor) {
-                  await this.prisma.outreachArticleEditor.upsert({
+                  const articleEditor = await this.prisma.outreachArticleEditor.upsert({
                     where: {
                       outreachArticleId_editorId: {
                         outreachArticleId: outreachArticle.id,
@@ -149,6 +150,32 @@ export class OutreachArticleSyncService {
                     },
                     update: {},
                   });
+
+                  // Detect if this editor is the article creator
+                  try {
+                    const wikiBaseUrl = `https://${article.language}.${article.project}.org`;
+                    const wikimediaClient = new WikimediaClient({ baseUrl: wikiBaseUrl });
+                    const articleInfo = await wikimediaClient.getArticleInfo(article.title);
+
+                    if (articleInfo?.creator) {
+                      // Normalize usernames: replace spaces with underscores for comparison
+                      const normalizedCreator = articleInfo.creator.replace(/\s+/g, "_");
+                      const normalizedEditor = editor.username.replace(/\s+/g, "_");
+
+                      if (normalizedCreator === normalizedEditor) {
+                        await this.prisma.outreachArticleEditor.update({
+                          where: { id: articleEditor.id },
+                          data: { isAuthor: true },
+                        });
+                      }
+                    }
+                  } catch (error) {
+                    // Gracefully handle author detection failures - don't block sync
+                    console.warn(
+                      `Failed to detect author for article "${article.title}" and editor "${editor.username}":`,
+                      error instanceof Error ? error.message : String(error),
+                    );
+                  }
                 }
               }
 
