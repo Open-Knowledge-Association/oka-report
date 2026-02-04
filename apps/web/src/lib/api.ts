@@ -114,15 +114,47 @@ export type OutreachArticle = {
   url: string;
 };
 
-export const fetchOutreachArticles = async () => {
-  const data = await apiFetch<{
-    articles: OutreachArticle[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-  }>("/outreach/articles/db");
-  return data.articles;
+export type PaginationMetadata = {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type ArticlesResponse = {
+  articles: OutreachArticle[];
+  pagination: PaginationMetadata;
+};
+
+export type ArticleStats = {
+  totalArticles: number;
+  totalPageviews: number;
+  uniqueWikis: number;
+  wikiStats: Array<{
+    wiki: string;
+    count: number;
+    pageviews: number;
+  }>;
+};
+
+export const fetchOutreachArticles = async (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  wiki?: string;
+}): Promise<ArticlesResponse> => {
+  const queryString = new URLSearchParams();
+  if (params?.page) queryString.set("page", String(params.page));
+  if (params?.limit) queryString.set("limit", String(params.limit));
+  if (params?.search) queryString.set("search", params.search);
+  if (params?.wiki) queryString.set("wiki", params.wiki);
+
+  const query = queryString.toString();
+  const path = `/outreach/articles/db${query ? `?${query}` : ""}`;
+
+  return apiFetch<ArticlesResponse>(path);
+};
+
+export const fetchArticleStats = async (): Promise<ArticleStats> => {
+  return apiFetch<ArticleStats>("/outreach/articles/stats");
 };
