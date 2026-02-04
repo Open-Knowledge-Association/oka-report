@@ -253,5 +253,32 @@ describe("API Integration Tests", () => {
       expect(json.data.pagination.page).toBe(1);
       expect(json.data.pagination.limit).toBe(50);
     });
+
+    it("GET /api/outreach/articles/db should support search", async () => {
+      const res = await app.request("/api/outreach/articles/db?search=Test");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.pagination).toBeDefined();
+    });
+
+    it("GET /api/outreach/articles/db should support wiki filter", async () => {
+      const res = await app.request("/api/outreach/articles/db?wiki=en.wikipedia");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.pagination).toBeDefined();
+    });
+
+    it("GET /api/outreach/articles/stats should return global stats", async () => {
+      const res = await app.request("/api/outreach/articles/stats");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.totalArticles).toBeDefined();
+      expect(json.data.totalPageviews).toBeDefined();
+      expect(json.data.uniqueWikis).toBeDefined();
+      expect(Array.isArray(json.data.wikiStats)).toBe(true);
+    });
   });
 });
