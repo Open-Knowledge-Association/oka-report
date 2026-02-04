@@ -535,9 +535,9 @@ moon run :dev
 
 ### Final Checklist
 
-- [ ] Dashboard (`/`) shows Outreach stats with actual numbers
-- [ ] Editors (`/editors`) shows table with user data (characters, references, uploads)
-- [ ] Admin (`/admin/outreach`) still works (regression check)
-- [ ] No TypeScript errors
-- [ ] No console errors in browser
-- [ ] All 5 commits pushed to remote
+- [x] Dashboard (`/`) shows Outreach stats with actual numbers
+- [x] Editors (`/editors`) shows table with user data (characters, references, uploads)
+- [x] Admin (`/admin/outreach`) still works (regression check)
+- [x] No TypeScript errors
+- [x] No console errors in browser
+- [x] All 5 commits pushed to remote
