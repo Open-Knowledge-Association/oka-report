@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
+import { WikimediaClient } from "@repo/utils";
 import { OutreachSyncService } from "../services/outreach-sync.service";
 import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 import {
@@ -59,7 +60,104 @@ outreachRoutes.get("/course", async (c) => {
     return c.json(
       {
         success: false,
-        error: "Failed to fetch course data",
+        error: "Failed to trigger sync",
+        details: message,
+      },
+      500,
+    );
+  }
+});
+
+/**
+ * POST /api/outreach/backfill-authors
+ * Backfill isAuthor field for OutreachArticleEditor records
+ * Query params: limit (default 100, max 500)
+ * Returns: { success: boolean, data: { total, processed, authorsFound } }
+ */
+outreachRoutes.post("/backfill-authors", async (c) => {
+  try {
+    const limitParam = c.req.query("limit");
+    let limit = 100;
+    if (limitParam) {
+      limit = Math.min(Math.max(parseInt(limitParam, 10), 1), 500);
+    }
+
+    const recordsToProcess = await prisma.outreachArticleEditor.findMany({
+      where: {
+        isAuthor: false,
+      },
+      take: limit,
+      include: {
+        outreachArticle: true,
+        editor: true,
+      },
+    });
+
+    const total = recordsToProcess.length;
+    let processed = 0;
+    let authorsFound = 0;
+    const errors: Array<{ articleTitle: string; editorUsername: string; error: string }> = [];
+
+    for (const record of recordsToProcess) {
+      try {
+        const wikiBaseUrl = `https://${record.outreachArticle.language}.${record.outreachArticle.project}.org`;
+        const wikimediaClient = new WikimediaClient({
+          baseUrl: wikiBaseUrl,
+          rateLimiterOptions: { delayMs: 200 }, // 200ms delay = 5 req/sec
+        });
+
+        const articleInfo = await wikimediaClient.getArticleInfo(record.outreachArticle.title);
+
+        if (articleInfo?.creator) {
+          // Normalize usernames: replace spaces with underscores for comparison
+          const normalizedCreator = articleInfo.creator.replace(/\s+/g, "_");
+          const normalizedEditor = record.editor.username.replace(/\s+/g, "_");
+
+          if (normalizedCreator === normalizedEditor) {
+            await prisma.outreachArticleEditor.update({
+              where: { id: record.id },
+              data: { isAuthor: true },
+            });
+            authorsFound++;
+          }
+        }
+
+        processed++;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push({
+          articleTitle: record.outreachArticle.title,
+          editorUsername: record.editor.username,
+          error: errorMessage,
+        });
+        processed++;
+        console.error(
+          `Failed to process article "${record.outreachArticle.title}" for editor "${record.editor.username}":`,
+          errorMessage,
+        );
+      }
+    }
+
+    return c.json(
+      {
+        success: true,
+        data: {
+          total,
+          processed,
+          authorsFound,
+          errors: errors.length > 0 ? errors : undefined,
+        },
+      },
+      200,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error backfilling authors:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to backfill authors",
         details: message,
       },
       500,
