@@ -58,7 +58,6 @@ export class SyncService {
     let syncedCount = 0;
 
     for (const editor of editors) {
-      // Check cancellation before processing each editor
       if (jobId && (await this.checkCancelled(jobId))) {
         return syncedCount;
       }
@@ -69,7 +68,11 @@ export class SyncService {
       );
 
       for (const contribution of contributions) {
-        const article = await this.upsertArticle(contribution, editor.id);
+        const article = await this.findArticleForContribution(contribution);
+        if (!article) {
+          continue;
+        }
+
         await this.prisma.contribution.upsert({
           where: {
             revisionId_articleId: {
@@ -247,35 +250,34 @@ export class SyncService {
     }
   }
 
-  private async upsertArticle(contribution: UserContribution, editorId: string) {
+  /**
+   * Links contribution to existing Outreach article by title+wikiProject.
+   * Returns null if article not in Outreach program (contribution will be skipped).
+   */
+  private async findArticleForContribution(
+    contribution: UserContribution,
+  ): Promise<{ id: string } | null> {
     const wikiProject = new URL(this.wikimediaClient.getBaseUrl()).host;
-    const isCreation = contribution.parentId == null || contribution.parentId === 0;
-    const articleInfo = isCreation
-      ? await this.wikimediaClient.getArticleInfo(contribution.title)
-      : null;
 
-    return this.prisma.article.upsert({
+    const existingArticle = await this.prisma.article.findFirst({
       where: {
-        pageId_wikiProject: {
-          pageId: contribution.pageId,
-          wikiProject,
-        },
-      },
-      create: {
-        pageId: contribution.pageId,
         title: contribution.title,
         wikiProject,
-        source: "MEDIAWIKI",
-        createdByEditorId: articleInfo?.creator === contribution.username ? editorId : null,
-        articleCreatedAt: articleInfo?.createdAt ? new Date(articleInfo.createdAt) : null,
-      },
-      update: {
-        title: contribution.title,
-        source: "MEDIAWIKI",
-        createdByEditorId: articleInfo?.creator === contribution.username ? editorId : undefined,
-        articleCreatedAt: articleInfo?.createdAt ? new Date(articleInfo.createdAt) : undefined,
       },
     });
+
+    if (!existingArticle) {
+      return null;
+    }
+
+    if (existingArticle.pageId === 0 || existingArticle.pageId !== contribution.pageId) {
+      await this.prisma.article.update({
+        where: { id: existingArticle.id },
+        data: { pageId: contribution.pageId },
+      });
+    }
+
+    return { id: existingArticle.id };
   }
 
   private async storeCommonsUploads(editorId: string, uploads: CommonsUpload[]) {
