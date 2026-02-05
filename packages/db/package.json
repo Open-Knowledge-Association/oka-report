@@ -3,6 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "migrate:unified-articles": "bun run scripts/migrate-unified-articles.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
