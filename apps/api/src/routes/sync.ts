@@ -277,37 +277,12 @@ syncRoutes.post("/outreach", async (c) => {
   try {
     const body = OutreachSyncSchema.parse(await c.req.json());
 
-    const job = await prisma.syncJob.create({
-      data: {
-        jobType: "editors",
-        status: "pending",
-      },
-    });
-
     setTimeout(async () => {
       try {
-        const result = await outreachSyncService.syncEditorsFromDashboard(body.school, body.slug);
-
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "completed",
-            completedAt: new Date(),
-            metadata: result as any,
-          },
-        });
+        await outreachSyncService.syncEditorsFromDashboard(body.school, body.slug);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Outreach sync failed:", errorMessage);
-
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "failed",
-            completedAt: new Date(),
-            error: errorMessage,
-          },
-        });
       }
     }, 0);
 
@@ -315,7 +290,6 @@ syncRoutes.post("/outreach", async (c) => {
       {
         success: true,
         data: {
-          jobId: job.id,
           status: "accepted",
         },
       },
