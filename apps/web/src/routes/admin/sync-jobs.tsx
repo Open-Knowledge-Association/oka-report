@@ -49,6 +49,7 @@ function SyncJobsPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [jobToCancel, setJobToCancel] = useState<string | null>(null);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
+  const [triggeringSync, setTriggeringSync] = useState<string | null>(null);
 
   const handleCancelJob = async (jobId: string) => {
     try {
@@ -119,6 +120,9 @@ function SyncJobsPage() {
   };
 
   const handleTriggerSync = async (jobType: string) => {
+    if (triggeringSync) return;
+    setTriggeringSync(jobType);
+
     try {
       let response;
       if (jobType === "outreach_articles") {
@@ -155,6 +159,8 @@ function SyncJobsPage() {
         description: "Failed to trigger sync.",
         variant: "destructive",
       });
+    } finally {
+      setTriggeringSync(null);
     }
   };
 
@@ -262,32 +268,81 @@ function SyncJobsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => handleTriggerSync("full")} size="sm">
-              <Play className="w-4 h-4 mr-2" />
+            <Button
+              onClick={() => handleTriggerSync("full")}
+              size="sm"
+              disabled={triggeringSync !== null}
+            >
+              {triggeringSync === "full" ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
               Full Sync
             </Button>
-            <Button onClick={() => handleTriggerSync("contributions")} size="sm" variant="outline">
-              <Play className="w-4 h-4 mr-2" />
+            <Button
+              onClick={() => handleTriggerSync("contributions")}
+              size="sm"
+              variant="outline"
+              disabled={triggeringSync !== null}
+            >
+              {triggeringSync === "contributions" ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
               Contributions
             </Button>
-            <Button onClick={() => handleTriggerSync("pageviews")} size="sm" variant="outline">
-              <Play className="w-4 h-4 mr-2" />
+            <Button
+              onClick={() => handleTriggerSync("pageviews")}
+              size="sm"
+              variant="outline"
+              disabled={triggeringSync !== null}
+            >
+              {triggeringSync === "pageviews" ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
               Pageviews
             </Button>
-            <Button onClick={() => handleTriggerSync("commons")} size="sm" variant="outline">
-              <Play className="w-4 h-4 mr-2" />
+            <Button
+              onClick={() => handleTriggerSync("commons")}
+              size="sm"
+              variant="outline"
+              disabled={triggeringSync !== null}
+            >
+              {triggeringSync === "commons" ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
               Commons
             </Button>
-            <Button onClick={() => handleTriggerSync("editors")} size="sm" variant="outline">
-              <Play className="w-4 h-4 mr-2" />
+            <Button
+              onClick={() => handleTriggerSync("editors")}
+              size="sm"
+              variant="outline"
+              disabled={triggeringSync !== null}
+            >
+              {triggeringSync === "editors" ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
               Editors
             </Button>
             <Button
               onClick={() => handleTriggerSync("outreach_articles")}
               size="sm"
               variant="outline"
+              disabled={triggeringSync !== null}
             >
-              <Play className="w-4 h-4 mr-2" />
+              {triggeringSync === "outreach_articles" ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
               Articles
             </Button>
           </div>
