@@ -26,3 +26,4 @@ export type {
   OutreachUser,
   OutreachUpload,
 } from "./src/outreach-dashboard";
+export { normalizeWikiProject, parseWikiProject, extractFromUrl } from "./src/wiki-project";
