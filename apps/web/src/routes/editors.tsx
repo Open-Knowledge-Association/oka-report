@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Users, FileText, BookOpen, HardDrive } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +10,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchOutreachUsers, type OutreachUser } from "@/lib/api";
+import { fetchEditors, type Editor } from "@/lib/api";
 
-type OutreachUserStats = OutreachUser;
-type OutreachStatsTotals = {
+type EditorStats = {
+  id: string;
+  username: string;
+  character_sum_ms: number;
+  references_count: number;
+  total_uploads: number;
+};
+type StatsTotals = {
   characters: number;
   references: number;
   uploads: number;
@@ -26,12 +32,18 @@ export const Route = createFileRoute("/editors")({
 function EditorsStatsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["stats", "editors"],
-    queryFn: fetchOutreachUsers,
+    queryFn: fetchEditors,
   });
 
-  const editors: OutreachUserStats[] = data ?? [];
+  const editors: EditorStats[] = (data ?? []).map((editor) => ({
+    id: editor.id,
+    username: editor.username,
+    character_sum_ms: 0,
+    references_count: 0,
+    total_uploads: 0,
+  }));
 
-  const totalStats = editors.reduce<OutreachStatsTotals>(
+  const totalStats = editors.reduce<StatsTotals>(
     (acc, editor) => ({
       characters: acc.characters + (editor.character_sum_ms || 0),
       references: acc.references + (editor.references_count || 0),
@@ -113,14 +125,13 @@ function EditorsStatsPage() {
               editors.map((editor) => (
                 <TableRow key={editor.id}>
                   <TableCell className="font-medium">
-                    <a
-                      href={editor.contribution_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
+                    <Link
+                      to="/editors/$editorId"
+                      params={{ editorId: editor.id }}
+                      className="hover:underline"
                     >
                       {editor.username}
-                    </a>
+                    </Link>
                   </TableCell>
                   <TableCell className="text-right">
                     {editor.character_sum_ms.toLocaleString()}

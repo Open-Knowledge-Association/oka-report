@@ -1,8 +1,8 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/article-sync-optimization.md",
-  "started_at": "2026-02-04T07:05:09.160Z",
-  "completed_at": "2026-02-04T07:55:32.951Z",
-  "session_ids": ["ses_3dc0d08abffeq14CPkWDntyrdn"],
-  "plan_name": "article-sync-optimization",
-  "status": "completed"
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/fix-editor-statistics.md",
+  "started_at": "2026-02-05T01:52:38.998Z",
+  "session_ids": [
+    "ses_3dc0d08abffeq14CPkWDntyrdn"
+  ],
+  "plan_name": "fix-editor-statistics"
 }
