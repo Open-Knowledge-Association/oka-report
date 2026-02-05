@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchEditors, type Editor } from "@/lib/api";
+import { fetchOutreachUsers, type OutreachUser } from "@/lib/api";
 
 type EditorStats = {
   id: string;
@@ -32,16 +32,18 @@ export const Route = createFileRoute("/editors")({
 function EditorsStatsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["stats", "editors"],
-    queryFn: fetchEditors,
+    queryFn: fetchOutreachUsers,
   });
 
-  const editors: EditorStats[] = (data ?? []).map((editor) => ({
-    id: editor.id,
-    username: editor.username,
-    character_sum_ms: 0,
-    references_count: 0,
-    total_uploads: 0,
-  }));
+  const editors: EditorStats[] = (data ?? [])
+    .filter((user) => user.role === 0)
+    .map((user) => ({
+      id: String(user.id),
+      username: user.username,
+      character_sum_ms: user.character_sum_ms,
+      references_count: user.references_count,
+      total_uploads: user.total_uploads,
+    }));
 
   const totalStats = editors.reduce<StatsTotals>(
     (acc, editor) => ({
