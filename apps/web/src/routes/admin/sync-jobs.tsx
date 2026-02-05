@@ -1,0 +1,431 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { useSyncJobStream, type SyncJob } from "@/hooks/useSyncJobStream";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import {
+  Play,
+  Square,
+  RotateCcw,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Info,
+} from "lucide-react";
+
+export const Route = createFileRoute("/admin/sync-jobs")({
+  component: SyncJobsPage,
+});
+
+function SyncJobsPage() {
+  const { jobs, isConnected, error } = useSyncJobStream();
+  const { toast } = useToast();
+  const [selectedJob, setSelectedJob] = useState<SyncJob | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all");
+
+  const handleCancelJob = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/sync/jobs/${jobId}/cancel`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        toast({
+          title: "Job Cancelled",
+          description: "The sync job has been cancelled.",
+        });
+      } else {
+        throw new Error("Failed to cancel job");
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to cancel job.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRetryJob = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/sync/jobs/${jobId}/retry`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: "Job Retried",
+          description: `New job created with ID: ${data.data?.newJobId?.slice(0, 8)}...`,
+        });
+      } else {
+        throw new Error("Failed to retry job");
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to retry job.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTriggerSync = async (jobType: string) => {
+    try {
+      let response;
+      if (jobType === "outreach_articles") {
+        response = await fetch("/api/outreach/articles/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ school: "OKA", slug: "OKA" }),
+        });
+      } else if (jobType === "editors") {
+        response = await fetch("/api/sync/outreach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ school: "OKA", slug: "OKA" }),
+        });
+      } else {
+        response = await fetch("/api/sync/trigger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobType }),
+        });
+      }
+
+      if (response.ok) {
+        toast({
+          title: "Sync Started",
+          description: `${jobType} sync has been triggered.`,
+        });
+      } else {
+        throw new Error("Failed to trigger sync");
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to trigger sync.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants: Record<
+      string,
+      { variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode }
+    > = {
+      pending: { variant: "secondary", icon: <Clock className="w-3 h-3" /> },
+      running: { variant: "default", icon: <RefreshCw className="w-3 h-3 animate-spin" /> },
+      completed: { variant: "default", icon: <CheckCircle2 className="w-3 h-3" /> },
+      failed: { variant: "destructive", icon: <XCircle className="w-3 h-3" /> },
+      cancelled: { variant: "outline", icon: <Square className="w-3 h-3" /> },
+    };
+    const config = variants[status] || variants.pending;
+    return (
+      <Badge variant={config.variant} className="gap-1">
+        {config.icon}
+        {status}
+      </Badge>
+    );
+  };
+
+  const formatDuration = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+  };
+
+  const getDuration = (job: SyncJob) => {
+    if (!job.startedAt) return "-";
+    const end = job.completedAt ? new Date(job.completedAt).getTime() : Date.now();
+    const start = new Date(job.startedAt).getTime();
+    return formatDuration(end - start);
+  };
+
+  const getProgress = (job: SyncJob) => {
+    if (!job.metadata?.total) return 0;
+    return Math.round((job.metadata.processed / job.metadata.total) * 100);
+  };
+
+  const filteredJobs = jobs.filter((job) => {
+    if (filterStatus !== "all" && job.status !== filterStatus) return false;
+    if (filterType !== "all" && job.jobType !== filterType) return false;
+    return true;
+  });
+
+  const jobTypes = [...new Set(jobs.map((j) => j.jobType))];
+
+  return (
+    <div className="container mx-auto py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Sync Job Manager</h1>
+        <p className="text-muted-foreground mt-2">
+          Monitor and manage background synchronization jobs in real-time.
+        </p>
+      </div>
+
+      {/* Connection Status */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
+              />
+              <span className="text-sm">
+                {isConnected ? "Connected to real-time updates" : error?.message || "Disconnected"}
+              </span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {jobs.length} job{jobs.length !== 1 ? "s" : ""} tracked
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Trigger Panel */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Trigger New Sync</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => handleTriggerSync("full")} size="sm">
+              <Play className="w-4 h-4 mr-2" />
+              Full Sync
+            </Button>
+            <Button onClick={() => handleTriggerSync("contributions")} size="sm" variant="outline">
+              <Play className="w-4 h-4 mr-2" />
+              Contributions
+            </Button>
+            <Button onClick={() => handleTriggerSync("pageviews")} size="sm" variant="outline">
+              <Play className="w-4 h-4 mr-2" />
+              Pageviews
+            </Button>
+            <Button onClick={() => handleTriggerSync("commons")} size="sm" variant="outline">
+              <Play className="w-4 h-4 mr-2" />
+              Commons
+            </Button>
+            <Button onClick={() => handleTriggerSync("editors")} size="sm" variant="outline">
+              <Play className="w-4 h-4 mr-2" />
+              Editors
+            </Button>
+            <Button
+              onClick={() => handleTriggerSync("outreach_articles")}
+              size="sm"
+              variant="outline"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Articles
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Status:</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="border rounded px-2 py-1 text-sm"
+              >
+                <option value="all">All</option>
+                <option value="pending">Pending</option>
+                <option value="running">Running</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Type:</label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="border rounded px-2 py-1 text-sm"
+              >
+                <option value="all">All</option>
+                {jobTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Jobs Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Job History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredJobs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+              <p>No jobs found matching the selected filters.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredJobs.map((job) => (
+                  <TableRow key={job.id}>
+                    <TableCell className="font-medium">{job.jobType}</TableCell>
+                    <TableCell>{getStatusBadge(job.status)}</TableCell>
+                    <TableCell>
+                      {job.startedAt ? new Date(job.startedAt).toLocaleString() : "-"}
+                    </TableCell>
+                    <TableCell>{getDuration(job)}</TableCell>
+                    <TableCell>
+                      {job.status === "running" && job.metadata?.total ? (
+                        <div className="w-32">
+                          <Progress value={getProgress(job)} className="h-2" />
+                          <span className="text-xs text-muted-foreground">
+                            {getProgress(job)}% ({job.metadata.processed}/{job.metadata.total})
+                          </span>
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {job.status === "running" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleCancelJob(job.id)}
+                          >
+                            <Square className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {(job.status === "failed" || job.status === "cancelled") && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleRetryJob(job.id)}
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button size="icon" variant="ghost" onClick={() => setSelectedJob(job)}>
+                              <Info className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Job Details</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-sm font-medium">ID</label>
+                                  <p className="text-sm text-muted-foreground font-mono">
+                                    {job.id}
+                                  </p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Type</label>
+                                  <p className="text-sm text-muted-foreground">{job.jobType}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Status</label>
+                                  <p className="text-sm text-muted-foreground">{job.status}</p>
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium">Created</label>
+                                  <p className="text-sm text-muted-foreground">
+                                    {new Date(job.createdAt).toLocaleString()}
+                                  </p>
+                                </div>
+                                {job.startedAt && (
+                                  <div>
+                                    <label className="text-sm font-medium">Started</label>
+                                    <p className="text-sm text-muted-foreground">
+                                      {new Date(job.startedAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                )}
+                                {job.completedAt && (
+                                  <div>
+                                    <label className="text-sm font-medium">Completed</label>
+                                    <p className="text-sm text-muted-foreground">
+                                      {new Date(job.completedAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                              {job.error && (
+                                <div>
+                                  <label className="text-sm font-medium text-destructive">
+                                    Error
+                                  </label>
+                                  <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">
+                                    {job.error}
+                                  </p>
+                                </div>
+                              )}
+                              {job.metadata && (
+                                <div>
+                                  <label className="text-sm font-medium">Metadata</label>
+                                  <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-64">
+                                    {JSON.stringify(job.metadata, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

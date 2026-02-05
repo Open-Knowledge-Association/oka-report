@@ -7,6 +7,7 @@ const navItems = [
   { to: "/editors", label: "Editors" },
   { to: "/articles", label: "Articles" },
   { to: "/admin/editors", label: "Admin" },
+  { to: "/admin/sync-jobs", label: "Sync Jobs" },
 ];
 
 export default function Header() {
