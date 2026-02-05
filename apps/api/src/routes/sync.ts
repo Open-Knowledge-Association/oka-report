@@ -56,10 +56,13 @@ syncRoutes.post("/trigger", async (c) => {
       }
 
       // Full sync: editors → articles → contributions → pageviews → commons
-      const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA");
+      const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
+        skipJobCreation: true,
+      });
       const articlesResult = await outreachArticleSyncService.syncArticlesFromDashboard(
         "OKA",
         "OKA",
+        { skipJobCreation: true },
       );
 
       await syncService.runFullSync(job.id, {

@@ -29,31 +29,36 @@ export class OutreachSyncService {
    * @param slug - Outreach Dashboard course slug (e.g., "OKA")
    * @returns Sync result with import/update/error counts
    */
-  async syncEditorsFromDashboard(school: string, slug: string): Promise<SyncResult> {
-    // Create sync job
-    const job = await this.prisma.syncJob.create({
-      data: {
-        jobType: "editors",
-        status: "pending",
-      },
-    });
+  async syncEditorsFromDashboard(
+    school: string,
+    slug: string,
+    options?: { skipJobCreation?: boolean },
+  ): Promise<SyncResult> {
+    const skipJob = options?.skipJobCreation ?? false;
+    const startTime = Date.now();
 
-    try {
-      // Mark job as running
+    let jobId: string | null = null;
+    if (!skipJob) {
+      const job = await this.prisma.syncJob.create({
+        data: {
+          jobType: "editors",
+          status: "pending",
+        },
+      });
+      jobId = job.id;
+
       await this.prisma.syncJob.update({
-        where: { id: job.id },
+        where: { id: jobId },
         data: {
           status: "running",
           startedAt: new Date(),
         },
       });
+    }
 
-      // Fetch users from Outreach Dashboard
+    try {
       const userData = await this.dashboardClient.getUsers(school, slug);
       const allUsers = userData.course?.users ?? userData.users ?? [];
-
-      // Filter to students only (role: 0)
-      // role: 0 = student, role: 1 = instructor/facilitator
       const users = allUsers.filter((user) => user.role === 0);
 
       let imported = 0;
@@ -83,9 +88,7 @@ export class OutreachSyncService {
             },
           });
 
-          // Track if this was a create or update
-          // Since upsert doesn't tell us which, we check based on the create timestamp
-          const createdJustNow = result.createdAt.getTime() > job.createdAt.getTime() - 1000;
+          const createdJustNow = result.createdAt.getTime() > startTime - 1000;
           if (createdJustNow) {
             imported++;
           } else {
@@ -107,27 +110,30 @@ export class OutreachSyncService {
         errorDetails,
       };
 
-      // Mark job as completed with metadata
-      await this.prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "completed",
-          completedAt: new Date(),
-          metadata: result as any,
-        },
-      });
+      if (jobId) {
+        await this.prisma.syncJob.update({
+          where: { id: jobId },
+          data: {
+            status: "completed",
+            completedAt: new Date(),
+            metadata: result as any,
+          },
+        });
+      }
 
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await this.prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "failed",
-          completedAt: new Date(),
-          error: errorMessage,
-        },
-      });
+      if (jobId) {
+        await this.prisma.syncJob.update({
+          where: { id: jobId },
+          data: {
+            status: "failed",
+            completedAt: new Date(),
+            error: errorMessage,
+          },
+        });
+      }
       throw error;
     }
   }

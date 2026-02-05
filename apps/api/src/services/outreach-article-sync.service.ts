@@ -30,34 +30,45 @@ export class OutreachArticleSyncService {
     );
   }
 
-  async syncArticlesFromDashboard(school: string, slug: string): Promise<SyncResult> {
-    // Check for running job to prevent concurrent syncs
-    const runningJob = await this.prisma.syncJob.findFirst({
-      where: {
-        jobType: "outreach_articles",
-        status: "running",
-      },
-    });
-    if (runningJob) {
-      throw new Error(`Sync already in progress (job ID: ${runningJob.id})`);
-    }
+  async syncArticlesFromDashboard(
+    school: string,
+    slug: string,
+    options?: { skipJobCreation?: boolean },
+  ): Promise<SyncResult> {
+    const skipJob = options?.skipJobCreation ?? false;
+    const startTime = Date.now();
 
-    const job = await this.prisma.syncJob.create({
-      data: {
-        jobType: "outreach_articles",
-        status: "pending",
-      },
-    });
+    let jobId: string | null = null;
 
-    try {
+    if (!skipJob) {
+      const runningJob = await this.prisma.syncJob.findFirst({
+        where: {
+          jobType: "outreach_articles",
+          status: "running",
+        },
+      });
+      if (runningJob) {
+        throw new Error(`Sync already in progress (job ID: ${runningJob.id})`);
+      }
+
+      const job = await this.prisma.syncJob.create({
+        data: {
+          jobType: "outreach_articles",
+          status: "pending",
+        },
+      });
+      jobId = job.id;
+
       await this.prisma.syncJob.update({
-        where: { id: job.id },
+        where: { id: jobId },
         data: {
           status: "running",
           startedAt: new Date(),
         },
       });
+    }
 
+    try {
       const articleData = await this.dashboardClient.getArticles(school, slug);
       const articles = articleData.course.articles;
 
@@ -73,31 +84,33 @@ export class OutreachArticleSyncService {
       const limit = pLimit(CONCURRENCY);
 
       for (const batch of batches) {
-        const currentJob = await this.prisma.syncJob.findUnique({
-          where: { id: job.id },
-        });
-        if (currentJob?.status === "cancelled") {
-          await this.prisma.syncJob.update({
-            where: { id: job.id },
-            data: {
-              status: "cancelled",
-              completedAt: new Date(),
-              metadata: {
-                total: articles.length,
-                processed: processedCount,
-                stage: "Cancelled by user",
-                imported,
-                updated,
-                errors: errorDetails.length,
-              } as any,
-            },
+        if (jobId) {
+          const currentJob = await this.prisma.syncJob.findUnique({
+            where: { id: jobId },
           });
-          return {
-            imported,
-            updated,
-            errors: errorDetails.length,
-            errorDetails,
-          };
+          if (currentJob?.status === "cancelled") {
+            await this.prisma.syncJob.update({
+              where: { id: jobId },
+              data: {
+                status: "cancelled",
+                completedAt: new Date(),
+                metadata: {
+                  total: articles.length,
+                  processed: processedCount,
+                  stage: "Cancelled by user",
+                  imported,
+                  updated,
+                  errors: errorDetails.length,
+                } as any,
+              },
+            });
+            return {
+              imported,
+              updated,
+              errors: errorDetails.length,
+              errorDetails,
+            };
+          }
         }
 
         const results = await Promise.allSettled(
@@ -135,7 +148,7 @@ export class OutreachArticleSyncService {
                 },
               });
 
-              const createdJustNow = article.createdAt.getTime() > job.createdAt.getTime() - 1000;
+              const createdJustNow = article.createdAt.getTime() > startTime - 1000;
               const isNewlyCreated = createdJustNow;
 
               const today = new Date();
@@ -236,9 +249,12 @@ export class OutreachArticleSyncService {
           }
         }
 
-        if (processedCount % CHECKPOINT_INTERVAL === 0 || processedCount === articles.length) {
+        if (
+          jobId &&
+          (processedCount % CHECKPOINT_INTERVAL === 0 || processedCount === articles.length)
+        ) {
           await this.prisma.syncJob.update({
-            where: { id: job.id },
+            where: { id: jobId },
             data: {
               metadata: {
                 total: articles.length,
@@ -260,26 +276,30 @@ export class OutreachArticleSyncService {
         errorDetails,
       };
 
-      await this.prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "completed",
-          completedAt: new Date(),
-          metadata: result as any,
-        },
-      });
+      if (jobId) {
+        await this.prisma.syncJob.update({
+          where: { id: jobId },
+          data: {
+            status: "completed",
+            completedAt: new Date(),
+            metadata: result as any,
+          },
+        });
+      }
 
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await this.prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "failed",
-          completedAt: new Date(),
-          error: errorMessage,
-        },
-      });
+      if (jobId) {
+        await this.prisma.syncJob.update({
+          where: { id: jobId },
+          data: {
+            status: "failed",
+            completedAt: new Date(),
+            error: errorMessage,
+          },
+        });
+      }
       throw error;
     }
   }
