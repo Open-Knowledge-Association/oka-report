@@ -1,19 +1,24 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { prisma } from "@repo/db";
-import { WikimediaClient } from "@repo/utils";
+import { OutreachDashboardClient, WikimediaClient } from "@repo/utils";
 import { TriggerSyncSchema, OutreachSyncSchema } from "../schemas";
 import { SyncService } from "../services";
 import { OutreachSyncService } from "../services/outreach-sync.service";
+import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 
 const wikimediaClient = new WikimediaClient({
   baseUrl: "https://en.wikipedia.org",
 });
 const syncService = new SyncService(prisma, wikimediaClient);
 
+const dashboardClient = new OutreachDashboardClient({
+  baseUrl: "https://outreachdashboard.wmflabs.org",
+});
 const outreachSyncService = new OutreachSyncService(prisma, {
   baseUrl: "https://outreachdashboard.wmflabs.org",
 });
+const outreachArticleSyncService = new OutreachArticleSyncService(prisma, dashboardClient);
 
 export const syncRoutes = new Hono();
 
@@ -50,7 +55,17 @@ syncRoutes.post("/trigger", async (c) => {
         return;
       }
 
-      await syncService.runFullSync(job.id);
+      // Full sync: editors → articles → contributions → pageviews → commons
+      const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA");
+      const articlesResult = await outreachArticleSyncService.syncArticlesFromDashboard(
+        "OKA",
+        "OKA",
+      );
+
+      await syncService.runFullSync(job.id, {
+        editorsSynced: editorsResult.imported + editorsResult.updated,
+        articlesSynced: articlesResult.imported + articlesResult.updated,
+      });
     } catch (error) {
       await syncService.failSyncJob(job.id, error);
     }

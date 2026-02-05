@@ -2,9 +2,16 @@ import type { Prisma, PrismaClient } from "@repo/db/generated/prisma/client";
 import type { CommonsUpload, UserContribution, WikimediaClient } from "@repo/utils";
 
 type SyncSummary = {
+  editorsSynced?: number;
+  articlesSynced?: number;
   contributionsSynced: number;
   pageviewsSynced: number;
   commonsUploadsSynced: number;
+};
+
+type PreSyncStats = {
+  editorsSynced?: number;
+  articlesSynced?: number;
 };
 
 const bytesToWords = (bytesChanged: number) => Math.max(0, Math.floor(bytesChanged / 6));
@@ -210,38 +217,63 @@ export class SyncService {
     });
   }
 
-  async runFullSync(existingJobId?: string): Promise<SyncSummary> {
+  async runFullSync(existingJobId?: string, preSyncStats?: PreSyncStats): Promise<SyncSummary> {
     const jobId = existingJobId ?? (await this.createSyncJob("full")).id;
     if (!existingJobId) {
       await this.startSyncJob(jobId);
     }
 
+    const editorsSynced = preSyncStats?.editorsSynced;
+    const articlesSynced = preSyncStats?.articlesSynced;
+
     try {
       const contributionsSynced = await this.syncEditorContributions(undefined, undefined, jobId);
 
       if (await this.checkCancelled(jobId)) {
-        return { contributionsSynced, pageviewsSynced: 0, commonsUploadsSynced: 0 };
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced: 0,
+          commonsUploadsSynced: 0,
+        };
       }
 
       const pageviewsSynced = await this.syncArticlePageviews(undefined, undefined, jobId);
 
       if (await this.checkCancelled(jobId)) {
-        return { contributionsSynced, pageviewsSynced, commonsUploadsSynced: 0 };
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced,
+          commonsUploadsSynced: 0,
+        };
       }
 
       const commonsUploadsSynced = await this.syncCommonsUploads(undefined, jobId);
 
       if (await this.checkCancelled(jobId)) {
-        return { contributionsSynced, pageviewsSynced, commonsUploadsSynced };
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced,
+          commonsUploadsSynced,
+        };
       }
 
       await this.completeSyncJob(jobId, {
+        editorsSynced,
+        articlesSynced,
         contributionsSynced,
         pageviewsSynced,
         commonsUploadsSynced,
       });
 
       return {
+        editorsSynced,
+        articlesSynced,
         contributionsSynced,
         pageviewsSynced,
         commonsUploadsSynced,
