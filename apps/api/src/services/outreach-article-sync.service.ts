@@ -1,19 +1,12 @@
 import type { PrismaClient } from "@repo/db/generated/prisma/client";
 import type { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard/client";
-import { WikimediaClient } from "@repo/utils";
+import { normalizeWikiProject, WikimediaClient } from "@repo/utils";
 import pLimit from "p-limit";
 
 // Configuration constants for batch processing
 const BATCH_SIZE = 100;
 const CONCURRENCY = 5;
 const CHECKPOINT_INTERVAL = 1000;
-
-interface SyncProgress {
-  totalExpected: number;
-  processed: number;
-  lastProcessedIndex: number;
-  errors: number;
-}
 
 interface SyncResult {
   imported: number;
@@ -80,72 +73,108 @@ export class OutreachArticleSyncService {
       const limit = pLimit(CONCURRENCY);
 
       for (const batch of batches) {
+        const currentJob = await this.prisma.syncJob.findUnique({
+          where: { id: job.id },
+        });
+        if (currentJob?.status === "cancelled") {
+          await this.prisma.syncJob.update({
+            where: { id: job.id },
+            data: {
+              status: "cancelled",
+              completedAt: new Date(),
+              metadata: {
+                total: articles.length,
+                processed: processedCount,
+                stage: "Cancelled by user",
+                imported,
+                updated,
+                errors: errorDetails.length,
+              } as any,
+            },
+          });
+          return {
+            imported,
+            updated,
+            errors: errorDetails.length,
+            errorDetails,
+          };
+        }
+
         const results = await Promise.allSettled(
-          batch.map((article) =>
+          batch.map((dashboardArticle) =>
             limit(async () => {
-              const outreachArticle = await this.prisma.outreachArticle.upsert({
-                where: { outreachId: article.id },
+              const wikiProject = normalizeWikiProject(
+                dashboardArticle.language,
+                dashboardArticle.project,
+              );
+              const article = await this.prisma.article.upsert({
+                where: { outreachId: dashboardArticle.id },
                 create: {
-                  outreachId: article.id,
-                  title: article.title,
-                  language: article.language,
-                  project: article.project,
-                  url: article.url,
-                  characterSum: article.character_sum,
-                  referencesCount: article.references_count,
-                  isNewArticle: article.new_article,
-                  rating: article.rating,
+                  outreachId: dashboardArticle.id,
+                  pageId: 0,
+                  title: dashboardArticle.title,
+                  wikiProject,
+                  source: "OUTREACH_DASHBOARD",
+                  url: dashboardArticle.url,
+                  characterSum: dashboardArticle.character_sum,
+                  referencesCount: dashboardArticle.references_count,
+                  isNewArticle: dashboardArticle.new_article,
+                  rating: dashboardArticle.rating,
                 },
                 update: {
-                  title: article.title,
-                  language: article.language,
-                  project: article.project,
-                  url: article.url,
-                  characterSum: article.character_sum,
-                  referencesCount: article.references_count,
-                  isNewArticle: article.new_article,
-                  rating: article.rating,
+                  pageId: 0,
+                  title: dashboardArticle.title,
+                  wikiProject,
+                  source: "OUTREACH_DASHBOARD",
+                  url: dashboardArticle.url,
+                  characterSum: dashboardArticle.character_sum,
+                  referencesCount: dashboardArticle.references_count,
+                  isNewArticle: dashboardArticle.new_article,
+                  rating: dashboardArticle.rating,
                   updatedAt: new Date(),
                 },
               });
 
-              const createdJustNow =
-                outreachArticle.createdAt.getTime() > job.createdAt.getTime() - 1000;
+              const createdJustNow = article.createdAt.getTime() > job.createdAt.getTime() - 1000;
               const isNewlyCreated = createdJustNow;
 
               const today = new Date();
               today.setUTCHours(0, 0, 0, 0);
 
-              await this.prisma.outreachArticlePageview.upsert({
+              await this.prisma.pageview.upsert({
                 where: {
-                  outreachArticleId_snapshotDate: {
-                    outreachArticleId: outreachArticle.id,
-                    snapshotDate: today,
+                  articleId_date: {
+                    articleId: article.id,
+                    date: today,
                   },
                 },
                 create: {
-                  outreachArticleId: outreachArticle.id,
-                  snapshotDate: today,
-                  cumulativeViews: article.view_count,
+                  articleId: article.id,
+                  date: today,
+                  type: "CUMULATIVE",
+                  views: dashboardArticle.view_count,
+                  cumulativeViews: dashboardArticle.view_count,
                 },
                 update: {
-                  cumulativeViews: article.view_count,
+                  type: "CUMULATIVE",
+                  views: dashboardArticle.view_count,
+                  cumulativeViews: dashboardArticle.view_count,
                 },
               });
 
-              for (const userId of article.user_ids) {
+              for (const userId of dashboardArticle.user_ids) {
                 const editor = editorMap.get(String(userId));
 
                 if (editor) {
-                  const articleEditor = await this.prisma.outreachArticleEditor.upsert({
+                  const articleEditor = await this.prisma.articleEditor.upsert({
                     where: {
-                      outreachArticleId_editorId: {
-                        outreachArticleId: outreachArticle.id,
+                      articleId_editorId: {
+                        articleId: article.id,
                         editorId: editor.id,
                       },
                     },
                     create: {
-                      outreachArticleId: outreachArticle.id,
+                      articleId: article.id,
                       editorId: editor.id,
                     },
                     update: {},
@@ -153,9 +182,11 @@ export class OutreachArticleSyncService {
 
                   // Detect if this editor is the article creator
                   try {
-                    const wikiBaseUrl = `https://${article.language}.${article.project}.org`;
+                    const wikiBaseUrl = `https://${dashboardArticle.language}.${dashboardArticle.project}.org`;
                     const wikimediaClient = new WikimediaClient({ baseUrl: wikiBaseUrl });
-                    const articleInfo = await wikimediaClient.getArticleInfo(article.title);
+                    const articleInfo = await wikimediaClient.getArticleInfo(
+                      dashboardArticle.title,
+                    );
 
                     if (articleInfo?.creator) {
                       // Normalize usernames: replace spaces with underscores for comparison
@@ -163,7 +194,7 @@ export class OutreachArticleSyncService {
                       const normalizedEditor = editor.username.replace(/\s+/g, "_");
 
                       if (normalizedCreator === normalizedEditor) {
-                        await this.prisma.outreachArticleEditor.update({
+                        await this.prisma.articleEditor.update({
                           where: { id: articleEditor.id },
                           data: { isAuthor: true },
                         });
@@ -172,14 +203,14 @@ export class OutreachArticleSyncService {
                   } catch (error) {
                     // Gracefully handle author detection failures - don't block sync
                     console.warn(
-                      `Failed to detect author for article "${article.title}" and editor "${editor.username}":`,
+                      `Failed to detect author for article "${dashboardArticle.title}" and editor "${editor.username}":`,
                       error instanceof Error ? error.message : String(error),
                     );
                   }
                 }
               }
 
-              return { articleId: article.id, isNewlyCreated };
+              return { articleId: dashboardArticle.id, isNewlyCreated };
             }),
           ),
         );
@@ -195,11 +226,11 @@ export class OutreachArticleSyncService {
               updated++;
             }
           } else {
-            const article = batch[i];
+            const dashboardArticle = batch[i];
             const errorMessage =
               result.reason instanceof Error ? result.reason.message : String(result.reason);
             errorDetails.push({
-              articleId: article.id,
+              articleId: dashboardArticle.id,
               error: errorMessage,
             });
           }
@@ -210,9 +241,11 @@ export class OutreachArticleSyncService {
             where: { id: job.id },
             data: {
               metadata: {
-                totalExpected: articles.length,
+                total: articles.length,
                 processed: processedCount,
-                lastProcessedIndex: processedCount,
+                stage: `Processing articles (${processedCount}/${articles.length})`,
+                imported,
+                updated,
                 errors: errorDetails.length,
               } as any,
             },

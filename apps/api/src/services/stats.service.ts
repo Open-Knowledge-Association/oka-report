@@ -1,10 +1,11 @@
-import type { Prisma, PrismaClient } from "@repo/db/generated/prisma/client";
+import type { ArticleSource, Prisma, PrismaClient } from "@repo/db/generated/prisma/client";
 
 export type StatsFilter = {
   startDate?: Date;
   endDate?: Date;
   wikiProject?: string;
   editorId?: string;
+  source?: ArticleSource;
 };
 
 export type OverallStats = {
@@ -68,10 +69,7 @@ export class StatsService {
     });
 
     const edits = contributions.length;
-    const wordsAdded = contributions.reduce(
-      (total, item) => total + item.wordsAdded,
-      0,
-    );
+    const wordsAdded = contributions.reduce((total, item) => total + item.wordsAdded, 0);
 
     const createdArticles = new Set(
       contributions.filter((item) => item.isCreation).map((item) => item.articleId),
@@ -156,9 +154,7 @@ export class StatsService {
       stats.articlesModified = modifiedByProject.get(project)?.size ?? 0;
     }
 
-    return Array.from(projectMap.values()).sort(
-      (a, b) => b.wordsAdded - a.wordsAdded,
-    );
+    return Array.from(projectMap.values()).sort((a, b) => b.wordsAdded - a.wordsAdded);
   }
 
   async getStatsByEditor(filters: StatsFilter = {}): Promise<EditorStats[]> {
@@ -235,9 +231,7 @@ export class StatsService {
       stats.articlesModified = modifiedByEditor.get(editorId)?.size ?? 0;
     }
 
-    return Array.from(editorMap.values()).sort(
-      (a, b) => b.wordsAdded - a.wordsAdded,
-    );
+    return Array.from(editorMap.values()).sort((a, b) => b.wordsAdded - a.wordsAdded);
   }
 
   async getTimeSeries(
@@ -290,9 +284,7 @@ export class StatsService {
       point.pageviews += pageview.views;
     }
 
-    return Array.from(seriesMap.values()).sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
+    return Array.from(seriesMap.values()).sort((a, b) => a.date.localeCompare(b.date));
   }
 
   private buildContributionWhere(filters: StatsFilter): Prisma.ContributionWhereInput {
@@ -306,18 +298,23 @@ export class StatsService {
         ...(filters.endDate ? { lte: filters.endDate } : {}),
       };
     }
-    if (filters.wikiProject) {
-      where.article = { wikiProject: filters.wikiProject };
+    if (filters.wikiProject || filters.source) {
+      where.article = {
+        ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+        ...(filters.source ? { source: filters.source } : {}),
+      };
     }
     return where;
   }
 
   private buildPageviewWhere(filters: StatsFilter): Prisma.PageviewWhereInput {
     const where: Prisma.PageviewWhereInput = {
+      type: "DAILY",
       article: {
         createdByEditorId: { not: null },
         ...(filters.editorId ? { createdByEditorId: filters.editorId } : {}),
         ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+        ...(filters.source ? { source: filters.source } : {}),
       },
     };
 

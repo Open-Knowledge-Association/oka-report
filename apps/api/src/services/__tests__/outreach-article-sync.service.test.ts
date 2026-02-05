@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
 import { OutreachArticleSyncService } from "../outreach-article-sync.service";
+import { normalizeWikiProject } from "@repo/utils";
 import type { PrismaClient } from "@repo/db/generated/prisma/client";
 import type { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard/client";
 import type { ArticleData, OutreachArticle } from "@repo/utils/src/outreach-dashboard/types";
@@ -18,8 +19,9 @@ describe("OutreachArticleSyncService", () => {
         create: mock(() => Promise.resolve({ id: "job-123", createdAt: jobCreatedAt })),
         update: mock(() => Promise.resolve({ id: "job-123" })),
         findFirst: mock(() => Promise.resolve(null)),
+        findUnique: mock(() => Promise.resolve({ id: "job-123", status: "running" })),
       },
-      outreachArticle: {
+      article: {
         upsert: mock(() =>
           Promise.resolve({
             id: "article-1",
@@ -28,22 +30,18 @@ describe("OutreachArticleSyncService", () => {
           }),
         ),
       },
-      outreachArticle: {
-        upsert: mock(() =>
-          Promise.resolve({
-            id: "article-1",
-            outreachId: 100,
-            createdAt: new Date(),
-          }),
-        ),
-      },
-      outreachArticlePageview: {
+      pageview: {
         upsert: mock(() => Promise.resolve({ id: "pageview-1" })),
       },
-      outreachArticleEditor: {
+      articleEditor: {
         upsert: mock(() =>
-          Promise.resolve({ outreachArticleId: "article-1", editorId: "editor-1" }),
+          Promise.resolve({
+            id: "article-editor-1",
+            articleId: "article-1",
+            editorId: "editor-1",
+          }),
         ),
+        update: mock(() => Promise.resolve({ id: "article-editor-1" })),
       },
       editor: {
         findMany: mock(() => Promise.resolve([])),
@@ -101,6 +99,7 @@ describe("OutreachArticleSyncService", () => {
     });
 
     it("should upsert articles by outreachId", async () => {
+      const wikiProject = normalizeWikiProject("en", "wikipedia");
       const mockArticles: OutreachArticle[] = [
         {
           id: 100,
@@ -126,13 +125,14 @@ describe("OutreachArticleSyncService", () => {
 
       await service.syncArticlesFromDashboard("OKA", "oka");
 
-      expect(mockPrisma.outreachArticle.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.article.upsert).toHaveBeenCalledWith({
         where: { outreachId: 100 },
         create: {
           outreachId: 100,
+          pageId: 0,
           title: "Test_Article",
-          language: "en",
-          project: "wikipedia",
+          wikiProject,
+          source: "OUTREACH_DASHBOARD",
           url: "https://en.wikipedia.org/wiki/Test_Article",
           characterSum: 5000,
           referencesCount: 10,
@@ -140,9 +140,10 @@ describe("OutreachArticleSyncService", () => {
           rating: "B",
         },
         update: {
+          pageId: 0,
           title: "Test_Article",
-          language: "en",
-          project: "wikipedia",
+          wikiProject,
+          source: "OUTREACH_DASHBOARD",
           url: "https://en.wikipedia.org/wiki/Test_Article",
           characterSum: 5000,
           referencesCount: 10,
@@ -182,19 +183,23 @@ describe("OutreachArticleSyncService", () => {
 
       await service.syncArticlesFromDashboard("OKA", "oka");
 
-      expect(mockPrisma.outreachArticlePageview.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.pageview.upsert).toHaveBeenCalledWith({
         where: {
-          outreachArticleId_snapshotDate: {
-            outreachArticleId: "article-1",
-            snapshotDate: today,
+          articleId_date: {
+            articleId: "article-1",
+            date: today,
           },
         },
         create: {
-          outreachArticleId: "article-1",
-          snapshotDate: today,
+          articleId: "article-1",
+          date: today,
+          type: "CUMULATIVE",
+          views: 1000,
           cumulativeViews: 1000,
         },
         update: {
+          type: "CUMULATIVE",
+          views: 1000,
           cumulativeViews: 1000,
         },
       });
@@ -226,21 +231,21 @@ describe("OutreachArticleSyncService", () => {
 
       mockPrisma.editor.findMany = mock(() =>
         Promise.resolve([{ id: "editor-42", externalId: "42" }]),
-      );
+      ) as unknown as PrismaClient["editor"]["findMany"];
 
       await service.syncArticlesFromDashboard("OKA", "oka");
 
       expect(mockPrisma.editor.findMany).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.outreachArticleEditor.upsert).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.outreachArticleEditor.upsert).toHaveBeenCalledWith({
+      expect(mockPrisma.articleEditor.upsert).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.articleEditor.upsert).toHaveBeenCalledWith({
         where: {
-          outreachArticleId_editorId: {
-            outreachArticleId: "article-1",
+          articleId_editorId: {
+            articleId: "article-1",
             editorId: "editor-42",
           },
         },
         create: {
-          outreachArticleId: "article-1",
+          articleId: "article-1",
           editorId: "editor-42",
         },
         update: {},
@@ -271,11 +276,9 @@ describe("OutreachArticleSyncService", () => {
         } as ArticleData),
       );
 
-      mockPrisma.editor.findUnique = mock(() => Promise.resolve(null));
+      await service.syncArticlesFromDashboard("OKA", "oka");
 
-      await expect(service.syncArticlesFromDashboard("OKA", "oka")).resolves.toBeDefined();
-
-      expect(mockPrisma.outreachArticleEditor.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.articleEditor.upsert).not.toHaveBeenCalled();
     });
 
     it("should complete sync job with metadata", async () => {
@@ -377,7 +380,7 @@ describe("OutreachArticleSyncService", () => {
 
       // Make second article fail
       let callCount = 0;
-      mockPrisma.outreachArticle.upsert = mock(() => {
+      mockPrisma.article.upsert = mock(() => {
         callCount++;
         if (callCount === 2) {
           throw new Error("Database error");
@@ -387,7 +390,7 @@ describe("OutreachArticleSyncService", () => {
           outreachId: 100,
           createdAt: new Date(jobCreatedAt.getTime() + 500),
         });
-      });
+      }) as unknown as PrismaClient["article"]["upsert"];
 
       const result = await service.syncArticlesFromDashboard("OKA", "oka");
 
@@ -401,9 +404,15 @@ describe("OutreachArticleSyncService", () => {
     it("should fail sync job on critical error", async () => {
       mockDashboardClient.getArticles = mock(() => Promise.reject(new Error("Network error")));
 
-      await expect(service.syncArticlesFromDashboard("OKA", "oka")).rejects.toThrow(
-        "Network error",
-      );
+      let thrownError: Error | null = null;
+
+      try {
+        await service.syncArticlesFromDashboard("OKA", "oka");
+      } catch (error) {
+        thrownError = error as Error;
+      }
+
+      expect(thrownError?.message).toBe("Network error");
 
       expect(mockPrisma.syncJob.update).toHaveBeenCalledWith({
         where: { id: "job-123" },

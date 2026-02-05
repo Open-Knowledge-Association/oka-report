@@ -110,16 +110,20 @@ export const fetchOutreachUsers = async () => {
 export type OutreachArticle = {
   id: string;
   title: string;
-  language: string;
-  project: string;
+  wikiProject?: string;
+  language?: string;
+  project?: string;
   url: string;
   characterSum: number;
   referencesCount: number;
   isNewArticle: boolean;
   rating: string | null;
+  source?: "MEDIAWIKI" | "OUTREACH_DASHBOARD";
   pageviews: Array<{
-    cumulativeViews: number;
-    snapshotDate: string;
+    cumulativeViews: number | null;
+    date: string;
+    views?: number;
+    type?: "DAILY" | "CUMULATIVE";
   }>;
   editors?: OutreachArticleEditor[];
 };

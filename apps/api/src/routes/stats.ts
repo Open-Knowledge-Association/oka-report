@@ -13,6 +13,7 @@ const parseFilters = (input: Record<string, string | undefined>) => {
     endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
     wikiProject: parsed.wikiProject,
     editorId: parsed.editorId,
+    source: parsed.source,
   };
 };
 

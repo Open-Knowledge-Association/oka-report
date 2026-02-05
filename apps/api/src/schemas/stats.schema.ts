@@ -5,6 +5,7 @@ export const StatsFilterSchema = z.object({
   endDate: z.string().datetime().optional(),
   wikiProject: z.string().min(1).optional(),
   editorId: z.string().min(1).optional(),
+  source: z.enum(["MEDIAWIKI", "OUTREACH_DASHBOARD"]).optional(),
 });
 
 export const TimeSeriesSchema = StatsFilterSchema.extend({

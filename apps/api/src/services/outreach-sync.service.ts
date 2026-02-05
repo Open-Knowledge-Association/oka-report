@@ -1,5 +1,9 @@
 import type { PrismaClient } from "@repo/db/generated/prisma/client";
-import { OutreachDashboardClient, type OutreachDashboardClientConfig } from "@repo/utils";
+import {
+  OutreachDashboardClient,
+  type OutreachDashboardClientConfig,
+  normalizeWikiProject,
+} from "@repo/utils";
 
 interface SyncResult {
   imported: number;
@@ -143,13 +147,17 @@ export class OutreachSyncService {
 
       for (const article of articles) {
         try {
-          const result = await this.prisma.outreachArticle.upsert({
+          const result = await this.prisma.article.upsert({
             where: { outreachId: article.id || 0 },
             create: {
-              outreachId: article.id || 0,
+              pageId: 0,
               title: article.title || "",
-              language: article.language || "en",
-              project: article.project || "wikipedia",
+              wikiProject: normalizeWikiProject(
+                article.language || "en",
+                article.project || "wikipedia",
+              ),
+              source: "OUTREACH_DASHBOARD",
+              outreachId: article.id || 0,
               url: article.url || "",
               characterSum: article.character_sum || 0,
               referencesCount: article.references_count || 0,
@@ -158,8 +166,10 @@ export class OutreachSyncService {
             },
             update: {
               title: article.title || "",
-              language: article.language || "en",
-              project: article.project || "wikipedia",
+              wikiProject: normalizeWikiProject(
+                article.language || "en",
+                article.project || "wikipedia",
+              ),
               url: article.url || "",
               characterSum: article.character_sum || 0,
               referencesCount: article.references_count || 0,

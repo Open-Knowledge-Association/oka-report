@@ -19,6 +19,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -31,6 +34,7 @@ import {
   Clock,
   XCircle,
   Info,
+  Trash2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/sync-jobs")({
@@ -38,11 +42,13 @@ export const Route = createFileRoute("/admin/sync-jobs")({
 });
 
 function SyncJobsPage() {
-  const { jobs, isConnected, error } = useSyncJobStream();
+  const { jobs, isConnected, isLoading, error, reconnect } = useSyncJobStream();
   const { toast } = useToast();
   const [selectedJob, setSelectedJob] = useState<SyncJob | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [jobToCancel, setJobToCancel] = useState<string | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
 
   const handleCancelJob = async (jobId: string) => {
     try {
@@ -84,6 +90,29 @@ function SyncJobsPage() {
       toast({
         title: "Error",
         description: "Failed to retry job.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteJob = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/sync/jobs/${jobId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        toast({
+          title: "Job Deleted",
+          description: "The sync job has been deleted.",
+        });
+      } else {
+        const data = await response.json();
+        throw new Error(data.error?.message || "Failed to delete job");
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete job.",
         variant: "destructive",
       });
     }
@@ -166,8 +195,10 @@ function SyncJobsPage() {
   };
 
   const getProgress = (job: SyncJob) => {
-    if (!job.metadata?.total) return 0;
-    return Math.round((job.metadata.processed / job.metadata.total) * 100);
+    const total = job.metadata?.total || job.metadata?.totalExpected;
+    const processed = job.metadata?.processed;
+    if (!total || !processed) return 0;
+    return Math.round((processed / total) * 100);
   };
 
   const filteredJobs = jobs.filter((job) => {
@@ -192,15 +223,33 @@ function SyncJobsPage() {
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div
-                className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
-              />
-              <span className="text-sm">
-                {isConnected ? "Connected to real-time updates" : error?.message || "Disconnected"}
-              </span>
+              {isLoading ? (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                  <span className="text-sm">Connecting...</span>
+                </>
+              ) : isConnected ? (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-sm">Connected to real-time updates</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="text-sm">{error?.message || "Disconnected"}</span>
+                </>
+              )}
             </div>
-            <div className="text-sm text-muted-foreground">
-              {jobs.length} job{jobs.length !== 1 ? "s" : ""} tracked
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">
+                {jobs.length} job{jobs.length !== 1 ? "s" : ""} tracked
+              </div>
+              {!isConnected && !isLoading && (
+                <Button variant="outline" size="sm" onClick={reconnect}>
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  Reconnect
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -316,11 +365,13 @@ function SyncJobsPage() {
                     </TableCell>
                     <TableCell>{getDuration(job)}</TableCell>
                     <TableCell>
-                      {job.status === "running" && job.metadata?.total ? (
+                      {job.status === "running" &&
+                      (job.metadata?.total || job.metadata?.totalExpected) ? (
                         <div className="w-32">
                           <Progress value={getProgress(job)} className="h-2" />
                           <span className="text-xs text-muted-foreground">
-                            {getProgress(job)}% ({job.metadata.processed}/{job.metadata.total})
+                            {getProgress(job)}% ({job.metadata?.processed || 0}/
+                            {job.metadata?.total || job.metadata?.totalExpected})
                           </span>
                         </div>
                       ) : (
@@ -333,7 +384,7 @@ function SyncJobsPage() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => handleCancelJob(job.id)}
+                            onClick={() => setJobToCancel(job.id)}
                           >
                             <Square className="w-4 h-4" />
                           </Button>
@@ -345,6 +396,15 @@ function SyncJobsPage() {
                             onClick={() => handleRetryJob(job.id)}
                           >
                             <RotateCcw className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {job.status !== "running" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setJobToDelete(job.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         )}
                         <Dialog>
@@ -426,6 +486,62 @@ function SyncJobsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={jobToCancel !== null} onOpenChange={(open) => !open && setJobToCancel(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Stop Sync Job?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to stop this sync job? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (jobToCancel) {
+                  handleCancelJob(jobToCancel);
+                  setJobToCancel(null);
+                }
+              }}
+            >
+              Stop Job
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={jobToDelete !== null} onOpenChange={(open) => !open && setJobToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Job?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this job record? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (jobToDelete) {
+                  handleDeleteJob(jobToDelete);
+                  setJobToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

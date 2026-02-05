@@ -34,8 +34,9 @@ interface EditorProfile {
     id: string;
     title: string;
     url: string;
-    language: string;
-    project: string;
+    wikiProject?: string;
+    language?: string;
+    project?: string;
     characterSum: number;
     referencesCount: number;
   }>;
@@ -249,7 +250,11 @@ function EditorProfilePage() {
                       {article.title}
                     </a>
                   </TableCell>
-                  <TableCell>{`${article.language}.${article.project}`}</TableCell>
+                  <TableCell>
+                    {article.wikiProject
+                      ? article.wikiProject.replace(".org", "")
+                      : `${article.language}.${article.project}`}
+                  </TableCell>
                   <TableCell className="text-right">
                     {article.characterSum.toLocaleString()}
                   </TableCell>

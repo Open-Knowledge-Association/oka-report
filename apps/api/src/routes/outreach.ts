@@ -70,7 +70,7 @@ outreachRoutes.get("/course", async (c) => {
 
 /**
  * POST /api/outreach/backfill-authors
- * Backfill isAuthor field for OutreachArticleEditor records
+ * Backfill isAuthor field for ArticleEditor records (filtered by OUTREACH_DASHBOARD source)
  * Query params: limit (default 100, max 500)
  * Returns: { success: boolean, data: { total, processed, authorsFound } }
  */
@@ -82,13 +82,16 @@ outreachRoutes.post("/backfill-authors", async (c) => {
       limit = Math.min(Math.max(parseInt(limitParam, 10), 1), 500);
     }
 
-    const recordsToProcess = await prisma.outreachArticleEditor.findMany({
+    const recordsToProcess = await prisma.articleEditor.findMany({
       where: {
         isAuthor: false,
+        article: {
+          source: "OUTREACH_DASHBOARD",
+        },
       },
       take: limit,
       include: {
-        outreachArticle: true,
+        article: true,
         editor: true,
       },
     });
@@ -100,13 +103,17 @@ outreachRoutes.post("/backfill-authors", async (c) => {
 
     for (const record of recordsToProcess) {
       try {
-        const wikiBaseUrl = `https://${record.outreachArticle.language}.${record.outreachArticle.project}.org`;
+        // Parse wikiProject format: "en.wikipedia.org" -> extract language and project
+        const wikiProjectParts = record.article.wikiProject.split(".");
+        const language = wikiProjectParts[0];
+        const project = wikiProjectParts[1];
+        const wikiBaseUrl = `https://${language}.${project}.org`;
         const wikimediaClient = new WikimediaClient({
           baseUrl: wikiBaseUrl,
           rateLimiterOptions: { delayMs: 200 }, // 200ms delay = 5 req/sec
         });
 
-        const articleInfo = await wikimediaClient.getArticleInfo(record.outreachArticle.title);
+        const articleInfo = await wikimediaClient.getArticleInfo(record.article.title);
 
         if (articleInfo?.creator) {
           // Normalize usernames: replace spaces with underscores for comparison
@@ -114,7 +121,7 @@ outreachRoutes.post("/backfill-authors", async (c) => {
           const normalizedEditor = record.editor.username.replace(/\s+/g, "_");
 
           if (normalizedCreator === normalizedEditor) {
-            await prisma.outreachArticleEditor.update({
+            await prisma.articleEditor.update({
               where: { id: record.id },
               data: { isAuthor: true },
             });
@@ -126,13 +133,13 @@ outreachRoutes.post("/backfill-authors", async (c) => {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         errors.push({
-          articleTitle: record.outreachArticle.title,
+          articleTitle: record.article.title,
           editorUsername: record.editor.username,
           error: errorMessage,
         });
         processed++;
         console.error(
-          `Failed to process article "${record.outreachArticle.title}" for editor "${record.editor.username}":`,
+          `Failed to process article "${record.article.title}" for editor "${record.editor.username}":`,
           errorMessage,
         );
       }
@@ -388,23 +395,27 @@ outreachRoutes.get("/articles/db", async (c) => {
 
     // Build dynamic where clause based on query parameters
     const where: any = {
+      source: "OUTREACH_DASHBOARD",
       ...(query.search ? { title: { contains: query.search, mode: "insensitive" } } : {}),
       ...(query.wiki
         ? (() => {
             const [language, project] = query.wiki.split(".");
-            return language && project ? { language, project } : {};
+            if (language && project) {
+              return { wikiProject: `${language}.${project}.org` };
+            }
+            return {};
           })()
         : {}),
     };
 
-    const total = await prisma.outreachArticle.count({ where });
+    const total = await prisma.article.count({ where });
 
-    const articles = await prisma.outreachArticle.findMany({
+    const articles = await prisma.article.findMany({
       where,
       skip: offset,
       take: query.limit,
       include: {
-        pageviews: true,
+        pageviews: { where: { type: "CUMULATIVE" }, orderBy: { date: "desc" }, take: 1 },
         editors: {
           include: {
             editor: true,
@@ -456,13 +467,17 @@ outreachRoutes.get("/articles/db", async (c) => {
 outreachRoutes.get("/articles/stats", async (c) => {
   try {
     // Total article count
-    const totalArticles = await prisma.outreachArticle.count();
+    const totalArticles = await prisma.article.count({
+      where: { source: "OUTREACH_DASHBOARD" },
+    });
 
-    // Get all articles with their latest pageview snapshot
-    const articles = await prisma.outreachArticle.findMany({
+    // Get all articles with their latest CUMULATIVE pageview snapshot
+    const articles = await prisma.article.findMany({
+      where: { source: "OUTREACH_DASHBOARD" },
       include: {
         pageviews: {
-          orderBy: { snapshotDate: "desc" },
+          where: { type: "CUMULATIVE" },
+          orderBy: { date: "desc" },
           take: 1,
         },
       },
@@ -471,16 +486,16 @@ outreachRoutes.get("/articles/stats", async (c) => {
     // Calculate total pageviews from latest snapshots
     let totalPageviews = 0;
     for (const article of articles) {
-      if (article.pageviews.length > 0) {
+      if (article.pageviews.length > 0 && article.pageviews[0].cumulativeViews) {
         totalPageviews += article.pageviews[0].cumulativeViews;
       }
     }
 
-    // Group by wiki (language + project) to get stats
+    // Group by wiki (using wikiProject field) to get stats
     const wikiMap = new Map<string, { count: number; pageviews: number }>();
 
     for (const article of articles) {
-      const wikiKey = `${article.language}.${article.project}`;
+      const wikiKey = article.wikiProject;
 
       if (!wikiMap.has(wikiKey)) {
         wikiMap.set(wikiKey, { count: 0, pageviews: 0 });
@@ -489,7 +504,7 @@ outreachRoutes.get("/articles/stats", async (c) => {
       const stats = wikiMap.get(wikiKey)!;
       stats.count += 1;
 
-      if (article.pageviews.length > 0) {
+      if (article.pageviews.length > 0 && article.pageviews[0].cumulativeViews) {
         stats.pageviews += article.pageviews[0].cumulativeViews;
       }
     }

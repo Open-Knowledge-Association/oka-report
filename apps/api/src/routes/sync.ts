@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { prisma } from "@repo/db";
 import { WikimediaClient } from "@repo/utils";
-import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { TriggerSyncSchema, OutreachSyncSchema } from "../schemas";
 import { SyncService } from "../services";
 import { OutreachSyncService } from "../services/outreach-sync.service";
@@ -123,10 +122,12 @@ syncRoutes.post("/jobs/:id/cancel", async (c) => {
     );
   }
 
-  // Set isCancelled flag - the sync loops will pick this up
   await prisma.syncJob.update({
     where: { id: jobId },
-    data: { isCancelled: true },
+    data: {
+      status: "cancelled",
+      completedAt: new Date(),
+    },
   });
 
   return c.json({
@@ -229,13 +230,49 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
   );
 });
 
-/**
- * POST /api/sync/outreach
- * Trigger sync of editors from Outreach Dashboard
- * Body: { school, slug }
- * Returns: { success: boolean, data: { jobId, status } }
- * Status: 202 Accepted
- */
+syncRoutes.delete("/jobs/:id", async (c) => {
+  const jobId = c.req.param("id");
+
+  const job = await prisma.syncJob.findUnique({
+    where: { id: jobId },
+  });
+
+  if (!job) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Job not found",
+        },
+      },
+      404,
+    );
+  }
+
+  if (job.status === "running") {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "BAD_REQUEST",
+          message: "Cannot delete a running job. Cancel it first.",
+        },
+      },
+      400,
+    );
+  }
+
+  await prisma.syncJob.delete({
+    where: { id: jobId },
+  });
+
+  return c.json({
+    success: true,
+    data: { id: jobId },
+  });
+});
+
 syncRoutes.post("/outreach", async (c) => {
   try {
     const body = OutreachSyncSchema.parse(await c.req.json());
@@ -328,9 +365,7 @@ syncRoutes.post("/outreach", async (c) => {
  */
 syncRoutes.get("/stream", async (c) => {
   return streamSSE(c, async (stream) => {
-    stream.onAbort(() => {
-      console.log("SSE client disconnected");
-    });
+    stream.onAbort(() => {});
 
     while (true) {
       try {

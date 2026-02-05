@@ -85,7 +85,7 @@ editorsRoutes.put("/:id", async (c) => {
 
 editorsRoutes.delete("/all", async (c) => {
   await prisma.$transaction(async (tx) => {
-    await tx.outreachArticleEditor.deleteMany({});
+    await tx.articleEditor.deleteMany({});
     await tx.contribution.deleteMany({});
     await tx.commonsUpload.deleteMany({});
     await tx.article.updateMany({
@@ -155,11 +155,11 @@ editorsRoutes.get("/:id/profile", async (c) => {
   const editor = await prisma.editor.findUnique({
     where: { id },
     include: {
-      outreachArticles: {
+      articles: {
         include: {
-          outreachArticle: {
+          article: {
             include: {
-              pageviews: true,
+              pageviews: { where: { type: "CUMULATIVE" }, orderBy: { date: "desc" }, take: 1 },
             },
           },
         },
@@ -177,15 +177,13 @@ editorsRoutes.get("/:id/profile", async (c) => {
     );
   }
 
-  const articles = editor.outreachArticles.map((oa) => oa.outreachArticle);
+  const articles = editor.articles.map((ae) => ae.article);
   const articlesCount = articles.length;
   const totalEdits = articles.reduce((sum, article) => sum + (article.characterSum > 0 ? 1 : 0), 0);
   const charactersAdded = articles.reduce((sum, article) => sum + article.characterSum, 0);
   const referencesAdded = articles.reduce((sum, article) => sum + article.referencesCount, 0);
   const pageviews = articles.reduce((sum, article) => {
-    const latestPageview = article.pageviews.sort(
-      (a, b) => b.snapshotDate.getTime() - a.snapshotDate.getTime(),
-    )[0];
+    const latestPageview = article.pageviews[0];
     return sum + (latestPageview?.cumulativeViews || 0);
   }, 0);
 
@@ -201,7 +199,7 @@ editorsRoutes.get("/:id/profile", async (c) => {
   try {
     const firstArticle = articles[0];
     const wikiBase = firstArticle
-      ? `https://${firstArticle.language}.${firstArticle.project}.org`
+      ? `https://${firstArticle.wikiProject}`
       : "https://en.wikipedia.org";
 
     const { WikimediaClient } = await import("@repo/utils");
@@ -240,26 +238,44 @@ editorsRoutes.get("/:id/profile", async (c) => {
     console.error("Failed to fetch MediaWiki profile:", error);
   }
 
+  // Parse wikiProject to extract language and project for backward compatibility
+  const parseWikiProject = (wikiProject: string) => {
+    const match = wikiProject.match(/^(.+?)\.(.+?)\.org$/);
+    if (match) {
+      return { language: match[1], project: match[2] };
+    }
+    return { language: "en", project: "wikipedia" };
+  };
+
+  // Get the primary wiki for editor profile display
+  const firstArticle = articles[0];
+  const editorWiki = firstArticle ? firstArticle.wikiProject.replace(".org", "") : "en.wikipedia";
+
   return c.json({
     success: true,
     data: {
       editor: {
         id: editor.id,
         username: editor.username,
+        wiki: editorWiki,
       },
       outreachStats,
       wikimediaProfile,
-      articles: articles.map((article) => ({
-        id: article.id,
-        title: article.title,
-        language: article.language,
-        project: article.project,
-        url: article.url,
-        characterSum: article.characterSum,
-        referencesCount: article.referencesCount,
-        isNewArticle: article.isNewArticle,
-        rating: article.rating,
-      })),
+      articles: articles.map((article) => {
+        const { language, project } = parseWikiProject(article.wikiProject);
+        return {
+          id: article.id,
+          title: article.title,
+          wikiProject: article.wikiProject,
+          language,
+          project,
+          url: article.url,
+          characterSum: article.characterSum,
+          referencesCount: article.referencesCount,
+          isNewArticle: article.isNewArticle,
+          rating: article.rating,
+        };
+      }),
     },
   });
 });

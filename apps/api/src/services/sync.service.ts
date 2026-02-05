@@ -1,9 +1,5 @@
 import type { Prisma, PrismaClient } from "@repo/db/generated/prisma/client";
-import type {
-  CommonsUpload,
-  UserContribution,
-  WikimediaClient,
-} from "@repo/utils";
+import type { CommonsUpload, UserContribution, WikimediaClient } from "@repo/utils";
 
 type SyncSummary = {
   contributionsSynced: number;
@@ -11,11 +7,9 @@ type SyncSummary = {
   commonsUploadsSynced: number;
 };
 
-const bytesToWords = (bytesChanged: number) =>
-  Math.max(0, Math.floor(bytesChanged / 6));
+const bytesToWords = (bytesChanged: number) => Math.max(0, Math.floor(bytesChanged / 6));
 
-const toPageviewsProject = (wikiProject: string) =>
-  wikiProject.replace(/\.org$/, "");
+const toPageviewsProject = (wikiProject: string) => wikiProject.replace(/\.org$/, "");
 
 const formatDateForPageviews = (date: Date) => {
   const year = date.getUTCFullYear();
@@ -32,7 +26,28 @@ export class SyncService {
     private readonly wikimediaClient: WikimediaClient,
   ) {}
 
-  async syncEditorContributions(editorId?: string, since?: Date) {
+  /**
+   * Check if a job has been cancelled and update its status if so.
+   * Returns true if cancelled (caller should stop processing).
+   */
+  private async checkCancelled(jobId: string): Promise<boolean> {
+    const job = await this.prisma.syncJob.findUnique({
+      where: { id: jobId },
+    });
+    if (job?.status === "cancelled") {
+      await this.prisma.syncJob.update({
+        where: { id: jobId },
+        data: {
+          status: "cancelled",
+          completedAt: new Date(),
+        },
+      });
+      return true;
+    }
+    return false;
+  }
+
+  async syncEditorContributions(editorId?: string, since?: Date, jobId?: string) {
     const editors = await this.prisma.editor.findMany({
       where: {
         isActive: true,
@@ -43,6 +58,11 @@ export class SyncService {
     let syncedCount = 0;
 
     for (const editor of editors) {
+      // Check cancellation before processing each editor
+      if (jobId && (await this.checkCancelled(jobId))) {
+        return syncedCount;
+      }
+
       const contributions = await this.wikimediaClient.getUserContributions(
         editor.username,
         since ? { start: since.toISOString() } : {},
@@ -76,7 +96,7 @@ export class SyncService {
     return syncedCount;
   }
 
-  async syncArticlePageviews(articleId?: string, since?: Date) {
+  async syncArticlePageviews(articleId?: string, since?: Date, jobId?: string) {
     const articles = await this.prisma.article.findMany({
       where: {
         ...(articleId ? { id: articleId } : {}),
@@ -87,6 +107,10 @@ export class SyncService {
     let syncedCount = 0;
 
     for (const article of articles) {
+      if (jobId && (await this.checkCancelled(jobId))) {
+        return syncedCount;
+      }
+
       const startDate = since ?? article.articleCreatedAt ?? new Date();
       const endDate = new Date();
       const pageviews = await this.wikimediaClient.getPageviews(
@@ -107,6 +131,7 @@ export class SyncService {
           create: {
             articleId: article.id,
             date: parsePageviewDate(item.date),
+            type: "DAILY",
             views: item.views,
           },
           update: {
@@ -120,7 +145,7 @@ export class SyncService {
     return syncedCount;
   }
 
-  async syncCommonsUploads(editorId?: string) {
+  async syncCommonsUploads(editorId?: string, jobId?: string) {
     const editors = await this.prisma.editor.findMany({
       where: {
         isActive: true,
@@ -131,6 +156,10 @@ export class SyncService {
     let syncedCount = 0;
 
     for (const editor of editors) {
+      if (jobId && (await this.checkCancelled(jobId))) {
+        return syncedCount;
+      }
+
       const uploads = await this.wikimediaClient.getCommonsUploads(editor.username);
       await this.storeCommonsUploads(editor.id, uploads);
       syncedCount += uploads.length;
@@ -183,9 +212,23 @@ export class SyncService {
     await this.startSyncJob(job.id);
 
     try {
-      const contributionsSynced = await this.syncEditorContributions();
-      const pageviewsSynced = await this.syncArticlePageviews();
-      const commonsUploadsSynced = await this.syncCommonsUploads();
+      const contributionsSynced = await this.syncEditorContributions(undefined, undefined, job.id);
+
+      if (await this.checkCancelled(job.id)) {
+        return { contributionsSynced, pageviewsSynced: 0, commonsUploadsSynced: 0 };
+      }
+
+      const pageviewsSynced = await this.syncArticlePageviews(undefined, undefined, job.id);
+
+      if (await this.checkCancelled(job.id)) {
+        return { contributionsSynced, pageviewsSynced, commonsUploadsSynced: 0 };
+      }
+
+      const commonsUploadsSynced = await this.syncCommonsUploads(undefined, job.id);
+
+      if (await this.checkCancelled(job.id)) {
+        return { contributionsSynced, pageviewsSynced, commonsUploadsSynced };
+      }
 
       await this.completeSyncJob(job.id, {
         contributionsSynced,
@@ -204,10 +247,7 @@ export class SyncService {
     }
   }
 
-  private async upsertArticle(
-    contribution: UserContribution,
-    editorId: string,
-  ) {
+  private async upsertArticle(contribution: UserContribution, editorId: string) {
     const wikiProject = new URL(this.wikimediaClient.getBaseUrl()).host;
     const isCreation = contribution.parentId == null || contribution.parentId === 0;
     const articleInfo = isCreation
@@ -225,19 +265,15 @@ export class SyncService {
         pageId: contribution.pageId,
         title: contribution.title,
         wikiProject,
-        createdByEditorId:
-          articleInfo?.creator === contribution.username ? editorId : null,
-        articleCreatedAt: articleInfo?.createdAt
-          ? new Date(articleInfo.createdAt)
-          : null,
+        source: "MEDIAWIKI",
+        createdByEditorId: articleInfo?.creator === contribution.username ? editorId : null,
+        articleCreatedAt: articleInfo?.createdAt ? new Date(articleInfo.createdAt) : null,
       },
       update: {
         title: contribution.title,
-        createdByEditorId:
-          articleInfo?.creator === contribution.username ? editorId : undefined,
-        articleCreatedAt: articleInfo?.createdAt
-          ? new Date(articleInfo.createdAt)
-          : undefined,
+        source: "MEDIAWIKI",
+        createdByEditorId: articleInfo?.creator === contribution.username ? editorId : undefined,
+        articleCreatedAt: articleInfo?.createdAt ? new Date(articleInfo.createdAt) : undefined,
       },
     });
   }

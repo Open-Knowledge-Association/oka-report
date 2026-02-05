@@ -329,7 +329,11 @@ function ArticlesPage() {
                       {article.isNewArticle && <Badge variant="secondary">Created</Badge>}
                     </div>
                   </TableCell>
-                  <TableCell>{`${article.language}.${article.project}`}</TableCell>
+                  <TableCell>
+                    {article.wikiProject
+                      ? article.wikiProject.replace(".org", "")
+                      : `${article.language}.${article.project}`}
+                  </TableCell>
                   <TableCell>
                     {article.editors && article.editors.length > 0 ? (
                       <TooltipProvider>
@@ -404,7 +408,11 @@ function ArticlesPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {(article.pageviews?.[0]?.cumulativeViews || 0).toLocaleString()}
+                    {(
+                      article.pageviews?.[0]?.cumulativeViews ??
+                      article.pageviews?.[0]?.views ??
+                      0
+                    ).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
                     {(article.characterSum || 0).toLocaleString()}
