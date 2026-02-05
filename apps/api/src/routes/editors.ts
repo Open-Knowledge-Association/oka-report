@@ -83,6 +83,21 @@ editorsRoutes.put("/:id", async (c) => {
   return c.json({ success: true, data: updated });
 });
 
+editorsRoutes.delete("/all", async (c) => {
+  await prisma.$transaction(async (tx) => {
+    await tx.outreachArticleEditor.deleteMany({});
+    await tx.contribution.deleteMany({});
+    await tx.commonsUpload.deleteMany({});
+    await tx.article.updateMany({
+      where: { createdByEditorId: { not: null } },
+      data: { createdByEditorId: null },
+    });
+    await tx.editor.deleteMany({});
+  });
+
+  return c.json({ success: true, message: "All editors deleted" });
+});
+
 editorsRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
   await prisma.editor.update({
