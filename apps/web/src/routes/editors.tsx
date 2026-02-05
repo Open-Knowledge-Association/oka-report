@@ -10,15 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchOutreachUsers, type OutreachUser } from "@/lib/api";
+import { fetchEditorsListStats, type EditorsListStats } from "@/lib/api";
 
-type EditorStats = {
-  id: string;
-  username: string;
-  character_sum_ms: number;
-  references_count: number;
-  total_uploads: number;
-};
 type StatsTotals = {
   characters: number;
   references: number;
@@ -32,24 +25,16 @@ export const Route = createFileRoute("/editors")({
 function EditorsStatsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["stats", "editors"],
-    queryFn: fetchOutreachUsers,
+    queryFn: fetchEditorsListStats,
   });
 
-  const editors: EditorStats[] = (data ?? [])
-    .filter((user) => user.role === 0)
-    .map((user) => ({
-      id: String(user.id),
-      username: user.username,
-      character_sum_ms: user.character_sum_ms,
-      references_count: user.references_count,
-      total_uploads: user.total_uploads,
-    }));
+  const editors: EditorsListStats[] = data ?? [];
 
   const totalStats = editors.reduce<StatsTotals>(
     (acc, editor) => ({
-      characters: acc.characters + (editor.character_sum_ms || 0),
-      references: acc.references + (editor.references_count || 0),
-      uploads: acc.uploads + (editor.total_uploads || 0),
+      characters: acc.characters + (editor.characterSum || 0),
+      references: acc.references + (editor.referencesCount || 0),
+      uploads: acc.uploads + (editor.uploadsCount || 0),
     }),
     { characters: 0, references: 0, uploads: 0 },
   );
@@ -136,13 +121,13 @@ function EditorsStatsPage() {
                     </Link>
                   </TableCell>
                   <TableCell className="text-right">
-                    {editor.character_sum_ms.toLocaleString()}
+                    {editor.characterSum.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {editor.references_count.toLocaleString()}
+                    {editor.referencesCount.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {editor.total_uploads.toLocaleString()}
+                    {editor.uploadsCount.toLocaleString()}
                   </TableCell>
                 </TableRow>
               ))

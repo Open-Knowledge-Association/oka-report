@@ -84,6 +84,59 @@ export const fetchEditorStats = () =>
     }>
   >("/stats/editors");
 
+export type DashboardStats = {
+  editorsCount: number;
+  articlesCreated: number;
+  articlesEdited: number;
+  totalEdits: number;
+  wordsAdded: number;
+  referencesAdded: number;
+  pageviews: number;
+  commonsUploads: number;
+};
+
+export const fetchDashboardStats = () => apiFetch<DashboardStats>("/stats/dashboard");
+
+export type EditorsListStats = {
+  id: string;
+  username: string;
+  characterSum: number;
+  referencesCount: number;
+  uploadsCount: number;
+};
+
+export const fetchEditorsListStats = () => apiFetch<EditorsListStats[]>("/stats/editors-list");
+
+export type SyncStatus = {
+  local: {
+    editorsCount: number;
+    articlesCount: number;
+    articlesCreated: number;
+    characterSum: number;
+    wordsAdded: number;
+    referencesAdded: number;
+    pageviews: number;
+  };
+  external: {
+    editorsCount: number;
+    articlesCount: number;
+    articlesCreated: number;
+    totalEdits: number;
+    wordsAdded: number;
+    referencesAdded: number;
+    pageviews: number;
+    commonsUploads: number;
+  } | null;
+  lastSync: {
+    jobType: string;
+    completedAt: string;
+    metadata: Record<string, unknown>;
+  } | null;
+  syncRequired: boolean;
+};
+
+export const fetchSyncStatus = () => apiFetch<SyncStatus>("/stats/sync-status");
+
 export const fetchOutreachCourse = () =>
   apiFetch<{ course: any }>("/outreach/course?school=OKA&slug=OKA");
 

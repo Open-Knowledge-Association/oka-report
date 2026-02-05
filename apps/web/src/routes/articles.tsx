@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
-import { fetchOutreachArticles, fetchArticleStats, fetchOutreachCourse } from "@/lib/api";
+import { fetchOutreachArticles, fetchArticleStats, fetchDashboardStats } from "@/lib/api";
 
 export const Route = createFileRoute("/articles")({
   component: ArticlesPage,
@@ -83,13 +83,11 @@ function ArticlesPage() {
       }),
   });
 
-  // Course stats query (from Outreach Dashboard)
-  const { data: courseData, isLoading: courseLoading } = useQuery({
-    queryKey: ["outreach", "course"],
-    queryFn: fetchOutreachCourse,
+  // Dashboard stats query (from local DB)
+  const { data: dashboardStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["stats", "dashboard"],
+    queryFn: fetchDashboardStats,
   });
-
-  const course = courseData?.course;
 
   const articles = articlesData?.articles ?? [];
   const pagination = articlesData?.pagination;
@@ -132,7 +130,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.created_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.articlesCreated ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -144,7 +142,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.edited_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.articlesEdited ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -156,7 +154,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.edit_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.totalEdits ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -168,7 +166,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.student_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.editorsCount ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -180,7 +178,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.word_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.wordsAdded ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -192,7 +190,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.references_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.referencesAdded ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -204,7 +202,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.view_count ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.pageviews ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -216,7 +214,7 @@ function ArticlesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {courseLoading ? "..." : (course?.upload_count?.toLocaleString() ?? "-")}
+              {statsLoading ? "..." : (dashboardStats?.commonsUploads ?? 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
