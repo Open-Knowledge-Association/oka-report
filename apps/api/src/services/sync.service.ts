@@ -210,30 +210,32 @@ export class SyncService {
     });
   }
 
-  async runFullSync(): Promise<SyncSummary> {
-    const job = await this.createSyncJob("full");
-    await this.startSyncJob(job.id);
+  async runFullSync(existingJobId?: string): Promise<SyncSummary> {
+    const jobId = existingJobId ?? (await this.createSyncJob("full")).id;
+    if (!existingJobId) {
+      await this.startSyncJob(jobId);
+    }
 
     try {
-      const contributionsSynced = await this.syncEditorContributions(undefined, undefined, job.id);
+      const contributionsSynced = await this.syncEditorContributions(undefined, undefined, jobId);
 
-      if (await this.checkCancelled(job.id)) {
+      if (await this.checkCancelled(jobId)) {
         return { contributionsSynced, pageviewsSynced: 0, commonsUploadsSynced: 0 };
       }
 
-      const pageviewsSynced = await this.syncArticlePageviews(undefined, undefined, job.id);
+      const pageviewsSynced = await this.syncArticlePageviews(undefined, undefined, jobId);
 
-      if (await this.checkCancelled(job.id)) {
+      if (await this.checkCancelled(jobId)) {
         return { contributionsSynced, pageviewsSynced, commonsUploadsSynced: 0 };
       }
 
-      const commonsUploadsSynced = await this.syncCommonsUploads(undefined, job.id);
+      const commonsUploadsSynced = await this.syncCommonsUploads(undefined, jobId);
 
-      if (await this.checkCancelled(job.id)) {
+      if (await this.checkCancelled(jobId)) {
         return { contributionsSynced, pageviewsSynced, commonsUploadsSynced };
       }
 
-      await this.completeSyncJob(job.id, {
+      await this.completeSyncJob(jobId, {
         contributionsSynced,
         pageviewsSynced,
         commonsUploadsSynced,
@@ -245,7 +247,7 @@ export class SyncService {
         commonsUploadsSynced,
       };
     } catch (error) {
-      await this.failSyncJob(job.id, error);
+      await this.failSyncJob(jobId, error);
       throw error;
     }
   }

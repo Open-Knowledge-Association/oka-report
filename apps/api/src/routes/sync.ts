@@ -50,7 +50,7 @@ syncRoutes.post("/trigger", async (c) => {
         return;
       }
 
-      await syncService.runFullSync();
+      await syncService.runFullSync(job.id);
     } catch (error) {
       await syncService.failSyncJob(job.id, error);
     }
