@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useSyncJobStream, type SyncJob } from "@/hooks/useSyncJobStream";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ function SyncJobsPage() {
   const [jobToCancel, setJobToCancel] = useState<string | null>(null);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [triggeringSync, setTriggeringSync] = useState<string | null>(null);
+  const triggerLockRef = useRef<string | null>(null);
 
   const handleCancelJob = async (jobId: string) => {
     try {
@@ -120,7 +121,8 @@ function SyncJobsPage() {
   };
 
   const handleTriggerSync = async (jobType: string) => {
-    if (triggeringSync) return;
+    if (triggeringSync || triggerLockRef.current) return;
+    triggerLockRef.current = jobType;
     setTriggeringSync(jobType);
 
     try {
@@ -160,6 +162,7 @@ function SyncJobsPage() {
         variant: "destructive",
       });
     } finally {
+      triggerLockRef.current = null;
       setTriggeringSync(null);
     }
   };
