@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { prisma } from "@repo/db";
 import { WikimediaClient } from "@repo/utils";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
@@ -27,17 +28,25 @@ syncRoutes.post("/trigger", async (c) => {
   setTimeout(async () => {
     try {
       if (jobType === "contributions") {
-        const contributionsSynced = await syncService.syncEditorContributions();
+        const contributionsSynced = await syncService.syncEditorContributions(
+          undefined,
+          undefined,
+          job.id,
+        );
         await syncService.completeSyncJob(job.id, { contributionsSynced });
         return;
       }
       if (jobType === "pageviews") {
-        const pageviewsSynced = await syncService.syncArticlePageviews();
+        const pageviewsSynced = await syncService.syncArticlePageviews(
+          undefined,
+          undefined,
+          job.id,
+        );
         await syncService.completeSyncJob(job.id, { pageviewsSynced });
         return;
       }
       if (jobType === "commons") {
-        const commonsUploadsSynced = await syncService.syncCommonsUploads();
+        const commonsUploadsSynced = await syncService.syncCommonsUploads(undefined, job.id);
         await syncService.completeSyncJob(job.id, { commonsUploadsSynced });
         return;
       }
@@ -70,6 +79,154 @@ syncRoutes.get("/history", async (c) => {
   });
 
   return c.json({ success: true, data: history });
+});
+
+/**
+ * POST /api/sync/jobs/:id/cancel
+ * Cancel a running sync job
+ * Returns: { success: boolean, data: { id, status } }
+ * Status: 200 OK, 404 Not Found, 400 Bad Request
+ */
+syncRoutes.post("/jobs/:id/cancel", async (c) => {
+  const jobId = c.req.param("id");
+
+  // Find the job
+  const job = await prisma.syncJob.findUnique({
+    where: { id: jobId },
+  });
+
+  // Job not found
+  if (!job) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Job not found",
+        },
+      },
+      404,
+    );
+  }
+
+  // Job is not running - can't cancel
+  if (job.status !== "running") {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "BAD_REQUEST",
+          message: "Job is not running",
+        },
+      },
+      400,
+    );
+  }
+
+  // Set isCancelled flag - the sync loops will pick this up
+  await prisma.syncJob.update({
+    where: { id: jobId },
+    data: { isCancelled: true },
+  });
+
+  return c.json({
+    success: true,
+    data: {
+      id: jobId,
+      status: "cancelled",
+    },
+  });
+});
+
+/**
+ * POST /api/sync/jobs/:id/retry
+ * Retry a failed or cancelled sync job
+ * Returns: { success: true, data: { newJobId } } (200)
+ *          { success: false, error: { code, message } } (404 or 400)
+ * Status: 200 OK, 404 Not Found, 400 Bad Request
+ */
+syncRoutes.post("/jobs/:id/retry", async (c) => {
+  const jobId = c.req.param("id");
+
+  // Find the job
+  const job = await prisma.syncJob.findUnique({
+    where: { id: jobId },
+  });
+
+  // Job not found
+  if (!job) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Job not found",
+        },
+      },
+      404,
+    );
+  }
+
+  // Job is not retriable (only failed or cancelled are retriable)
+  if (!["failed", "cancelled"].includes(job.status)) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "BAD_REQUEST",
+          message: "Job is not in a retriable state",
+        },
+      },
+      400,
+    );
+  }
+
+  // Create new job with same jobType
+  const newJob = await syncService.createSyncJob(job.jobType);
+  await syncService.startSyncJob(newJob.id);
+
+  // Trigger sync async based on jobType
+  setTimeout(async () => {
+    try {
+      if (job.jobType === "contributions") {
+        const contributionsSynced = await syncService.syncEditorContributions(
+          undefined,
+          undefined,
+          newJob.id,
+        );
+        await syncService.completeSyncJob(newJob.id, { contributionsSynced });
+        return;
+      }
+      if (job.jobType === "pageviews") {
+        const pageviewsSynced = await syncService.syncArticlePageviews(
+          undefined,
+          undefined,
+          newJob.id,
+        );
+        await syncService.completeSyncJob(newJob.id, { pageviewsSynced });
+        return;
+      }
+      if (job.jobType === "commons") {
+        const commonsUploadsSynced = await syncService.syncCommonsUploads(undefined, newJob.id);
+        await syncService.completeSyncJob(newJob.id, { commonsUploadsSynced });
+        return;
+      }
+
+      await syncService.runFullSync();
+    } catch (error) {
+      await syncService.failSyncJob(newJob.id, error);
+    }
+  }, 0);
+
+  return c.json(
+    {
+      success: true,
+      data: {
+        newJobId: newJob.id,
+      },
+    },
+    200,
+  );
 });
 
 /**
@@ -161,4 +318,55 @@ syncRoutes.post("/outreach", async (c) => {
       500,
     );
   }
+});
+
+/**
+ * GET /api/sync/stream
+ * Server-Sent Events (SSE) endpoint for real-time job status updates
+ * Streams running jobs and recently completed jobs (last 5 minutes)
+ * Returns: text/event-stream with job-update events
+ */
+syncRoutes.get("/stream", async (c) => {
+  return streamSSE(c, async (stream) => {
+    stream.onAbort(() => {
+      console.log("SSE client disconnected");
+    });
+
+    while (true) {
+      try {
+        // Get running jobs
+        const runningJobs = await prisma.syncJob.findMany({
+          where: { status: "running" },
+          orderBy: { startedAt: "desc" },
+        });
+
+        // Get recently completed/failed/cancelled jobs (last 5 minutes)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const recentJobs = await prisma.syncJob.findMany({
+          where: {
+            status: { in: ["completed", "failed", "cancelled"] },
+            completedAt: { gte: fiveMinutesAgo },
+          },
+          orderBy: { completedAt: "desc" },
+          take: 10,
+        });
+
+        // Combine and send
+        const jobs = [...runningJobs, ...recentJobs];
+
+        await stream.writeSSE({
+          data: JSON.stringify(jobs),
+          event: "job-update",
+          id: String(Date.now()),
+        });
+
+        // Wait 2 seconds before next update
+        await stream.sleep(2000);
+      } catch (error) {
+        console.error("Error streaming job updates:", error);
+        // Continue streaming even if there's an error
+        await stream.sleep(2000);
+      }
+    }
+  });
 });
