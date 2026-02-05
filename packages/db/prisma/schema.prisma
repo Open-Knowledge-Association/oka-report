@@ -13,6 +13,16 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ArticleSource {
+  MEDIAWIKI
+  OUTREACH_DASHBOARD
+}
+
+enum PageviewType {
+  DAILY
+  CUMULATIVE
+}
+
 /// Registered Wikipedia editors to track
 /// These are OKA members, grantees, or other editors whose contributions we monitor
 model Editor {
@@ -46,6 +56,7 @@ model Editor {
    commonsUploads   CommonsUpload[]
    createdArticles  Article[]       @relation("CreatedArticles")
    outreachArticles OutreachArticleEditor[]
+   articles         ArticleEditor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -71,6 +82,27 @@ model Article {
   /// Example: "en.wikipedia.org", "id.wikipedia.org", "commons.wikimedia.org"
   wikiProject String
 
+  /// Source system for this article
+  source ArticleSource @default(MEDIAWIKI)
+
+  /// Outreach Dashboard article ID (if sourced from Outreach)
+  outreachId Int? @unique
+
+  /// Full URL to the article on Wikipedia
+  url String?
+
+  /// Sum of character changes across all edits (Outreach Dashboard)
+  characterSum Int @default(0)
+
+  /// Number of references in the article (Outreach Dashboard)
+  referencesCount Int @default(0)
+
+  /// Whether this is a newly created article (Outreach Dashboard)
+  isNewArticle Boolean @default(false)
+
+  /// Quality rating from Outreach Dashboard
+  rating String?
+
   /// Reference to the tracked editor who created this article (if any)
   /// Null if article was created by a non-tracked editor
   createdByEditor   Editor? @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
@@ -83,6 +115,7 @@ model Article {
 
   contributions Contribution[]
   pageviews     Pageview[]
+  editors       ArticleEditor[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -150,16 +183,45 @@ model Pageview {
   /// Example: "2026-01-15"
   date DateTime @db.Date
 
+  /// Pageview record type (daily or cumulative snapshot)
+  type PageviewType @default(DAILY)
+
   /// Number of pageviews on this date
   /// Source: Wikimedia Pageviews API (user traffic only, excludes bots)
   /// Example: 1523
   views Int
+
+  /// Cumulative view count as of snapshot date
+  /// Used when type = CUMULATIVE
+  cumulativeViews Int?
 
   createdAt DateTime @default(now())
 
   @@unique([articleId, date])
   @@index([date])
   @@map("pageviews")
+}
+
+/// Join table linking articles to editors
+/// Tracks which editors worked on which unified articles
+model ArticleEditor {
+  id String @id @default(cuid())
+
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId String
+
+  editor   Editor @relation(fields: [editorId], references: [id], onDelete: Cascade)
+  editorId String
+
+  /// Whether this editor is the original article creator
+  isAuthor Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([articleId, editorId])
+  @@index([articleId])
+  @@index([editorId])
+  @@map("article_editors")
 }
 
 /// Wikimedia Commons file uploads by tracked editors
