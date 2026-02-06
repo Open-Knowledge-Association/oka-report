@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Users, FileText, BookOpen, HardDrive } from "lucide-react";
+import { Users, FileText, BookOpen, HardDrive, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchOutreachUsers, type OutreachUser } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type EditorStats = {
   id: string;
@@ -31,22 +31,20 @@ export const Route = createFileRoute("/editors")({
 });
 
 function EditorsStatsPage() {
-  const { data: outreachUsers = [], isLoading } = useQuery({
+  const navigate = useNavigate();
+  const {
+    data: editorsData = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["stats", "editors"],
-    queryFn: fetchOutreachUsers,
+    queryFn: async () => {
+      const data = await apiFetch<EditorStats[]>("/editors?school=OKA&slug=OKA");
+      return data;
+    },
   });
 
-  // Filter for students only (role === 0)
-  const students: OutreachUser[] = outreachUsers.filter((u) => u.role === 0);
-
-  // Transform Outreach API response to match table format
-  const editors: EditorStats[] = students.map((user, index) => ({
-    id: `outreach-${user.id}`,
-    username: user.username,
-    characterSum: user.character_sum_ms || 0,
-    referencesCount: user.references_count || 0,
-    uploadsCount: user.total_uploads || 0,
-  }));
+  const editors: EditorStats[] = editorsData;
 
   const totalStats = editors.reduce<StatsTotals>(
     (acc, editor) => ({
@@ -63,8 +61,10 @@ function EditorsStatsPage() {
         <h1 className="text-3xl font-bold text-slate-900">Editor Statistics</h1>
         <p className="text-slate-600 mt-1">
           {isLoading
-            ? "Loading editors from Outreach Dashboard..."
-            : `Real-time stats for ${editors.length} OKA students from Outreach Dashboard`}
+            ? "Loading editors..."
+            : error
+              ? "Failed to load editors"
+              : `Real-time stats for ${editors.length} OKA editors`}
         </p>
       </div>
 
@@ -127,21 +127,30 @@ function EditorsStatsPage() {
             ) : editors.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-8 text-slate-500">
-                  No editors found. Check your Outreach Dashboard connection.
+                  No editors found.
                 </TableCell>
               </TableRow>
             ) : (
               editors.map((editor) => (
                 <TableRow key={editor.id}>
                   <TableCell className="font-medium">
-                    <a
-                      href={`https://en.wikipedia.org/wiki/User:${editor.username}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline text-blue-600"
-                    >
-                      {editor.username}
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate({ to: `/editors/${editor.id}` as any })}
+                        className="hover:underline text-blue-600 cursor-pointer text-left"
+                      >
+                        {editor.username}
+                      </button>
+                      <a
+                        href={`https://en.wikipedia.org/wiki/User:${editor.username}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="View on Wikipedia"
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {editor.characterSum.toLocaleString()}
