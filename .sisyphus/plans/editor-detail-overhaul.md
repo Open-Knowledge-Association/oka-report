@@ -972,7 +972,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ### Wave 4: Additional Features
 
-- [ ] 12. **Export Profile Feature**
+- [x] 12. **Export Profile Feature**
 
   **What to do**:
   - Create `apps/web/src/components/editor/ExportButton.tsx`
@@ -1027,7 +1027,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 13. **Share Profile Feature**
+- [x] 13. **Share Profile Feature**
 
   **What to do**:
   - Create `apps/web/src/components/editor/ShareButton.tsx`
