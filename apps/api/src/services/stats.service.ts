@@ -1416,6 +1416,112 @@ export class StatsService {
     return { byWikiProject, totals };
   }
 
+  async getMonthlyStats(
+    year: number,
+    month: number,
+    filters?: { wikiProject?: string; source?: ArticleSource },
+  ): Promise<{
+    byWikiProject: WikiProjectAnnualStats[];
+    totals: AnnualStats;
+  }> {
+    const startOfMonth = new Date(Date.UTC(year, month - 1, 1));
+    const endOfMonth = new Date(Date.UTC(year, month, 0));
+
+    if (filters?.wikiProject && filters?.source) {
+      const stats = await this.prisma.dailyWikiSourceStat.findMany({
+        where: {
+          wikiProject: filters.wikiProject,
+          source: filters.source,
+          date: { gte: startOfMonth, lte: endOfMonth },
+        },
+      });
+
+      const aggregated = this.aggregateAnnualStats(stats);
+      return {
+        byWikiProject: [{ wikiProject: filters.wikiProject, ...aggregated }],
+        totals: aggregated,
+      };
+    }
+
+    if (filters?.source) {
+      const stats = await this.prisma.dailySourceStat.findMany({
+        where: {
+          source: filters.source,
+          date: { gte: startOfMonth, lte: endOfMonth },
+        },
+      });
+
+      const aggregated = this.aggregateAnnualStats(stats);
+      return {
+        byWikiProject: [],
+        totals: aggregated,
+      };
+    }
+
+    if (filters?.wikiProject) {
+      const stats = await this.prisma.dailyWikiStat.findMany({
+        where: {
+          wikiProject: filters.wikiProject,
+          date: { gte: startOfMonth, lte: endOfMonth },
+        },
+      });
+
+      const aggregated = this.aggregateAnnualStats(stats);
+      return {
+        byWikiProject: [{ wikiProject: filters.wikiProject, ...aggregated }],
+        totals: aggregated,
+      };
+    }
+
+    const dailyStats = await this.prisma.dailyStat.findMany({
+      where: {
+        date: { gte: startOfMonth, lte: endOfMonth },
+      },
+    });
+
+    const wikiStats = await this.prisma.dailyWikiStat.findMany({
+      where: {
+        date: { gte: startOfMonth, lte: endOfMonth },
+      },
+    });
+
+    const totals = this.aggregateAnnualStats(dailyStats);
+
+    const wikiProjectMap = new Map<string, AnnualStats>();
+    for (const stat of wikiStats) {
+      if (!wikiProjectMap.has(stat.wikiProject)) {
+        wikiProjectMap.set(stat.wikiProject, {
+          edits: 0,
+          wordsAdded: 0,
+          pageviews: 0,
+          articlesCreated: 0,
+          articlesEdited: 0,
+          editors: 0,
+          referencesAdded: 0,
+          commonsUploads: 0,
+        });
+      }
+      const projectStats = wikiProjectMap.get(stat.wikiProject)!;
+      projectStats.edits += stat.edits;
+      projectStats.wordsAdded += stat.wordsAdded;
+      projectStats.pageviews += stat.pageviews;
+      projectStats.articlesCreated += stat.articlesCreated;
+      projectStats.articlesEdited += stat.articlesEdited;
+      projectStats.editors += stat.editors;
+      projectStats.referencesAdded += stat.referencesAdded;
+      projectStats.commonsUploads += stat.commonsUploads;
+    }
+
+    const byWikiProject: WikiProjectAnnualStats[] = Array.from(wikiProjectMap.entries()).map(
+      ([wikiProject, stats]) => ({
+        wikiProject,
+        ...stats,
+      }),
+    );
+
+    return { byWikiProject, totals };
+  }
+
   async calculateYoY(
     currentYear: number,
     metric: keyof AnnualStats | "all" = "all",
