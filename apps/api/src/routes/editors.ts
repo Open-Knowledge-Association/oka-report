@@ -149,6 +149,51 @@ editorsRoutes.post("/bulk", async (c) => {
   return c.json({ success: true, data: results }, 201);
 });
 
+editorsRoutes.get("/:id/commons-uploads", async (c) => {
+  const id = c.req.param("id");
+
+  const editor = await prisma.editor.findUnique({
+    where: { id },
+  });
+
+  if (!editor) {
+    return c.json(
+      { success: false, error: { code: "not_found", message: "Editor not found" } },
+      404,
+    );
+  }
+
+  const uploads = await prisma.commonsUpload.findMany({
+    where: { editorId: id },
+    orderBy: { uploadedAt: "desc" },
+  });
+
+  const generateThumbnailUrl = (fileName: string): string | null => {
+    // Check if file is an image based on extension
+    const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
+    const isImage = imageExtensions.some((ext) => fileName.toLowerCase().endsWith(ext));
+
+    if (!isImage) return null;
+
+    const firstChar = fileName.charAt(0);
+    const firstTwoChars = fileName.substring(0, 2);
+    const width = 200;
+
+    return `https://upload.wikimedia.org/wikipedia/commons/thumb/${firstChar}/${firstTwoChars}/${encodeURIComponent(fileName)}/${width}px-${encodeURIComponent(fileName)}`;
+  };
+
+  const data = uploads.map((upload) => ({
+    fileName: upload.fileName,
+    fileUrl: upload.fileUrl,
+    fileSize: upload.fileSize,
+    mimeType: upload.mimeType,
+    uploadedAt: upload.uploadedAt,
+    thumbnailUrl: generateThumbnailUrl(upload.fileName),
+  }));
+
+  return c.json({ success: true, data });
+});
+
 editorsRoutes.get("/:id/profile", async (c) => {
   const id = c.req.param("id");
 
@@ -288,5 +333,180 @@ editorsRoutes.get("/:id/profile", async (c) => {
         };
       }),
     },
+  });
+});
+
+editorsRoutes.get("/:id/daily-stats", async (c) => {
+  const id = c.req.param("id");
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+
+  const editor = await prisma.editor.findUnique({
+    where: { id },
+  });
+
+  if (!editor) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "not_found", message: "Editor not found" },
+      },
+      404,
+    );
+  }
+
+  const where: { editorId: string; date?: { gte?: Date; lte?: Date } } = {
+    editorId: id,
+  };
+
+  if (from || to) {
+    where.date = {};
+    if (from) {
+      where.date.gte = new Date(from);
+    }
+    if (to) {
+      where.date.lte = new Date(to);
+    }
+  }
+
+  const dailyStats = await prisma.editorDailyStat.findMany({
+    where,
+    orderBy: { date: "asc" },
+  });
+
+  return c.json({
+    success: true,
+    data: dailyStats,
+  });
+});
+
+editorsRoutes.get("/:id/achievements", async (c) => {
+  const id = c.req.param("id");
+
+  const editor = await prisma.editor.findUnique({
+    where: { id },
+  });
+
+  if (!editor) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "not_found", message: "Editor not found" },
+      },
+      404,
+    );
+  }
+
+  // Fetch all daily stats for this editor
+  const dailyStats = await prisma.editorDailyStat.findMany({
+    where: { editorId: id },
+  });
+
+  // Calculate aggregate totals
+  const totals = dailyStats.reduce(
+    (acc, stat) => ({
+      articlesCreated: acc.articlesCreated + stat.articlesCreated,
+      wordsAdded: acc.wordsAdded + stat.wordsAdded,
+      referencesAdded: acc.referencesAdded + stat.referencesAdded,
+      edits: acc.edits + stat.edits,
+      commonsUploads: acc.commonsUploads + stat.commonsUploads,
+    }),
+    {
+      articlesCreated: 0,
+      wordsAdded: 0,
+      referencesAdded: 0,
+      edits: 0,
+      commonsUploads: 0,
+    },
+  );
+
+  // Calculate account age in days
+  const accountAgeMs = new Date().getTime() - editor.createdAt.getTime();
+  const accountAgeDays = Math.floor(accountAgeMs / (1000 * 60 * 60 * 24));
+
+  // Define badges with criteria
+  type BadgeId =
+    | "first_article"
+    | "prolific_writer"
+    | "wordsmith"
+    | "reference_master"
+    | "wiki_contributor"
+    | "commons_contributor"
+    | "veteran";
+
+  interface Badge {
+    id: BadgeId;
+    name: string;
+    description: string;
+    icon: string;
+    achieved: boolean;
+    achievedAt: string | null;
+  }
+
+  const badges: Badge[] = [
+    {
+      id: "first_article",
+      name: "First Article",
+      description: "Created your first article",
+      icon: "✍️",
+      achieved: totals.articlesCreated >= 1,
+      achievedAt: totals.articlesCreated >= 1 ? editor.createdAt.toISOString() : null,
+    },
+    {
+      id: "prolific_writer",
+      name: "Prolific Writer",
+      description: "Created 10 or more articles",
+      icon: "📚",
+      achieved: totals.articlesCreated >= 10,
+      achievedAt: null, // Would need to fetch from contributions to determine exact date
+    },
+    {
+      id: "wordsmith",
+      name: "Wordsmith",
+      description: "Added 10,000 or more words",
+      icon: "💬",
+      achieved: totals.wordsAdded >= 10000,
+      achievedAt: null, // Would need to fetch from contributions to determine exact date
+    },
+    {
+      id: "reference_master",
+      name: "Reference Master",
+      description: "Added 100 or more references",
+      icon: "📖",
+      achieved: totals.referencesAdded >= 100,
+      achievedAt: null, // Would need to fetch from contributions to determine exact date
+    },
+    {
+      id: "wiki_contributor",
+      name: "Wiki Contributor",
+      description: "Made 50 or more edits",
+      icon: "🔧",
+      achieved: totals.edits >= 50,
+      achievedAt: null, // Would need to fetch from contributions to determine exact date
+    },
+    {
+      id: "commons_contributor",
+      name: "Commons Contributor",
+      description: "Uploaded 5 or more files to Commons",
+      icon: "📸",
+      achieved: totals.commonsUploads >= 5,
+      achievedAt: null, // Would need to fetch from contributions to determine exact date
+    },
+    {
+      id: "veteran",
+      name: "Veteran Editor",
+      description: "Member for 1 year or more",
+      icon: "⭐",
+      achieved: accountAgeDays >= 365,
+      achievedAt:
+        accountAgeDays >= 365
+          ? new Date(editor.createdAt.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          : null,
+    },
+  ];
+
+  return c.json({
+    success: true,
+    data: badges,
   });
 });
