@@ -14,6 +14,12 @@ export {
   ArticleHistoryQuerySchema,
   WikiStatSchema,
   OutreachArticleStatsResponseSchema,
+  AnnualStatsQuerySchema,
+  TopArticlesQuerySchema,
+  ReportExportQuerySchema,
+  AnnualStatsResponseSchema,
+  TopArticlesResponseSchema,
+  TopArticle,
 } from "./stats.schema";
 export { TriggerSyncSchema, OutreachSyncSchema } from "./sync.schema";
 export { OutreachArticlesQuerySchema } from "./outreach.schema";
