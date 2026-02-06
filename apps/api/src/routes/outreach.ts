@@ -23,6 +23,14 @@ const outreachArticleSyncService = new OutreachArticleSyncService(prisma, dashbo
 
 export const outreachRoutes = new Hono();
 
+const parseWikiProject = (wikiProject: string) => {
+  const match = wikiProject.match(/^(.+?)\.(.+?)\.org$/);
+  if (match) {
+    return { language: match[1], project: match[2] };
+  }
+  return { language: "en", project: "wikipedia" };
+};
+
 /**
  * GET /api/outreach/course
  * Fetch course metadata from Outreach Dashboard
@@ -369,6 +377,9 @@ outreachRoutes.post("/articles/sync", async (c) => {
  */
 outreachRoutes.get("/articles/db", async (c) => {
   try {
+    c.header("Deprecation", "true");
+    c.header("Link", '</api/articles>; rel="successor-version"');
+
     const query = OutreachArticlesQuerySchema.parse(c.req.query());
 
     const offset = (query.page - 1) * query.limit;
@@ -409,11 +420,16 @@ outreachRoutes.get("/articles/db", async (c) => {
 
     const totalPages = Math.ceil(total / query.limit);
 
+    const normalizedArticles = articles.map((article) => {
+      const { language, project } = parseWikiProject(article.wikiProject);
+      return { ...article, language, project };
+    });
+
     return c.json(
       {
         success: true,
         data: {
-          articles,
+          articles: normalizedArticles,
           pagination: {
             total,
             page: query.page,
@@ -446,6 +462,9 @@ outreachRoutes.get("/articles/db", async (c) => {
  */
 outreachRoutes.get("/articles/stats", async (c) => {
   try {
+    c.header("Deprecation", "true");
+    c.header("Link", '</api/articles>; rel="successor-version"');
+
     // Total article count
     const totalArticles = await prisma.article.count({
       where: { source: "OUTREACH_DASHBOARD" },

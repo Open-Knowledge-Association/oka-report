@@ -159,9 +159,14 @@ editorsRoutes.get("/:id/profile", async (c) => {
         include: {
           article: {
             include: {
-              pageviews: { where: { type: "CUMULATIVE" }, orderBy: { date: "desc" }, take: 1 },
+              pageviews: { orderBy: { date: "desc" }, take: 1 },
             },
           },
+        },
+      },
+      createdArticles: {
+        include: {
+          pageviews: { orderBy: { date: "desc" }, take: 1 },
         },
       },
     },
@@ -177,14 +182,20 @@ editorsRoutes.get("/:id/profile", async (c) => {
     );
   }
 
-  const articles = editor.articles.map((ae) => ae.article);
+  const attachedArticles = editor.articles.map((ae) => ae.article);
+  const articleMap = new Map(attachedArticles.map((article) => [article.id, article]));
+  for (const article of editor.createdArticles) {
+    articleMap.set(article.id, article);
+  }
+
+  const articles = Array.from(articleMap.values());
   const articlesCount = articles.length;
   const totalEdits = articles.reduce((sum, article) => sum + (article.characterSum > 0 ? 1 : 0), 0);
   const charactersAdded = articles.reduce((sum, article) => sum + article.characterSum, 0);
   const referencesAdded = articles.reduce((sum, article) => sum + article.referencesCount, 0);
   const pageviews = articles.reduce((sum, article) => {
     const latestPageview = article.pageviews[0];
-    return sum + (latestPageview?.cumulativeViews || 0);
+    return sum + (latestPageview?.cumulativeViews ?? latestPageview?.views ?? 0);
   }, 0);
 
   const outreachStats = {
