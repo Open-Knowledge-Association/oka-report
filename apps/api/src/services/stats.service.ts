@@ -1,4 +1,9 @@
-import type { ArticleSource, Prisma, PrismaClient } from "@repo/db/generated/prisma/client";
+import type {
+  ArticleSource,
+  PageviewType,
+  Prisma,
+  PrismaClient,
+} from "@repo/db/generated/prisma/client";
 
 export type StatsFilter = {
   startDate?: Date;
@@ -741,26 +746,19 @@ export class StatsService {
     const edits = contributions.length;
     const wordsAdded = contributions.reduce((total, item) => total + item.wordsAdded, 0);
 
-    const createdArticles = new Set(
-      contributions.filter((item) => item.isCreation).map((item) => item.articleId),
-    );
-    const modifiedArticles = new Set(contributions.map((item) => item.articleId));
-
-    const pageviews = await this.prisma.pageview.aggregate({
-      where: this.buildPageviewWhere(filters),
-      _sum: { views: true },
-    });
-
-    const commonsUploads = await this.prisma.commonsUpload.count({
-      where: this.buildCommonsWhere(filters),
-    });
+    const [articlesCreated, articlesModified, pageviews, commonsUploads] = await Promise.all([
+      this.prisma.article.count({ where: this.buildCreatedArticleWhere(filters) }),
+      this.prisma.article.count({ where: this.buildModifiedArticleWhere(filters) }),
+      this.getTotalPageviews(filters),
+      this.prisma.commonsUpload.count({ where: this.buildCommonsWhere(filters) }),
+    ]);
 
     return {
       edits,
       wordsAdded,
-      pageviews: pageviews._sum.views ?? 0,
-      articlesCreated: createdArticles.size,
-      articlesModified: modifiedArticles.size,
+      pageviews,
+      articlesCreated,
+      articlesModified,
       commonsUploads,
     };
   }
@@ -778,11 +776,8 @@ export class StatsService {
     });
 
     const projectMap = new Map<string, WikiProjectStats>();
-    const createdByProject = new Map<string, Set<string>>();
-    const modifiedByProject = new Map<string, Set<string>>();
 
-    for (const contribution of contributions) {
-      const project = contribution.article.wikiProject;
+    const ensureProject = (project: string) => {
       if (!projectMap.has(project)) {
         projectMap.set(project, {
           wikiProject: project,
@@ -793,35 +788,44 @@ export class StatsService {
           articlesModified: 0,
           commonsUploads: 0,
         });
-        createdByProject.set(project, new Set());
-        modifiedByProject.set(project, new Set());
       }
+      return projectMap.get(project)!;
+    };
 
-      const stats = projectMap.get(project);
-      if (!stats) continue;
+    for (const contribution of contributions) {
+      const project = contribution.article.wikiProject;
+      const stats = ensureProject(project);
       stats.edits += 1;
       stats.wordsAdded += contribution.wordsAdded;
-      modifiedByProject.get(project)?.add(contribution.articleId);
-      if (contribution.isCreation) {
-        createdByProject.get(project)?.add(contribution.articleId);
-      }
     }
 
-    const pageviews = await this.prisma.pageview.findMany({
-      where: this.buildPageviewWhere(filters),
-      select: { views: true, article: { select: { wikiProject: true } } },
-    });
-
-    for (const pageview of pageviews) {
-      const stats = projectMap.get(pageview.article.wikiProject);
-      if (stats) {
-        stats.pageviews += pageview.views;
-      }
+    const pageviewTotals = await this.getPageviewsByWikiProject(filters);
+    for (const [project, total] of pageviewTotals.entries()) {
+      const stats = ensureProject(project);
+      stats.pageviews = total;
     }
 
-    for (const [project, stats] of projectMap.entries()) {
-      stats.articlesCreated = createdByProject.get(project)?.size ?? 0;
-      stats.articlesModified = modifiedByProject.get(project)?.size ?? 0;
+    const [createdCounts, modifiedCounts] = await Promise.all([
+      this.prisma.article.groupBy({
+        by: ["wikiProject"],
+        where: this.buildCreatedArticleWhere(filters),
+        _count: { _all: true },
+      }),
+      this.prisma.article.groupBy({
+        by: ["wikiProject"],
+        where: this.buildModifiedArticleWhere(filters),
+        _count: { _all: true },
+      }),
+    ]);
+
+    for (const entry of createdCounts) {
+      const stats = ensureProject(entry.wikiProject);
+      stats.articlesCreated = entry._count._all;
+    }
+
+    for (const entry of modifiedCounts) {
+      const stats = ensureProject(entry.wikiProject);
+      stats.articlesModified = entry._count._all;
     }
 
     return Array.from(projectMap.values()).sort((a, b) => b.wordsAdded - a.wordsAdded);
@@ -870,17 +874,33 @@ export class StatsService {
       }
     }
 
-    const pageviews = await this.prisma.pageview.findMany({
-      where: this.buildPageviewWhere(filters),
-      select: { views: true, article: { select: { createdByEditorId: true } } },
-    });
+    const pageviewTypes = this.resolvePageviewTypes(filters);
 
-    for (const pageview of pageviews) {
-      const editorId = pageview.article.createdByEditorId;
-      if (!editorId) continue;
-      const stats = editorMap.get(editorId);
-      if (stats) {
-        stats.pageviews += pageview.views;
+    if (pageviewTypes.includes("DAILY")) {
+      const pageviews = await this.prisma.pageview.findMany({
+        where: this.buildPageviewWhere(filters, "DAILY"),
+        select: { views: true, article: { select: { createdByEditorId: true } } },
+      });
+
+      for (const pageview of pageviews) {
+        const editorId = pageview.article.createdByEditorId;
+        if (!editorId) continue;
+        const stats = editorMap.get(editorId);
+        if (stats) {
+          stats.pageviews += pageview.views;
+        }
+      }
+    }
+
+    if (pageviewTypes.includes("CUMULATIVE")) {
+      const snapshots = await this.getLatestCumulativePageviews(filters);
+      for (const snapshot of snapshots) {
+        const editorId = snapshot.article.createdByEditorId;
+        if (!editorId) continue;
+        const stats = editorMap.get(editorId);
+        if (stats) {
+          stats.pageviews += snapshot.cumulativeViews ?? snapshot.views ?? 0;
+        }
       }
     }
 
@@ -943,18 +963,250 @@ export class StatsService {
       }
     }
 
-    const pageviews = await this.prisma.pageview.findMany({
-      where: this.buildPageviewWhere(filters),
-      select: { date: true, views: true },
-    });
+    const pageviewType = this.resolveTimeSeriesPageviewType(filters);
 
-    for (const pageview of pageviews) {
-      const dateKey = bucketDate(pageview.date, granularity);
-      const point = ensurePoint(dateKey);
-      point.pageviews += pageview.views;
+    if (pageviewType === "DAILY") {
+      const pageviews = await this.prisma.pageview.findMany({
+        where: this.buildPageviewWhere(filters, pageviewType),
+        select: { date: true, views: true },
+      });
+
+      for (const pageview of pageviews) {
+        const dateKey = bucketDate(pageview.date, granularity);
+        const point = ensurePoint(dateKey);
+        point.pageviews += pageview.views;
+      }
+    } else {
+      const pageviews = await this.prisma.pageview.findMany({
+        where: this.buildPageviewWhere(filters, pageviewType),
+        select: { articleId: true, date: true, cumulativeViews: true, views: true },
+      });
+
+      const bucketed = new Map<string, Map<string, { date: Date; value: number }>>();
+
+      for (const pageview of pageviews) {
+        const dateKey = bucketDate(pageview.date, granularity);
+        const value = pageview.cumulativeViews ?? pageview.views;
+
+        if (value == null) {
+          continue;
+        }
+
+        let articleMap = bucketed.get(dateKey);
+        if (!articleMap) {
+          articleMap = new Map();
+          bucketed.set(dateKey, articleMap);
+        }
+
+        const existing = articleMap.get(pageview.articleId);
+        if (!existing || pageview.date > existing.date) {
+          articleMap.set(pageview.articleId, { date: pageview.date, value });
+        }
+      }
+
+      for (const [dateKey, articleMap] of bucketed.entries()) {
+        const point = ensurePoint(dateKey);
+        let total = 0;
+        for (const entry of articleMap.values()) {
+          total += entry.value;
+        }
+        point.pageviews = total;
+      }
     }
 
     return Array.from(seriesMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  private resolvePageviewTypes(filters: StatsFilter): PageviewType[] {
+    if (filters.source === "MEDIAWIKI") {
+      return ["DAILY"];
+    }
+
+    if (filters.source === "OUTREACH_DASHBOARD") {
+      return ["CUMULATIVE"];
+    }
+
+    return ["DAILY", "CUMULATIVE"];
+  }
+
+  private resolveTimeSeriesPageviewType(filters: StatsFilter): PageviewType {
+    if (filters.source === "OUTREACH_DASHBOARD") {
+      return "CUMULATIVE";
+    }
+
+    return "DAILY";
+  }
+
+  private buildContributionFilter(filters: StatsFilter): Prisma.ContributionWhereInput {
+    const where: Prisma.ContributionWhereInput = {};
+    if (filters.editorId) {
+      where.editorId = filters.editorId;
+    }
+    if (filters.startDate || filters.endDate) {
+      where.editTimestamp = {
+        ...(filters.startDate ? { gte: filters.startDate } : {}),
+        ...(filters.endDate ? { lte: filters.endDate } : {}),
+      };
+    }
+    return where;
+  }
+
+  private buildArticleDateFilter(filters: StatsFilter): Prisma.ArticleWhereInput {
+    if (!filters.startDate && !filters.endDate) {
+      return {};
+    }
+
+    const range = {
+      ...(filters.startDate ? { gte: filters.startDate } : {}),
+      ...(filters.endDate ? { lte: filters.endDate } : {}),
+    };
+
+    return {
+      OR: [{ articleCreatedAt: range }, { articleCreatedAt: null, createdAt: range }],
+    };
+  }
+
+  private buildCreatedArticleWhere(filters: StatsFilter): Prisma.ArticleWhereInput {
+    const dateFilter = this.buildArticleDateFilter(filters);
+    const base: Prisma.ArticleWhereInput = {
+      ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+    };
+
+    if (filters.source === "MEDIAWIKI") {
+      return {
+        ...base,
+        ...dateFilter,
+        source: "MEDIAWIKI",
+        ...(filters.editorId
+          ? { createdByEditorId: filters.editorId }
+          : { createdByEditorId: { not: null } }),
+      };
+    }
+
+    if (filters.source === "OUTREACH_DASHBOARD") {
+      return {
+        ...base,
+        ...dateFilter,
+        source: "OUTREACH_DASHBOARD",
+        isNewArticle: true,
+        ...(filters.editorId
+          ? { editors: { some: { editorId: filters.editorId, isAuthor: true } } }
+          : {}),
+      };
+    }
+
+    return {
+      ...base,
+      ...dateFilter,
+      OR: [
+        {
+          ...(filters.editorId
+            ? { createdByEditorId: filters.editorId }
+            : { createdByEditorId: { not: null } }),
+        },
+        {
+          isNewArticle: true,
+          ...(filters.editorId
+            ? { editors: { some: { editorId: filters.editorId, isAuthor: true } } }
+            : {}),
+        },
+      ],
+    };
+  }
+
+  private buildModifiedArticleWhere(filters: StatsFilter): Prisma.ArticleWhereInput {
+    const base: Prisma.ArticleWhereInput = {
+      ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+    };
+
+    const contributionFilter = this.buildContributionFilter(filters);
+    const mediawikiCondition: Prisma.ArticleWhereInput = {
+      contributions: { some: contributionFilter },
+    };
+
+    const outreachCondition: Prisma.ArticleWhereInput = {
+      source: "OUTREACH_DASHBOARD",
+      ...this.buildArticleDateFilter(filters),
+      ...(filters.editorId ? { editors: { some: { editorId: filters.editorId } } } : {}),
+    };
+
+    if (filters.source === "MEDIAWIKI") {
+      return { ...base, source: "MEDIAWIKI", ...mediawikiCondition };
+    }
+
+    if (filters.source === "OUTREACH_DASHBOARD") {
+      return { ...base, ...outreachCondition };
+    }
+
+    return {
+      ...base,
+      OR: [mediawikiCondition, outreachCondition],
+    };
+  }
+
+  private async getLatestCumulativePageviews(filters: StatsFilter) {
+    return this.prisma.pageview.findMany({
+      where: this.buildPageviewWhere(filters, "CUMULATIVE"),
+      select: {
+        articleId: true,
+        date: true,
+        views: true,
+        cumulativeViews: true,
+        article: { select: { wikiProject: true, createdByEditorId: true } },
+      },
+      orderBy: [{ articleId: "asc" }, { date: "desc" }],
+      distinct: ["articleId"],
+    });
+  }
+
+  private async getTotalPageviews(filters: StatsFilter): Promise<number> {
+    const pageviewTypes = this.resolvePageviewTypes(filters);
+    let total = 0;
+
+    if (pageviewTypes.includes("DAILY")) {
+      const daily = await this.prisma.pageview.aggregate({
+        where: this.buildPageviewWhere(filters, "DAILY"),
+        _sum: { views: true },
+      });
+      total += daily._sum.views ?? 0;
+    }
+
+    if (pageviewTypes.includes("CUMULATIVE")) {
+      const snapshots = await this.getLatestCumulativePageviews(filters);
+      for (const snapshot of snapshots) {
+        total += snapshot.cumulativeViews ?? snapshot.views ?? 0;
+      }
+    }
+
+    return total;
+  }
+
+  private async getPageviewsByWikiProject(filters: StatsFilter): Promise<Map<string, number>> {
+    const totals = new Map<string, number>();
+    const pageviewTypes = this.resolvePageviewTypes(filters);
+
+    if (pageviewTypes.includes("DAILY")) {
+      const pageviews = await this.prisma.pageview.findMany({
+        where: this.buildPageviewWhere(filters, "DAILY"),
+        select: { views: true, article: { select: { wikiProject: true } } },
+      });
+
+      for (const pageview of pageviews) {
+        const project = pageview.article.wikiProject;
+        totals.set(project, (totals.get(project) ?? 0) + pageview.views);
+      }
+    }
+
+    if (pageviewTypes.includes("CUMULATIVE")) {
+      const snapshots = await this.getLatestCumulativePageviews(filters);
+      for (const snapshot of snapshots) {
+        const project = snapshot.article.wikiProject;
+        const value = snapshot.cumulativeViews ?? snapshot.views ?? 0;
+        totals.set(project, (totals.get(project) ?? 0) + value);
+      }
+    }
+
+    return totals;
   }
 
   private buildContributionWhere(filters: StatsFilter): Prisma.ContributionWhereInput {
@@ -977,15 +1229,27 @@ export class StatsService {
     return where;
   }
 
-  private buildPageviewWhere(filters: StatsFilter): Prisma.PageviewWhereInput {
+  private buildPageviewWhere(filters: StatsFilter, type: PageviewType): Prisma.PageviewWhereInput {
+    const resolvedSource =
+      filters.source ?? (type === "DAILY" ? "MEDIAWIKI" : "OUTREACH_DASHBOARD");
+
+    const articleWhere: Prisma.ArticleWhereInput = {
+      ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+      ...(resolvedSource ? { source: resolvedSource } : {}),
+    };
+
+    if (type === "DAILY") {
+      articleWhere.createdByEditorId = filters.editorId ?? { not: null };
+    } else {
+      articleWhere.isNewArticle = true;
+      if (filters.editorId) {
+        articleWhere.editors = { some: { editorId: filters.editorId, isAuthor: true } };
+      }
+    }
+
     const where: Prisma.PageviewWhereInput = {
-      type: "DAILY",
-      article: {
-        createdByEditorId: { not: null },
-        ...(filters.editorId ? { createdByEditorId: filters.editorId } : {}),
-        ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
-        ...(filters.source ? { source: filters.source } : {}),
-      },
+      type,
+      article: { is: articleWhere },
     };
 
     if (filters.startDate || filters.endDate) {
