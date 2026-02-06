@@ -487,7 +487,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ### Wave 2: Chart Components
 
-- [ ] 4. **Contribution Timeline Chart**
+- [x] 4. **Contribution Timeline Chart**
 
   **What to do**:
   - Create `apps/web/src/components/editor/ContributionTimelineChart.tsx`
