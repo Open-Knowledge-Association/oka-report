@@ -962,7 +962,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ### Wave 5: Frontend
 
-- [ ] 11. Update frontend API client types
+- [x] 11. Update frontend API client types
 
   **What to do**:
   - Update `apps/web/src/lib/api.ts` with:
@@ -1027,7 +1027,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 12. Update articles.tsx page
+- [x] 12. Update articles.tsx page
 
   **What to do**:
   - Update `apps/web/src/routes/articles.tsx` to use new unified API
@@ -1106,7 +1106,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 13. Update editors.$editorId.tsx page
+- [x] 13. Update editors.$editorId.tsx page
 
   **What to do**:
   - Update `apps/web/src/routes/editors.$editorId.tsx` to use unified Article data
@@ -1174,7 +1174,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ### Wave 6: Cleanup and Verification
 
-- [ ] 14. Create migration to drop old tables
+- [x] 14. Create migration to drop old tables
 
   **What to do**:
   - Create new migration with `prisma migrate dev --create-only --name drop_legacy_tables`
@@ -1248,7 +1248,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 15. End-to-end verification
+- [x] 15. End-to-end verification
 
   **What to do**:
   - Run full E2E verification of the unified system:
