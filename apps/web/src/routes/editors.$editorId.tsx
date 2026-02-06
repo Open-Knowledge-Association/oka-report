@@ -1,18 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Users, FileText, BookOpen, Eye, Calendar, Hash, ExternalLink } from "lucide-react";
+import { ExternalLink, Users, FileText, BookOpen, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ArticleSource } from "@/lib/api";
+import { EditorStatsCards } from "@/components/editor/EditorStatsCards";
+import { AchievementBadges } from "@/components/editor/AchievementBadges";
+import { ChartsSection } from "@/components/editor/ChartsSection";
+import { ArticlesTable } from "@/components/editor/ArticlesTable";
+import { CommonsGallery } from "@/components/editor/CommonsGallery";
+import { ExportButton } from "@/components/editor/ExportButton";
+import { ShareButton } from "@/components/editor/ShareButton";
 
 interface EditorProfile {
   editor: {
@@ -44,7 +42,23 @@ interface EditorProfile {
     isNewArticle?: boolean;
     rating?: string | null;
     source?: ArticleSource;
+    pageviews?: Array<{
+      type: string;
+      views?: number;
+      cumulativeViews?: number;
+      date: string;
+    }>;
   }>;
+}
+
+interface DailyStat {
+  date: string;
+  edits: number;
+  wordsAdded: number;
+  articlesCreated: number;
+  articlesEdited: number;
+  referencesAdded: number;
+  commonsUploads: number;
 }
 
 export const Route = createFileRoute("/editors/$editorId")({
@@ -72,26 +86,26 @@ function EditorProfilePage() {
     },
   });
 
+  const { data: dailyStats } = useQuery<DailyStat[]>({
+    queryKey: ["editor", "daily-stats", editorId],
+    queryFn: async () => {
+      const response = await fetch(`/api/editors/${editorId}/daily-stats`);
+      if (!response.ok) throw new Error("Failed to fetch daily stats");
+      const result = await response.json();
+      return result.data;
+    },
+  });
+
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-8">
-          <div className="h-10 w-64 mb-2 bg-slate-200 animate-pulse rounded" />
-          <div className="h-5 w-48 bg-slate-200 animate-pulse rounded" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="mx-auto w-full max-w-6xl space-y-8">
+        <div className="h-10 w-64 bg-slate-200 animate-pulse rounded" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <div className="h-4 w-32 bg-slate-200 animate-pulse rounded" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 w-20 bg-slate-200 animate-pulse rounded" />
-              </CardContent>
-            </Card>
+            <div key={i} className="h-32 bg-slate-200 animate-pulse rounded" />
           ))}
         </div>
-        <div className="h-64 w-full bg-slate-200 animate-pulse rounded" />
+        <div className="h-96 bg-slate-200 animate-pulse rounded" />
       </div>
     );
   }
@@ -116,181 +130,64 @@ function EditorProfilePage() {
   const { editor, outreachStats, wikimediaProfile, articles } = data;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-3xl font-bold text-slate-900">{editor.username}</h1>
-          <a
-            href={`https://${editor.wiki}.org/wiki/User:${encodeURIComponent(editor.username)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-slate-500 hover:text-blue-600"
-            title="View on Wikipedia"
-          >
-            <ExternalLink className="h-5 w-5" />
-          </a>
-        </div>
-        <p className="text-slate-600">Editor Profile • {editor.wiki}</p>
-      </div>
-
-      {/* Outreach Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Articles</CardTitle>
-            <FileText className="h-4 w-4 text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{outreachStats.articlesCount.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Characters Added</CardTitle>
-            <Users className="h-4 w-4 text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {outreachStats.charactersAdded.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">References Added</CardTitle>
-            <BookOpen className="h-4 w-4 text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {outreachStats.referencesAdded.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pageviews</CardTitle>
-            <Eye className="h-4 w-4 text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{outreachStats.pageviews.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* MediaWiki Profile */}
-      {wikimediaProfile && (
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">Wikipedia Profile</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Registered</CardTitle>
-                <Calendar className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-lg font-semibold">
-                  {wikimediaProfile.registration
-                    ? new Date(wikimediaProfile.registration).toLocaleDateString()
-                    : "N/A"}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Edits</CardTitle>
-                <Hash className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-lg font-semibold">
-                  {wikimediaProfile.editcount?.toLocaleString() ?? "N/A"}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Gender</CardTitle>
-                <Users className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-lg font-semibold capitalize">
-                  {wikimediaProfile.gender ?? "Unknown"}
-                </div>
-              </CardContent>
-            </Card>
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-slate-900">{editor.username}</h1>
+            <a
+              href={`https://${editor.wiki}.org/wiki/User:${encodeURIComponent(editor.username)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-500 hover:text-blue-600"
+              title="View on Wikipedia"
+            >
+              <ExternalLink className="h-5 w-5" />
+            </a>
           </div>
+          <p className="text-slate-600">Editor Profile • {editor.wiki}</p>
         </div>
-      )}
+        <div className="flex gap-2">
+          <ExportButton profile={data} />
+          <ShareButton editorId={editorId} username={editor.username} />
+        </div>
+      </div>
 
-      {/* Articles List */}
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Articles ({articles.length})</h2>
+      {/* Stats Cards */}
+      <EditorStatsCards stats={outreachStats} />
+
+      {/* Achievement Badges */}
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">Achievements</h2>
+        <AchievementBadges editorId={editorId} />
+      </div>
+
+      {/* Charts Section */}
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">Analytics</h2>
+        <ChartsSection editorId={editorId} articles={articles} dailyStats={dailyStats} />
+      </div>
+
+      {/* Commons Gallery */}
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">Commons Uploads</h2>
+        <CommonsGallery editorId={editorId} />
+      </div>
+
+      {/* Articles Table */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-slate-900">Articles</h2>
+          <Link
+            to="/editors/compare"
+            search={{ ids: editorId }}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Compare with another editor →
+          </Link>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Wiki</TableHead>
-              <TableHead className="text-right">Characters</TableHead>
-              <TableHead className="text-right">References</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {articles.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                  No articles found for this editor.
-                </TableCell>
-              </TableRow>
-            ) : (
-              articles.map((article) => (
-                <TableRow key={article.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        {article.title}
-                      </a>
-                      {article.isNewArticle && <Badge variant="secondary">Created</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {article.source === ArticleSource.MEDIAWIKI ? (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                        MediaWiki
-                      </Badge>
-                    ) : article.source === ArticleSource.OUTREACH_DASHBOARD ? (
-                      <Badge
-                        variant="outline"
-                        className="bg-green-50 text-green-700 border-green-200"
-                      >
-                        Outreach
-                      </Badge>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {article.wikiProject
-                      ? article.wikiProject.replace(".org", "")
-                      : `${article.language}.${article.project}`}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {article.characterSum.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {article.referencesCount.toLocaleString()}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <ArticlesTable articles={articles} />
       </div>
     </div>
   );

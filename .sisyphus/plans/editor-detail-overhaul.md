@@ -1147,7 +1147,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 15. **Mobile Responsive Tabs**
+- [x] 15. **Mobile Responsive Tabs**
 
   **What to do**:
   - Create responsive layout for charts on mobile
