@@ -475,7 +475,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ### Wave 3: Backend Services
 
-- [ ] 4. Update sync.service.ts for unified Article
+- [x] 4. Update sync.service.ts for unified Article
 
   **What to do**:
   - Update `upsertArticle()` to set `source: 'MEDIAWIKI'` on all inserts
@@ -550,7 +550,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 5. Update outreach-article-sync.service.ts for unified Article
+- [x] 5. Update outreach-article-sync.service.ts for unified Article
 
   **What to do**:
   - Change from writing to `OutreachArticle` to writing to `Article`
@@ -634,7 +634,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 6. Update outreach-sync.service.ts for unified flow
+- [x] 6. Update outreach-sync.service.ts for unified flow
 
   **What to do**:
   - Update any references to `OutreachArticle` model to use `Article`
