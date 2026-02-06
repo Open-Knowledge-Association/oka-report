@@ -1081,7 +1081,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 14. **Compare Editors Page**
+- [x] 14. **Compare Editors Page**
 
   **What to do**:
   - Create `apps/web/src/routes/editors.compare.tsx`
