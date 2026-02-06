@@ -607,7 +607,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 6. **Activity Heatmap**
+- [x] 6. **Activity Heatmap**
 
   **What to do**:
   - Install `react-activity-calendar` or similar library
@@ -663,7 +663,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 7. **Wiki Distribution Chart**
+- [x] 7. **Wiki Distribution Chart**
 
   **What to do**:
   - Create `apps/web/src/components/editor/WikiDistributionChart.tsx`
