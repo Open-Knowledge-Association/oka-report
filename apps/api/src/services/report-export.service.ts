@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@repo/db";
+import type { PrismaClient } from "@repo/db/generated/prisma/client";
 
 export type AnnualReportData = {
   year: number;
