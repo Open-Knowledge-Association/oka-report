@@ -242,7 +242,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ### Wave 0: Foundation
 
-- [ ] 0. **Test Infrastructure Setup**
+- [x] 0. **Test Infrastructure Setup**
 
   **What to do**:
   - Install @testing-library/react and related dependencies if not present
