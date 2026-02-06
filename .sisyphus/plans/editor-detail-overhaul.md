@@ -554,7 +554,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 5. **Pageviews per Article Chart**
+- [x] 5. **Pageviews per Article Chart**
 
   **What to do**:
   - Create `apps/web/src/components/editor/PageviewsChart.tsx`
