@@ -69,12 +69,12 @@ Create a unified data model for Wikipedia articles that consolidates data from b
 
 ### Definition of Done
 
-- [ ] `moon run db:migrate` succeeds with no errors
-- [ ] All existing article data preserved (count matches before/after)
-- [ ] `moon run api:dev` starts without errors
-- [ ] `moon run web:dev` starts without errors
-- [ ] Articles page loads and displays unified data
-- [ ] Editor profile page shows articles correctly
+- [x] `moon run db:migrate` succeeds with no errors
+- [x] All existing article data preserved (count matches before/after)
+- [x] `moon run api:dev` starts without errors
+- [x] `moon run web:dev` starts without errors
+- [x] Articles page loads and displays unified data
+- [x] Editor profile page shows articles correctly
 
 ### Must Have
 
@@ -1374,10 +1374,10 @@ psql -c "SELECT source, COUNT(*) FROM articles GROUP BY source"
 
 ### Final Checklist
 
-- [ ] All "Must Have" requirements present
-- [ ] All "Must NOT Have" guardrails respected
-- [ ] All 15 tasks completed with green acceptance criteria
-- [ ] No TypeScript errors in any package
-- [ ] No runtime errors in API or frontend
-- [ ] Data counts verified (no data loss)
-- [ ] Old tables dropped (schema clean)
+- [x] All "Must Have" requirements present
+- [x] All "Must NOT Have" guardrails respected
+- [x] All 15 tasks completed with green acceptance criteria
+- [x] No TypeScript errors in any package
+- [x] No runtime errors in API or frontend
+- [x] Data counts verified (no data loss)
+- [x] Old tables dropped (schema clean)
