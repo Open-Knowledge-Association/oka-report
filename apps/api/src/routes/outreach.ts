@@ -277,7 +277,7 @@ outreachRoutes.post("/articles/sync", async (c) => {
     const runningSync = await prisma.syncJob.findFirst({
       where: {
         jobType: "outreach_articles",
-        status: "running",
+        status: { in: ["running", "pending"] },
       },
     });
 
@@ -296,32 +296,12 @@ outreachRoutes.post("/articles/sync", async (c) => {
     // Trigger async sync
     setTimeout(async () => {
       try {
-        const result = await outreachArticleSyncService.syncArticlesFromDashboard(
-          body.school,
-          body.slug,
-        );
-
-        // Update job with results
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "completed",
-            completedAt: new Date(),
-            metadata: result as any,
-          },
+        await outreachArticleSyncService.syncArticlesFromDashboard(body.school, body.slug, {
+          jobId: job.id,
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Outreach articles sync failed:", errorMessage);
-
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "failed",
-            completedAt: new Date(),
-            error: errorMessage,
-          },
-        });
       }
     }, 0);
 
@@ -559,6 +539,23 @@ outreachRoutes.post("/sync", async (c) => {
   try {
     const body = OutreachSyncSchema.parse(await c.req.json());
 
+    const runningSync = await prisma.syncJob.findFirst({
+      where: {
+        jobType: "editors",
+        status: { in: ["running", "pending"] },
+      },
+    });
+
+    if (runningSync) {
+      return c.json(
+        {
+          success: false,
+          error: "Sync already in progress",
+        },
+        409,
+      );
+    }
+
     // Create sync job
     const job = await prisma.syncJob.create({
       data: {
@@ -570,6 +567,14 @@ outreachRoutes.post("/sync", async (c) => {
     // Trigger async sync
     setTimeout(async () => {
       try {
+        await prisma.syncJob.update({
+          where: { id: job.id },
+          data: {
+            status: "running",
+            startedAt: new Date(),
+          },
+        });
+
         const result = await outreachSyncService.syncEditorsFromDashboard(body.school, body.slug);
 
         // Update job with results

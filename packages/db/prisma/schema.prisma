@@ -52,10 +52,11 @@ model Editor {
    /// Example: Outreach Dashboard participant ID "12345"
    externalId String? @unique
 
-   contributions    Contribution[]
-   commonsUploads   CommonsUpload[]
-   createdArticles  Article[]       @relation("CreatedArticles")
-   articles         ArticleEditor[]
+  contributions    Contribution[]
+  commonsUploads   CommonsUpload[]
+  createdArticles  Article[]       @relation("CreatedArticles")
+  articles         ArticleEditor[]
+  dailyStats       EditorDailyStat[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -69,7 +70,7 @@ model Article {
 
   /// MediaWiki page ID (unique within each wiki project)
   /// Example: 12345678
-  pageId Int
+  pageId Int?
 
   /// Article title as it appears in the URL (with underscores)
   /// Format: "Article_Title" not "Article Title"
@@ -115,6 +116,7 @@ model Article {
   contributions Contribution[]
   pageviews     Pageview[]
   editors       ArticleEditor[]
+  dailyStats    ArticleDailyStat[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -262,8 +264,14 @@ model CommonsUpload {
 model SyncJob {
   id String @id @default(cuid())
 
+  /// Parent job ID for sub-jobs in a full sync
+  /// Null for top-level jobs, set for child jobs
+  parentJobId String?
+  parentJob   SyncJob?  @relation("SubJobs", fields: [parentJobId], references: [id])
+  subJobs     SyncJob[] @relation("SubJobs")
+
   /// Type of sync operation
-  /// Values: "full" (all data), "contributions", "pageviews", "commons", "editors"
+  /// Values: "full" (all data), "contributions", "pageviews", "commons", "editors", "outreach_articles"
   /// Example: "full"
   jobType String
 
@@ -294,7 +302,179 @@ model SyncJob {
 
   @@index([status])
   @@index([jobType])
+  @@index([parentJobId])
   @@map("sync_jobs")
+}
+
+/// Daily aggregated stats for reporting
+model DailyStat {
+  id String @id @default(cuid())
+
+  /// Snapshot date (UTC)
+  date DateTime @db.Date
+
+  edits           Int
+  wordsAdded      Int
+  pageviews       Int
+  articlesCreated Int
+  articlesEdited  Int
+  editors         Int
+  referencesAdded Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([date])
+  @@index([date])
+  @@map("daily_stats")
+}
+
+/// Daily aggregated stats per wiki project
+model DailyWikiStat {
+  id String @id @default(cuid())
+
+  date DateTime @db.Date
+
+  wikiProject String
+
+  edits           Int
+  wordsAdded      Int
+  pageviews       Int
+  articlesCreated Int
+  articlesEdited  Int
+  editors         Int
+  referencesAdded Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, wikiProject])
+  @@index([date])
+  @@index([wikiProject])
+  @@map("daily_wiki_stats")
+}
+
+/// Daily aggregated stats per source
+model DailySourceStat {
+  id String @id @default(cuid())
+
+  date DateTime @db.Date
+
+  source ArticleSource
+
+  edits           Int
+  wordsAdded      Int
+  pageviews       Int
+  articlesCreated Int
+  articlesEdited  Int
+  editors         Int
+  referencesAdded Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, source])
+  @@index([date])
+  @@index([source])
+  @@map("daily_source_stats")
+}
+
+/// Daily aggregated stats per wiki project and source
+model DailyWikiSourceStat {
+  id String @id @default(cuid())
+
+  date DateTime @db.Date
+
+  wikiProject String
+  source ArticleSource
+
+  edits           Int
+  wordsAdded      Int
+  pageviews       Int
+  articlesCreated Int
+  articlesEdited  Int
+  editors         Int
+  referencesAdded Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, wikiProject, source])
+  @@index([date])
+  @@index([wikiProject])
+  @@index([source])
+  @@map("daily_wiki_source_stats")
+}
+
+model SchedulerSetting {
+  id String @id
+  enabled Boolean @default(true)
+  disabledReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("scheduler_settings")
+}
+
+model SchedulerSettingEvent {
+  id String @id @default(cuid())
+
+  schedulerId String
+  enabled Boolean
+  reason String?
+  source String?
+
+  createdAt DateTime @default(now())
+
+  @@index([schedulerId])
+  @@index([createdAt])
+  @@map("scheduler_setting_events")
+}
+
+/// Daily stats per editor for reporting
+model EditorDailyStat {
+  id String @id @default(cuid())
+
+  date DateTime @db.Date
+
+  editor   Editor @relation(fields: [editorId], references: [id])
+  editorId String
+
+  edits           Int
+  wordsAdded      Int
+  articlesCreated Int
+  articlesEdited  Int
+  referencesAdded Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, editorId])
+  @@index([date])
+  @@index([editorId])
+  @@map("editor_daily_stats")
+}
+
+/// Daily stats per article for reporting
+model ArticleDailyStat {
+  id String @id @default(cuid())
+
+  date DateTime @db.Date
+
+  article   Article @relation(fields: [articleId], references: [id])
+  articleId String
+
+  pageviews       Int
+  characterSum    Int
+  referencesCount Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, articleId])
+  @@index([date])
+  @@index([articleId])
+  @@map("article_daily_stats")
 }
 
 /// Application users for admin access

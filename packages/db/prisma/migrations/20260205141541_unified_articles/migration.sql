@@ -1,8 +1,16 @@
 -- CreateEnum
-CREATE TYPE "ArticleSource" AS ENUM ('MEDIAWIKI', 'OUTREACH_DASHBOARD');
+DO $$ BEGIN
+    CREATE TYPE "ArticleSource" AS ENUM ('MEDIAWIKI', 'OUTREACH_DASHBOARD');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "PageviewType" AS ENUM ('DAILY', 'CUMULATIVE');
+DO $$ BEGIN
+    CREATE TYPE "PageviewType" AS ENUM ('DAILY', 'CUMULATIVE');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- AlterTable
 ALTER TABLE "articles"

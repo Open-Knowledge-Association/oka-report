@@ -9,3 +9,7 @@ tasks:
       - "src/**/*"
       - "index.ts"
       - "vitest.config.ts"
+    options:
+      envFile:
+        - "/.env"
+        - ".env"

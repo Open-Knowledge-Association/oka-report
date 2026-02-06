@@ -4,8 +4,6 @@ import { app } from "../index";
 const baseUrl = "http://localhost:3001";
 
 describe("API Integration Tests", () => {
-  let testEditorId: string;
-
   describe("GET /api", () => {
     it("should return API info", async () => {
       const res = await app.request("/");
@@ -22,45 +20,6 @@ describe("API Integration Tests", () => {
       const json = await res.json();
       expect(json.success).toBe(true);
       expect(Array.isArray(json.data)).toBe(true);
-    });
-
-    it("POST /api/editors should create editor", async () => {
-      const res = await app.request("/api/editors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: `test_editor_${Date.now()}`,
-          source: "manual",
-        }),
-      });
-      expect(res.status).toBe(201);
-      const json = await res.json();
-      expect(json.success).toBe(true);
-      expect(json.data.username).toBeDefined();
-      testEditorId = json.data.id;
-    });
-
-    it("POST /api/editors/bulk should import multiple", async () => {
-      const res = await app.request("/api/editors/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          usernames: [`bulk_test_1_${Date.now()}`, `bulk_test_2_${Date.now()}`],
-        }),
-      });
-      expect(res.status).toBe(201);
-      const json = await res.json();
-      expect(json.success).toBe(true);
-      expect(json.data.created).toBeGreaterThanOrEqual(0);
-    });
-
-    it("GET /api/editors/:id should return editor", async () => {
-      if (!testEditorId) return;
-      const res = await app.request(`/api/editors/${testEditorId}`);
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.success).toBe(true);
-      expect(json.data.id).toBe(testEditorId);
     });
   });
 

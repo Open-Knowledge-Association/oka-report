@@ -44,7 +44,6 @@ export const Route = createFileRoute("/admin/sync-jobs")({
 function SyncJobsPage() {
   const { jobs, isConnected, isLoading, error, reconnect } = useSyncJobStream();
   const { toast } = useToast();
-  const [selectedJob, setSelectedJob] = useState<SyncJob | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [jobToCancel, setJobToCancel] = useState<string | null>(null);
@@ -217,6 +216,38 @@ function SyncJobsPage() {
   });
 
   const jobTypes = [...new Set(jobs.map((j) => j.jobType))];
+
+  const jobsById = new Map(filteredJobs.map((job) => [job.id, job]));
+  const childrenByParent = new Map<string, SyncJob[]>();
+
+  for (const job of filteredJobs) {
+    if (!job.parentJobId) continue;
+    const siblings = childrenByParent.get(job.parentJobId) ?? [];
+    siblings.push(job);
+    childrenByParent.set(job.parentJobId, siblings);
+  }
+
+  const orderedJobs: SyncJob[] = [];
+  const renderedChildren = new Set<string>();
+
+  for (const job of filteredJobs) {
+    if (job.parentJobId) continue;
+    orderedJobs.push(job);
+    const children = childrenByParent.get(job.id) ?? [];
+    children.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    for (const child of children) {
+      orderedJobs.push(child);
+      renderedChildren.add(child.id);
+    }
+  }
+
+  for (const job of filteredJobs) {
+    if (job.parentJobId && !jobsById.has(job.parentJobId) && !renderedChildren.has(job.id)) {
+      orderedJobs.push(job);
+    }
+  }
+
+  const displayJobs = orderedJobs.length > 0 ? orderedJobs : filteredJobs;
 
   return (
     <div className="container mx-auto py-8">
@@ -414,9 +445,19 @@ function SyncJobsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredJobs.map((job) => (
+                {displayJobs.map((job) => (
                   <TableRow key={job.id}>
-                    <TableCell className="font-medium">{job.jobType}</TableCell>
+                    <TableCell className="font-medium">
+                      {job.parentJobId ? (
+                        <div className="relative flex items-center gap-2 pl-8">
+                          <span className="absolute left-3 top-0 bottom-0 w-px bg-border" />
+                          <span className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 border-l border-b border-border" />
+                          <span className="text-muted-foreground">{job.jobType}</span>
+                        </div>
+                      ) : (
+                        job.jobType
+                      )}
+                    </TableCell>
                     <TableCell>{getStatusBadge(job.status)}</TableCell>
                     <TableCell>
                       {job.startedAt ? new Date(job.startedAt).toLocaleString() : "-"}
@@ -467,7 +508,7 @@ function SyncJobsPage() {
                         )}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button size="icon" variant="ghost" onClick={() => setSelectedJob(job)}>
+                            <Button size="icon" variant="ghost">
                               <Info className="w-4 h-4" />
                             </Button>
                           </DialogTrigger>
@@ -532,6 +573,47 @@ function SyncJobsPage() {
                                   </pre>
                                 </div>
                               )}
+                              {(() => {
+                                const errorsSample = (
+                                  job.metadata as {
+                                    errorsSample?: Array<{ articleId: number; error: string }>;
+                                  }
+                                )?.errorsSample;
+
+                                if (!errorsSample || errorsSample.length === 0) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div>
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-sm font-medium text-destructive">
+                                        Error Samples
+                                      </label>
+                                      <span className="text-xs text-muted-foreground">
+                                        {errorsSample.length} items
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 max-h-56 overflow-auto rounded border border-destructive/20 bg-destructive/5">
+                                      <div className="divide-y divide-destructive/20">
+                                        {errorsSample.map((item) => (
+                                          <div
+                                            key={`${item.articleId}-${item.error}`}
+                                            className="px-3 py-2"
+                                          >
+                                            <div className="text-xs font-mono text-destructive">
+                                              Article {item.articleId}
+                                            </div>
+                                            <div className="text-xs text-destructive/80 break-words">
+                                              {item.error}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </DialogContent>
                         </Dialog>

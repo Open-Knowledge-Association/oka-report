@@ -2,7 +2,15 @@ import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { StatsService } from "../services";
-import { PaginationSchema, StatsFilterSchema, TimeSeriesSchema } from "../schemas";
+import {
+  PaginationSchema,
+  StatsFilterSchema,
+  TimeSeriesSchema,
+  HistoryRangeSchema,
+  HistoryBackfillSchema,
+  EditorHistoryQuerySchema,
+  ArticleHistoryQuerySchema,
+} from "../schemas";
 
 const dashboardClient = new OutreachDashboardClient({
   baseUrl: "https://outreachdashboard.wmflabs.org",
@@ -10,6 +18,31 @@ const dashboardClient = new OutreachDashboardClient({
 
 const statsService = new StatsService(prisma);
 export const statsRoutes = new Hono();
+
+const withDelta = <T extends Record<string, number | string | Date | null | undefined>>(
+  series: T[],
+  fields: Array<keyof T>,
+) => {
+  let prev: T | null = null;
+  return series.map((item) => {
+    if (!prev) {
+      prev = item;
+      return { ...item, delta: {} };
+    }
+
+    const delta: Record<string, number> = {};
+    for (const field of fields) {
+      const current = item[field];
+      const previous = prev[field];
+      if (typeof current === "number" && typeof previous === "number") {
+        delta[String(field)] = current - previous;
+      }
+    }
+
+    prev = item;
+    return { ...item, delta };
+  });
+};
 
 const parseFilters = (input: Record<string, string | undefined>) => {
   const parsed = StatsFilterSchema.parse(input);
@@ -83,6 +116,89 @@ statsRoutes.get("/timeseries", async (c) => {
   const series = await statsService.getTimeSeries(filters, granularity);
 
   return c.json({ success: true, data: { granularity, series } });
+});
+
+statsRoutes.get("/history", async (c) => {
+  const parsed = HistoryRangeSchema.parse(c.req.query());
+  const series = await statsService.getDailyHistory({
+    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
+    wikiProject: parsed.wikiProject,
+    source: parsed.source,
+  });
+
+  const data = parsed.withDelta
+    ? withDelta(series, [
+        "edits",
+        "wordsAdded",
+        "pageviews",
+        "articlesCreated",
+        "articlesEdited",
+        "editors",
+        "referencesAdded",
+        "commonsUploads",
+      ])
+    : series;
+
+  return c.json({ success: true, data: { series: data } });
+});
+
+statsRoutes.post("/history/backfill", async (c) => {
+  const parsed = HistoryBackfillSchema.parse(await c.req.json());
+  const startDate = new Date(parsed.startDate);
+  const endDate = new Date(parsed.endDate);
+
+  await statsService.recordDailySnapshots(startDate, endDate);
+
+  return c.json({ success: true, data: { startDate, endDate } }, 202);
+});
+
+statsRoutes.post("/snapshot", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const dateValue = typeof body?.date === "string" ? new Date(body.date) : null;
+  const target = dateValue ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  await statsService.recordDailySnapshot(target);
+
+  return c.json({
+    success: true,
+    data: {
+      date: target.toISOString(),
+    },
+  });
+});
+
+statsRoutes.get("/editors/history", async (c) => {
+  const parsed = EditorHistoryQuerySchema.parse(c.req.query());
+  const series = await statsService.getEditorDailyHistory(parsed.editorId, {
+    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
+  });
+  const data = parsed.withDelta
+    ? withDelta(series, [
+        "edits",
+        "wordsAdded",
+        "articlesCreated",
+        "articlesEdited",
+        "referencesAdded",
+        "commonsUploads",
+      ])
+    : series;
+
+  return c.json({ success: true, data: { editorId: parsed.editorId, series: data } });
+});
+
+statsRoutes.get("/articles/history", async (c) => {
+  const parsed = ArticleHistoryQuerySchema.parse(c.req.query());
+  const series = await statsService.getArticleDailyHistory(parsed.articleId, {
+    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
+  });
+  const data = parsed.withDelta
+    ? withDelta(series, ["pageviews", "characterSum", "referencesCount"])
+    : series;
+
+  return c.json({ success: true, data: { articleId: parsed.articleId, series: data } });
 });
 
 statsRoutes.get("/dashboard", async (c) => {

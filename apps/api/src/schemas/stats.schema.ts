@@ -12,6 +12,27 @@ export const TimeSeriesSchema = StatsFilterSchema.extend({
   granularity: z.enum(["daily", "weekly", "monthly"]).optional(),
 });
 
+export const HistoryRangeSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  withDelta: z.coerce.boolean().optional(),
+  wikiProject: z.string().min(1).optional(),
+  source: z.enum(["MEDIAWIKI", "OUTREACH_DASHBOARD"]).optional(),
+});
+
+export const HistoryBackfillSchema = z.object({
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+});
+
+export const EditorHistoryQuerySchema = HistoryRangeSchema.extend({
+  editorId: z.string().min(1),
+});
+
+export const ArticleHistoryQuerySchema = HistoryRangeSchema.extend({
+  articleId: z.string().min(1),
+});
+
 export const WikiStatSchema = z.object({
   wiki: z.string(),
   count: z.number().int(),

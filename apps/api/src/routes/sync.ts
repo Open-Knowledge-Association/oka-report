@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { prisma } from "@repo/db";
+import { Prisma } from "@repo/db/generated/prisma/client";
 import { OutreachDashboardClient, WikimediaClient } from "@repo/utils";
 import { TriggerSyncSchema, OutreachSyncSchema } from "../schemas";
 import { SyncService } from "../services";
+import { FULL_SYNC_CHILD_JOB_TYPES } from "../services/sync.service";
 import { OutreachSyncService } from "../services/outreach-sync.service";
 import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 
@@ -25,6 +27,20 @@ export const syncRoutes = new Hono();
 syncRoutes.post("/trigger", async (c) => {
   const body = TriggerSyncSchema.parse(await c.req.json());
   const jobType = body.jobType ?? "full";
+
+  const activeJob = await syncService.findActiveJob(jobType);
+  if (activeJob) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CONFLICT",
+          message: "Job already running",
+        },
+      },
+      409,
+    );
+  }
 
   const job = await syncService.createSyncJob(jobType);
   await syncService.startSyncJob(job.id);
@@ -55,20 +71,51 @@ syncRoutes.post("/trigger", async (c) => {
         return;
       }
 
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Starting full sync",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+
       // Full sync: editors → articles → contributions → pageviews → commons
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Syncing editors",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
       const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
-        skipJobCreation: true,
+        parentJobId: job.id,
       });
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Editors completed",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Syncing outreach articles",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
       const articlesResult = await outreachArticleSyncService.syncArticlesFromDashboard(
         "OKA",
         "OKA",
-        { skipJobCreation: true },
+        { parentJobId: job.id },
+      );
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Outreach articles completed",
+        FULL_SYNC_CHILD_JOB_TYPES,
       );
 
-      await syncService.runFullSync(job.id, {
-        editorsSynced: editorsResult.imported + editorsResult.updated,
-        articlesSynced: articlesResult.imported + articlesResult.updated,
-      });
+      await syncService.runFullSync(
+        job.id,
+        {
+          editorsSynced: editorsResult.imported + editorsResult.updated,
+          articlesSynced: articlesResult.imported + articlesResult.updated,
+        },
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
     } catch (error) {
       await syncService.failSyncJob(job.id, error);
     }
@@ -200,9 +247,36 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
     );
   }
 
-  // Create new job with same jobType
-  const newJob = await syncService.createSyncJob(job.jobType);
-  await syncService.startSyncJob(newJob.id);
+  const activeJob = await syncService.findActiveJob(job.jobType);
+  if (activeJob) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CONFLICT",
+          message: "Job already running",
+        },
+      },
+      409,
+    );
+  }
+
+  await prisma.syncJob.update({
+    where: { id: job.id },
+    data: {
+      status: "pending",
+      startedAt: null,
+      completedAt: null,
+      error: null,
+      metadata: Prisma.JsonNull,
+    },
+  });
+
+  if (job.jobType === "full") {
+    await prisma.syncJob.deleteMany({ where: { parentJobId: job.id } });
+  }
+
+  await syncService.startSyncJob(job.id);
 
   // Trigger sync async based on jobType
   setTimeout(async () => {
@@ -211,29 +285,87 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
         const contributionsSynced = await syncService.syncEditorContributions(
           undefined,
           undefined,
-          newJob.id,
+          job.id,
         );
-        await syncService.completeSyncJob(newJob.id, { contributionsSynced });
+        await syncService.completeSyncJob(job.id, { contributionsSynced });
         return;
       }
       if (job.jobType === "pageviews") {
         const pageviewsSynced = await syncService.syncArticlePageviews(
           undefined,
           undefined,
-          newJob.id,
+          job.id,
         );
-        await syncService.completeSyncJob(newJob.id, { pageviewsSynced });
+        await syncService.completeSyncJob(job.id, { pageviewsSynced });
         return;
       }
       if (job.jobType === "commons") {
-        const commonsUploadsSynced = await syncService.syncCommonsUploads(undefined, newJob.id);
-        await syncService.completeSyncJob(newJob.id, { commonsUploadsSynced });
+        const commonsUploadsSynced = await syncService.syncCommonsUploads(undefined, job.id);
+        await syncService.completeSyncJob(job.id, { commonsUploadsSynced });
+        return;
+      }
+      if (job.jobType === "editors") {
+        await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
+          parentJobId: job.parentJobId ?? undefined,
+          jobId: job.id,
+        });
+        return;
+      }
+      if (job.jobType === "outreach_articles") {
+        await outreachArticleSyncService.syncArticlesFromDashboard("OKA", "OKA", {
+          parentJobId: job.parentJobId ?? undefined,
+          jobId: job.id,
+        });
         return;
       }
 
-      await syncService.runFullSync();
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Starting full sync",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+
+      // Full sync: editors → articles → contributions → pageviews → commons
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Syncing editors",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+      const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
+        parentJobId: job.id,
+      });
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Editors completed",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Syncing outreach articles",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+      const articlesResult = await outreachArticleSyncService.syncArticlesFromDashboard(
+        "OKA",
+        "OKA",
+        { parentJobId: job.id },
+      );
+      await syncService.updateParentJobProgress(
+        job.id,
+        "Outreach articles completed",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
+
+      await syncService.runFullSync(
+        job.id,
+        {
+          editorsSynced: editorsResult.imported + editorsResult.updated,
+          articlesSynced: articlesResult.imported + articlesResult.updated,
+        },
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
     } catch (error) {
-      await syncService.failSyncJob(newJob.id, error);
+      await syncService.failSyncJob(job.id, error);
     }
   }, 0);
 
@@ -241,7 +373,7 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
     {
       success: true,
       data: {
-        newJobId: newJob.id,
+        newJobId: job.id,
       },
     },
     200,
@@ -358,6 +490,7 @@ syncRoutes.post("/outreach", async (c) => {
 syncRoutes.get("/stream", async (c) => {
   return streamSSE(c, async (stream) => {
     stream.onAbort(() => {});
+    let failureCount = 0;
 
     while (true) {
       try {
@@ -387,12 +520,17 @@ syncRoutes.get("/stream", async (c) => {
           id: String(Date.now()),
         });
 
+        failureCount = 0;
+
         // Wait 2 seconds before next update
         await stream.sleep(2000);
       } catch (error) {
-        console.error("Error streaming job updates:", error);
+        failureCount += 1;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("Error streaming job updates:", message);
+        const backoff = Math.min(2000 * Math.pow(2, failureCount - 1), 30000);
         // Continue streaming even if there's an error
-        await stream.sleep(2000);
+        await stream.sleep(backoff);
       }
     }
   });

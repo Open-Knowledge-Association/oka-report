@@ -6,6 +6,9 @@ tasks:
     command: "bun run dev"
     description: "Run TanStack Start in development mode"
     options:
+      envFile:
+        - "/.env"
+        - ".env"
       cache: false
       persistent: true
       runInCI: false
@@ -15,6 +18,10 @@ tasks:
     outputs:
       - "dist"
     description: "Build frontend for production"
+    options:
+      envFile:
+        - "/.env"
+        - ".env"
 
   preview:
     command: "bun run preview"
@@ -29,3 +36,7 @@ tasks:
   test:
     command: "bun run test"
     description: "Run frontend tests with vitest"
+    options:
+      envFile:
+        - "/.env"
+        - ".env"

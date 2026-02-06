@@ -33,40 +33,45 @@ export class OutreachArticleSyncService {
   async syncArticlesFromDashboard(
     school: string,
     slug: string,
-    options?: { skipJobCreation?: boolean },
+    options?: { parentJobId?: string; jobId?: string },
   ): Promise<SyncResult> {
-    const skipJob = options?.skipJobCreation ?? false;
+    const parentJobId = options?.parentJobId;
+    const jobIdOverride = options?.jobId;
     const startTime = Date.now();
 
     let jobId: string | null = null;
 
-    if (!skipJob) {
+    if (!parentJobId && !jobIdOverride) {
       const runningJob = await this.prisma.syncJob.findFirst({
         where: {
           jobType: "outreach_articles",
-          status: "running",
+          status: { in: ["running", "pending"] },
         },
       });
       if (runningJob) {
         throw new Error(`Sync already in progress (job ID: ${runningJob.id})`);
       }
-
+    }
+    if (jobIdOverride) {
+      jobId = jobIdOverride;
+    } else {
       const job = await this.prisma.syncJob.create({
         data: {
           jobType: "outreach_articles",
           status: "pending",
+          parentJobId,
         },
       });
       jobId = job.id;
-
-      await this.prisma.syncJob.update({
-        where: { id: jobId },
-        data: {
-          status: "running",
-          startedAt: new Date(),
-        },
-      });
     }
+
+    await this.prisma.syncJob.update({
+      where: { id: jobId },
+      data: {
+        status: "running",
+        startedAt: new Date(),
+      },
+    });
 
     try {
       const articleData = await this.dashboardClient.getArticles(school, slug);
@@ -78,6 +83,8 @@ export class OutreachArticleSyncService {
       let imported = 0;
       let updated = 0;
       const errorDetails: Array<{ articleId: number; error: string }> = [];
+      const errorSamples: Array<{ articleId: number; error: string }> = [];
+      const MAX_ERROR_SAMPLES = 50;
       let processedCount = 0;
 
       const batches = this.chunkArray(articles, BATCH_SIZE);
@@ -124,7 +131,7 @@ export class OutreachArticleSyncService {
                 where: { outreachId: dashboardArticle.id },
                 create: {
                   outreachId: dashboardArticle.id,
-                  pageId: 0,
+                  pageId: null,
                   title: dashboardArticle.title,
                   wikiProject,
                   source: "OUTREACH_DASHBOARD",
@@ -135,7 +142,7 @@ export class OutreachArticleSyncService {
                   rating: dashboardArticle.rating,
                 },
                 update: {
-                  pageId: 0,
+                  pageId: null,
                   title: dashboardArticle.title,
                   wikiProject,
                   source: "OUTREACH_DASHBOARD",
@@ -242,10 +249,11 @@ export class OutreachArticleSyncService {
             const dashboardArticle = batch[i];
             const errorMessage =
               result.reason instanceof Error ? result.reason.message : String(result.reason);
-            errorDetails.push({
-              articleId: dashboardArticle.id,
-              error: errorMessage,
-            });
+            const sample = { articleId: dashboardArticle.id, error: errorMessage };
+            errorDetails.push(sample);
+            if (errorSamples.length < MAX_ERROR_SAMPLES) {
+              errorSamples.push(sample);
+            }
           }
         }
 
@@ -263,6 +271,7 @@ export class OutreachArticleSyncService {
                 imported,
                 updated,
                 errors: errorDetails.length,
+                errorsSample: errorSamples,
               } as any,
             },
           });
@@ -282,7 +291,10 @@ export class OutreachArticleSyncService {
           data: {
             status: "completed",
             completedAt: new Date(),
-            metadata: result as any,
+            metadata: {
+              ...result,
+              errorsSample: errorSamples,
+            } as any,
           },
         });
       }

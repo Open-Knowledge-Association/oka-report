@@ -129,7 +129,7 @@ describe("OutreachArticleSyncService", () => {
         where: { outreachId: 100 },
         create: {
           outreachId: 100,
-          pageId: 0,
+          pageId: null,
           title: "Test_Article",
           wikiProject,
           source: "OUTREACH_DASHBOARD",
@@ -140,7 +140,7 @@ describe("OutreachArticleSyncService", () => {
           rating: "B",
         },
         update: {
-          pageId: 0,
+          pageId: null,
           title: "Test_Article",
           wikiProject,
           source: "OUTREACH_DASHBOARD",
@@ -335,6 +335,7 @@ describe("OutreachArticleSyncService", () => {
             updated: 0,
             errors: 0,
             errorDetails: [],
+            errorsSample: [],
           },
         },
       });

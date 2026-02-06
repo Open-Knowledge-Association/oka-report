@@ -8,6 +8,10 @@ export {
 export {
   StatsFilterSchema,
   TimeSeriesSchema,
+  HistoryRangeSchema,
+  HistoryBackfillSchema,
+  EditorHistoryQuerySchema,
+  ArticleHistoryQuerySchema,
   WikiStatSchema,
   OutreachArticleStatsResponseSchema,
 } from "./stats.schema";

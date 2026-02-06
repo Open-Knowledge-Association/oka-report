@@ -14,6 +14,14 @@ type PreSyncStats = {
   articlesSynced?: number;
 };
 
+export const FULL_SYNC_CHILD_JOB_TYPES = [
+  "editors",
+  "outreach_articles",
+  "contributions",
+  "pageviews",
+  "commons",
+] as const;
+
 const bytesToWords = (bytesChanged: number) => Math.max(0, Math.floor(bytesChanged / 6));
 
 const toPageviewsProject = (wikiProject: string) => wikiProject.replace(/\.org$/, "");
@@ -33,6 +41,56 @@ export class SyncService {
     private readonly wikimediaClient: WikimediaClient,
   ) {}
 
+  async findActiveJob(jobType: string) {
+    return this.prisma.syncJob.findFirst({
+      where: {
+        jobType,
+        status: { in: ["running", "pending"] },
+      },
+      orderBy: { startedAt: "desc" },
+    });
+  }
+
+  private buildChildJobStatusMap(
+    childJobs: Array<{ id: string; jobType: string; status: string }>,
+  ): Record<string, { id: string; status: string }> {
+    const statusMap: Record<string, { id: string; status: string }> = {};
+    for (const childJob of childJobs) {
+      statusMap[childJob.jobType] = {
+        id: childJob.id,
+        status: childJob.status,
+      };
+    }
+    return statusMap;
+  }
+
+  async updateParentJobProgress(
+    parentJobId: string,
+    stage?: string,
+    childJobTypes: readonly string[] = FULL_SYNC_CHILD_JOB_TYPES,
+  ) {
+    const childJobs = await this.prisma.syncJob.findMany({
+      where: { parentJobId },
+      select: { id: true, jobType: true, status: true },
+    });
+
+    const completedStatuses = new Set(["completed", "failed", "cancelled"]);
+    const processed = childJobs.filter((job) => completedStatuses.has(job.status)).length;
+    const children = this.buildChildJobStatusMap(childJobs);
+
+    await this.prisma.syncJob.update({
+      where: { id: parentJobId },
+      data: {
+        metadata: {
+          totalExpected: childJobTypes.length,
+          processed,
+          stage,
+          children,
+        },
+      },
+    });
+  }
+
   /**
    * Check if a job has been cancelled and update its status if so.
    * Returns true if cancelled (caller should stop processing).
@@ -41,6 +99,9 @@ export class SyncService {
     const job = await this.prisma.syncJob.findUnique({
       where: { id: jobId },
     });
+    if (!job) {
+      return false;
+    }
     if (job?.status === "cancelled") {
       await this.prisma.syncJob.update({
         where: { id: jobId },
@@ -50,6 +111,21 @@ export class SyncService {
         },
       });
       return true;
+    }
+    if (job.parentJobId) {
+      const parentJob = await this.prisma.syncJob.findUnique({
+        where: { id: job.parentJobId },
+      });
+      if (parentJob?.status === "cancelled") {
+        await this.prisma.syncJob.update({
+          where: { id: jobId },
+          data: {
+            status: "cancelled",
+            completedAt: new Date(),
+          },
+        });
+        return true;
+      }
     }
     return false;
   }
@@ -178,11 +254,12 @@ export class SyncService {
     return syncedCount;
   }
 
-  async createSyncJob(jobType: string) {
+  async createSyncJob(jobType: string, parentJobId?: string) {
     return this.prisma.syncJob.create({
       data: {
         jobType,
         status: "pending",
+        parentJobId,
       },
     });
   }
@@ -205,6 +282,17 @@ export class SyncService {
     });
   }
 
+  async cancelSyncJob(jobId: string, metadata?: Prisma.InputJsonObject) {
+    return this.prisma.syncJob.update({
+      where: { id: jobId },
+      data: {
+        status: "cancelled",
+        completedAt: new Date(),
+        metadata,
+      },
+    });
+  }
+
   async failSyncJob(jobId: string, error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return this.prisma.syncJob.update({
@@ -217,7 +305,11 @@ export class SyncService {
     });
   }
 
-  async runFullSync(existingJobId?: string, preSyncStats?: PreSyncStats): Promise<SyncSummary> {
+  async runFullSync(
+    existingJobId?: string,
+    preSyncStats?: PreSyncStats,
+    childJobTypes: readonly string[] = FULL_SYNC_CHILD_JOB_TYPES,
+  ): Promise<SyncSummary> {
     const jobId = existingJobId ?? (await this.createSyncJob("full")).id;
     if (!existingJobId) {
       await this.startSyncJob(jobId);
@@ -226,32 +318,48 @@ export class SyncService {
     const editorsSynced = preSyncStats?.editorsSynced;
     const articlesSynced = preSyncStats?.articlesSynced;
 
+    let contributionsSynced = 0;
+    let pageviewsSynced = 0;
+    let commonsUploadsSynced = 0;
+
     try {
-      const contributionsSynced = await this.syncEditorContributions(undefined, undefined, jobId);
-
-      if (await this.checkCancelled(jobId)) {
-        return {
-          editorsSynced,
-          articlesSynced,
-          contributionsSynced,
-          pageviewsSynced: 0,
-          commonsUploadsSynced: 0,
-        };
-      }
-
-      const pageviewsSynced = await this.syncArticlePageviews(undefined, undefined, jobId);
-
       if (await this.checkCancelled(jobId)) {
         return {
           editorsSynced,
           articlesSynced,
           contributionsSynced,
           pageviewsSynced,
-          commonsUploadsSynced: 0,
+          commonsUploadsSynced,
         };
       }
 
-      const commonsUploadsSynced = await this.syncCommonsUploads(undefined, jobId);
+      await this.updateParentJobProgress(jobId, "Syncing contributions", childJobTypes);
+      const contributionsJob = await this.createSyncJob("contributions", jobId);
+      await this.startSyncJob(contributionsJob.id);
+      try {
+        contributionsSynced = await this.syncEditorContributions(
+          undefined,
+          undefined,
+          contributionsJob.id,
+        );
+      } catch (error) {
+        await this.failSyncJob(contributionsJob.id, error);
+        await this.updateParentJobProgress(jobId, "Contributions failed", childJobTypes);
+        throw error;
+      }
+      if (await this.checkCancelled(contributionsJob.id)) {
+        await this.cancelSyncJob(contributionsJob.id, { contributionsSynced });
+        await this.updateParentJobProgress(jobId, "Contributions cancelled", childJobTypes);
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced,
+          commonsUploadsSynced,
+        };
+      }
+      await this.completeSyncJob(contributionsJob.id, { contributionsSynced });
+      await this.updateParentJobProgress(jobId, "Contributions completed", childJobTypes);
 
       if (await this.checkCancelled(jobId)) {
         return {
@@ -263,13 +371,82 @@ export class SyncService {
         };
       }
 
-      await this.completeSyncJob(jobId, {
+      await this.updateParentJobProgress(jobId, "Syncing pageviews", childJobTypes);
+      const pageviewsJob = await this.createSyncJob("pageviews", jobId);
+      await this.startSyncJob(pageviewsJob.id);
+      try {
+        pageviewsSynced = await this.syncArticlePageviews(undefined, undefined, pageviewsJob.id);
+      } catch (error) {
+        await this.failSyncJob(pageviewsJob.id, error);
+        await this.updateParentJobProgress(jobId, "Pageviews failed", childJobTypes);
+        throw error;
+      }
+      if (await this.checkCancelled(pageviewsJob.id)) {
+        await this.cancelSyncJob(pageviewsJob.id, { pageviewsSynced });
+        await this.updateParentJobProgress(jobId, "Pageviews cancelled", childJobTypes);
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced,
+          commonsUploadsSynced,
+        };
+      }
+      await this.completeSyncJob(pageviewsJob.id, { pageviewsSynced });
+      await this.updateParentJobProgress(jobId, "Pageviews completed", childJobTypes);
+
+      if (await this.checkCancelled(jobId)) {
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced,
+          commonsUploadsSynced,
+        };
+      }
+
+      await this.updateParentJobProgress(jobId, "Syncing commons", childJobTypes);
+      const commonsJob = await this.createSyncJob("commons", jobId);
+      await this.startSyncJob(commonsJob.id);
+      try {
+        commonsUploadsSynced = await this.syncCommonsUploads(undefined, commonsJob.id);
+      } catch (error) {
+        await this.failSyncJob(commonsJob.id, error);
+        await this.updateParentJobProgress(jobId, "Commons failed", childJobTypes);
+        throw error;
+      }
+      if (await this.checkCancelled(commonsJob.id)) {
+        await this.cancelSyncJob(commonsJob.id, { commonsUploadsSynced });
+        await this.updateParentJobProgress(jobId, "Commons cancelled", childJobTypes);
+        return {
+          editorsSynced,
+          articlesSynced,
+          contributionsSynced,
+          pageviewsSynced,
+          commonsUploadsSynced,
+        };
+      }
+      await this.completeSyncJob(commonsJob.id, { commonsUploadsSynced });
+      await this.updateParentJobProgress(jobId, "Commons completed", childJobTypes);
+
+      const summaryMetadata = {
         editorsSynced,
         articlesSynced,
         contributionsSynced,
         pageviewsSynced,
         commonsUploadsSynced,
-      });
+        totalExpected: childJobTypes.length,
+        processed: childJobTypes.length,
+        children: {
+          editors: { synced: editorsSynced },
+          outreach_articles: { synced: articlesSynced },
+          contributions: { synced: contributionsSynced },
+          pageviews: { synced: pageviewsSynced },
+          commons: { synced: commonsUploadsSynced },
+        },
+      };
+
+      await this.completeSyncJob(jobId, summaryMetadata);
 
       return {
         editorsSynced,
@@ -304,7 +481,7 @@ export class SyncService {
       return null;
     }
 
-    if (existingArticle.pageId === 0 || existingArticle.pageId !== contribution.pageId) {
+    if (!existingArticle.pageId || existingArticle.pageId !== contribution.pageId) {
       await this.prisma.article.update({
         where: { id: existingArticle.id },
         data: { pageId: contribution.pageId },

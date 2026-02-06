@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 export interface SyncJob {
   id: string;
+  parentJobId?: string;
   jobType: string;
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   startedAt?: string;

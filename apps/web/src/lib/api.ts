@@ -225,3 +225,153 @@ export const fetchOutreachArticles = async (params?: {
 export const fetchArticleStats = async (): Promise<ArticleStats> => {
   return apiFetch<ArticleStats>("/outreach/articles/stats");
 };
+
+export type DailyHistoryPoint = {
+  date: string;
+  edits: number;
+  wordsAdded: number;
+  pageviews: number;
+  articlesCreated: number;
+  articlesEdited: number;
+  editors: number;
+  referencesAdded: number;
+  commonsUploads: number;
+  delta?: Record<string, number>;
+};
+
+export type EditorDailyHistoryPoint = {
+  date: string;
+  edits: number;
+  wordsAdded: number;
+  articlesCreated: number;
+  articlesEdited: number;
+  referencesAdded: number;
+  commonsUploads: number;
+  delta?: Record<string, number>;
+};
+
+export type ArticleDailyHistoryPoint = {
+  date: string;
+  pageviews: number;
+  characterSum: number;
+  referencesCount: number;
+  delta?: Record<string, number>;
+};
+
+const buildHistoryQuery = (params: Record<string, string | undefined>) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) query.set(key, value);
+  });
+  return query.toString();
+};
+
+export const fetchStatsHistory = async (params: {
+  startDate?: string;
+  endDate?: string;
+  wikiProject?: string;
+  source?: "MEDIAWIKI" | "OUTREACH_DASHBOARD";
+  withDelta?: boolean;
+}): Promise<{ series: DailyHistoryPoint[] }> => {
+  const query = buildHistoryQuery({
+    startDate: params.startDate,
+    endDate: params.endDate,
+    wikiProject: params.wikiProject,
+    source: params.source,
+    withDelta: params.withDelta ? "true" : undefined,
+  });
+  return apiFetch<{ series: DailyHistoryPoint[] }>(`/stats/history${query ? `?${query}` : ""}`);
+};
+
+export const fetchEditorHistory = async (params: {
+  editorId: string;
+  startDate?: string;
+  endDate?: string;
+  withDelta?: boolean;
+}): Promise<{ editorId: string; series: EditorDailyHistoryPoint[] }> => {
+  const query = buildHistoryQuery({
+    editorId: params.editorId,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    withDelta: params.withDelta ? "true" : undefined,
+  });
+  return apiFetch<{ editorId: string; series: EditorDailyHistoryPoint[] }>(
+    `/stats/editors/history${query ? `?${query}` : ""}`,
+  );
+};
+
+export const fetchArticleHistory = async (params: {
+  articleId: string;
+  startDate?: string;
+  endDate?: string;
+  withDelta?: boolean;
+}): Promise<{ articleId: string; series: ArticleDailyHistoryPoint[] }> => {
+  const query = buildHistoryQuery({
+    articleId: params.articleId,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    withDelta: params.withDelta ? "true" : undefined,
+  });
+  return apiFetch<{ articleId: string; series: ArticleDailyHistoryPoint[] }>(
+    `/stats/articles/history${query ? `?${query}` : ""}`,
+  );
+};
+
+export type SchedulerJob = {
+  id: string;
+  name: string;
+  type: "cron" | "startup";
+  schedule: string;
+  enabled: boolean;
+  disabledReason?: string | null;
+  description: string;
+  params?: Record<string, string>;
+  triggers?: Array<{
+    method: "POST" | "GET";
+    path: string;
+    payload?: Record<string, string | number | boolean | null>;
+  }>;
+};
+
+export type SchedulerInfo = {
+  timezone: string;
+  jobs: SchedulerJob[];
+};
+
+export const fetchSchedulerInfo = async (): Promise<SchedulerInfo> => {
+  return apiFetch<SchedulerInfo>("/scheduler");
+};
+
+export const updateSchedulerSetting = async (id: string, enabled: boolean) => {
+  return apiFetch<{ id: string; enabled: boolean }>(`/scheduler/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
+};
+
+export const updateSchedulerSettingWithReason = async (
+  id: string,
+  enabled: boolean,
+  reason?: string,
+) => {
+  return apiFetch<{ id: string; enabled: boolean; disabledReason?: string | null }>(
+    `/scheduler/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ enabled, reason }),
+    },
+  );
+};
+
+export type SchedulerEvent = {
+  id: string;
+  schedulerId: string;
+  enabled: boolean;
+  reason?: string | null;
+  source?: string | null;
+  createdAt: string;
+};
+
+export const fetchSchedulerEvents = async (id: string, limit = 20) => {
+  return apiFetch<{ events: SchedulerEvent[] }>(`/scheduler/${id}/events?limit=${limit}`);
+};

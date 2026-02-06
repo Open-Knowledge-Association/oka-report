@@ -32,29 +32,33 @@ export class OutreachSyncService {
   async syncEditorsFromDashboard(
     school: string,
     slug: string,
-    options?: { skipJobCreation?: boolean },
+    options?: { parentJobId?: string; jobId?: string },
   ): Promise<SyncResult> {
-    const skipJob = options?.skipJobCreation ?? false;
+    const parentJobId = options?.parentJobId;
+    const jobIdOverride = options?.jobId;
     const startTime = Date.now();
 
     let jobId: string | null = null;
-    if (!skipJob) {
+    if (jobIdOverride) {
+      jobId = jobIdOverride;
+    } else {
       const job = await this.prisma.syncJob.create({
         data: {
           jobType: "editors",
           status: "pending",
+          parentJobId,
         },
       });
       jobId = job.id;
-
-      await this.prisma.syncJob.update({
-        where: { id: jobId },
-        data: {
-          status: "running",
-          startedAt: new Date(),
-        },
-      });
     }
+
+    await this.prisma.syncJob.update({
+      where: { id: jobId },
+      data: {
+        status: "running",
+        startedAt: new Date(),
+      },
+    });
 
     try {
       const userData = await this.dashboardClient.getUsers(school, slug);
@@ -160,7 +164,7 @@ export class OutreachSyncService {
           const result = await this.prisma.article.upsert({
             where: { outreachId: article.id || 0 },
             create: {
-              pageId: 0,
+              pageId: null,
               title: article.title || "",
               wikiProject: normalizeWikiProject(
                 article.language || "en",

@@ -6,6 +6,8 @@ const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/editors", label: "Editors" },
   { to: "/articles", label: "Articles" },
+  { to: "/admin/history", label: "History" },
+  { to: "/admin/schedule-manager", label: "Schedule" },
   { to: "/admin/editors", label: "Admin" },
   { to: "/admin/sync-jobs", label: "Sync Jobs" },
 ];
