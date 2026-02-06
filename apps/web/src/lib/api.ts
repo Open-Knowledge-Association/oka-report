@@ -427,6 +427,71 @@ export const downloadAnnualReport = async (params: {
   return response.blob();
 };
 
+export type MonthlyStats = {
+  year: number;
+  month: number;
+  byWikiProject: Array<{
+    wikiProject: string;
+    edits: number;
+    wordsAdded: number;
+    pageviews: number;
+    articlesCreated: number;
+    articlesEdited: number;
+    editors: number;
+    referencesAdded: number;
+    commonsUploads: number;
+  }>;
+  totals: {
+    edits: number;
+    wordsAdded: number;
+    pageviews: number;
+    articlesCreated: number;
+    articlesEdited: number;
+    editors: number;
+    referencesAdded: number;
+    commonsUploads: number;
+  };
+  mom?: {
+    articlesCreated: { current: number; previous: number; changePercent: number };
+    pageviews: { current: number; previous: number; changePercent: number };
+    wordsAdded: { current: number; previous: number; changePercent: number };
+  };
+};
+
+export const fetchMonthlyStats = async (params: {
+  year: number;
+  month: number;
+  wikiProject?: string;
+  includeMoM?: boolean;
+}): Promise<MonthlyStats> => {
+  const query = new URLSearchParams();
+  query.set("year", String(params.year));
+  query.set("month", String(params.month));
+  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
+  if (params.includeMoM) query.set("includeMoM", "true");
+
+  return apiFetch<MonthlyStats>(`/stats/monthly?${query.toString()}`);
+};
+
+export const downloadMonthlyReport = async (params: {
+  year: number;
+  month: number;
+  format: "pdf" | "csv" | "json";
+  wikiProject?: string;
+}): Promise<Blob> => {
+  const query = new URLSearchParams();
+  query.set("year", String(params.year));
+  query.set("month", String(params.month));
+  query.set("format", params.format);
+  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
+
+  const response = await fetch(`/api/stats/monthly/export?${query.toString()}`);
+  if (!response.ok) {
+    throw new Error("Failed to download report");
+  }
+  return response.blob();
+};
+
 export type SchedulerJob = {
   id: string;
   name: string;
