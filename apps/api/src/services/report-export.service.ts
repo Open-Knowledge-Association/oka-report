@@ -234,12 +234,71 @@ export class ReportExportService {
   }
 
   async exportCSV(data: AnnualReportData): Promise<string> {
-    // TODO: Implement in Task 7
-    throw new Error("Not implemented");
+    const headers = [
+      "Wiki Project",
+      "Articles Created",
+      "Articles Edited",
+      "Edits",
+      "Words Added",
+      "Pageviews",
+      "Editors",
+      "References Added",
+      "Commons Uploads",
+    ];
+
+    const rows = data.byWikiProject.map((project) => [
+      project.wikiProject,
+      project.articlesCreated,
+      project.articlesEdited,
+      project.edits,
+      project.wordsAdded,
+      project.pageviews,
+      project.editors,
+      project.referencesAdded,
+      project.commonsUploads,
+    ]);
+
+    // Add totals row
+    rows.push([
+      "TOTAL",
+      data.totals.articlesCreated,
+      data.totals.articlesEdited,
+      data.totals.edits,
+      data.totals.wordsAdded,
+      data.totals.pageviews,
+      data.totals.editors,
+      data.totals.referencesAdded,
+      data.totals.commonsUploads,
+    ]);
+
+    // Convert to CSV format with proper escaping
+    const escapeCSV = (value: string | number) => {
+      const str = String(value);
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.map(escapeCSV).join(","))].join(
+      "\n",
+    );
+
+    return csvContent;
   }
 
   async exportJSON(data: AnnualReportData): Promise<string> {
-    // TODO: Implement in Task 7
-    throw new Error("Not implemented");
+    const report = {
+      metadata: {
+        year: data.year,
+        generatedAt: new Date().toISOString(),
+        version: "1.0",
+      },
+      summary: data.totals,
+      byWikiProject: data.byWikiProject,
+      topArticles: data.topArticles,
+    };
+
+    return JSON.stringify(report, null, 2);
   }
 }

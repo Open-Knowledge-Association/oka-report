@@ -339,6 +339,94 @@ export const fetchArticleHistory = async (params: {
   );
 };
 
+export type AnnualStats = {
+  year: number;
+  byWikiProject: Array<{
+    wikiProject: string;
+    edits: number;
+    wordsAdded: number;
+    pageviews: number;
+    articlesCreated: number;
+    articlesEdited: number;
+    editors: number;
+    referencesAdded: number;
+    commonsUploads: number;
+  }>;
+  totals: {
+    edits: number;
+    wordsAdded: number;
+    pageviews: number;
+    articlesCreated: number;
+    articlesEdited: number;
+    editors: number;
+    referencesAdded: number;
+    commonsUploads: number;
+  };
+  yoy?: {
+    articlesCreated: { current: number; previous: number; changePercent: number };
+    pageviews: { current: number; previous: number; changePercent: number };
+    wordsAdded: { current: number; previous: number; changePercent: number };
+  };
+};
+
+export type TopArticle = {
+  rank: number;
+  title: string;
+  wikiProject: string;
+  totalPageviews: number;
+  articleId: string;
+};
+
+export type TopArticlesResponse = {
+  year: number;
+  wikiProject: string | null;
+  articles: TopArticle[];
+  totalCount: number;
+};
+
+export const fetchAnnualStats = async (params: {
+  year: number;
+  wikiProject?: string;
+  includeYoY?: boolean;
+}): Promise<AnnualStats> => {
+  const query = new URLSearchParams();
+  query.set("year", String(params.year));
+  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
+  if (params.includeYoY) query.set("includeYoY", "true");
+
+  return apiFetch<AnnualStats>(`/stats/annual?${query.toString()}`);
+};
+
+export const fetchTopArticles = async (params: {
+  year: number;
+  wikiProject?: string;
+  limit?: number;
+}): Promise<TopArticlesResponse> => {
+  const query = new URLSearchParams();
+  query.set("year", String(params.year));
+  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
+  if (params.limit) query.set("limit", String(params.limit));
+
+  return apiFetch<TopArticlesResponse>(`/stats/top-articles?${query.toString()}`);
+};
+
+export const downloadAnnualReport = async (params: {
+  year: number;
+  format: "pdf" | "csv" | "json";
+  wikiProject?: string;
+}): Promise<Blob> => {
+  const query = new URLSearchParams();
+  query.set("year", String(params.year));
+  query.set("format", params.format);
+  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
+
+  const response = await fetch(`/api/stats/annual/export?${query.toString()}`);
+  if (!response.ok) {
+    throw new Error("Failed to download report");
+  }
+  return response.blob();
+};
+
 export type SchedulerJob = {
   id: string;
   name: string;

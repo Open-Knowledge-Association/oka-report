@@ -139,11 +139,25 @@ statsRoutes.get("/annual/export", async (c) => {
     }
 
     if (format === "csv") {
-      throw new Error("CSV export not yet implemented");
+      const csvContent = await reportExportService.exportCSV(reportData);
+      return new Response(csvContent, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": `attachment; filename="oka-annual-report-${year}.csv"`,
+        },
+      });
     }
 
     if (format === "json") {
-      throw new Error("JSON export not yet implemented");
+      const jsonContent = await reportExportService.exportJSON(reportData);
+      return new Response(jsonContent, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="oka-annual-report-${year}.json"`,
+        },
+      });
     }
 
     return c.json(
