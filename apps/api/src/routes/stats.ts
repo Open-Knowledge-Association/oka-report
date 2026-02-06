@@ -10,6 +10,8 @@ import {
   HistoryBackfillSchema,
   EditorHistoryQuerySchema,
   ArticleHistoryQuerySchema,
+  AnnualStatsQuerySchema,
+  TopArticlesQuerySchema,
 } from "../schemas";
 
 const dashboardClient = new OutreachDashboardClient({
@@ -141,6 +143,68 @@ statsRoutes.get("/history", async (c) => {
     : series;
 
   return c.json({ success: true, data: { series: data } });
+});
+
+statsRoutes.get("/annual", async (c) => {
+  const parsed = AnnualStatsQuerySchema.parse(c.req.query());
+  const year = parsed.year;
+
+  const stats = await statsService.getAnnualStats(year, {
+    wikiProject: parsed.wikiProject,
+    source: parsed.source,
+  });
+
+  let yoy = undefined;
+  if (parsed.includeYoY) {
+    yoy = await statsService.calculateYoY(year);
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      year,
+      byWikiProject: stats.byWikiProject,
+      totals: stats.totals,
+      ...(yoy && { yoy }),
+    },
+  });
+});
+
+statsRoutes.get("/top-articles", async (c) => {
+  try {
+    const parsed = TopArticlesQuerySchema.parse(c.req.query());
+    const { year, wikiProject, limit } = parsed;
+
+    const articles = await statsService.getTopArticlesByYear(year, limit, wikiProject);
+
+    return c.json({
+      success: true,
+      data: {
+        year,
+        wikiProject: wikiProject ?? null,
+        articles: articles.map((article) => ({
+          rank: article.rank,
+          title: article.title,
+          wikiProject: article.wikiProject,
+          totalPageviews: article.totalPageviews,
+          articleId: article.articleId,
+        })),
+        totalCount: articles.length,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching top articles:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to fetch top articles",
+        details: message,
+      },
+      500,
+    );
+  }
 });
 
 statsRoutes.post("/history/backfill", async (c) => {
