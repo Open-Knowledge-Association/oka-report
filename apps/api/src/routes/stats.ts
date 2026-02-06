@@ -129,7 +129,7 @@ statsRoutes.get("/annual/export", async (c) => {
 
     if (format === "pdf") {
       const pdfBuffer = await reportExportService.exportPDF(reportData);
-      return new Response(pdfBuffer, {
+      return new Response(new Uint8Array(pdfBuffer), {
         status: 200,
         headers: {
           "Content-Type": "application/pdf",
