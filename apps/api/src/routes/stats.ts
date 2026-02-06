@@ -129,9 +129,13 @@ statsRoutes.get("/annual/export", async (c) => {
 
     if (format === "pdf") {
       const pdfBuffer = await reportExportService.exportPDF(reportData);
-      c.header("Content-Type", "application/pdf");
-      c.header("Content-Disposition", `attachment; filename="oka-annual-report-${year}.pdf"`);
-      return c.body(pdfBuffer);
+      return new Response(pdfBuffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="oka-annual-report-${year}.pdf"`,
+        },
+      });
     }
 
     if (format === "csv") {
