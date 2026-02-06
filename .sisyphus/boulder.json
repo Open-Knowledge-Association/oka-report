@@ -1,11 +1,7 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/fix-editor-statistics.md",
-  "started_at": "2026-02-05T01:52:38.998Z",
-  "completed_at": "2026-02-05T02:15:00.000Z",
-  "session_ids": [
-    "ses_3dc0d08abffeq14CPkWDntyrdn",
-    "ses_3d39652e3ffes08tWLkT5lc2rb"
-  ],
-  "plan_name": "fix-editor-statistics",
-  "status": "completed"
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/unified-articles-table.md",
+  "started_at": "2026-02-06T02:35:13.758Z",
+  "session_ids": ["ses_3cf33961dffeuj2QSC4PrDXdgH"],
+  "plan_name": "unified-articles-table",
+  "status": "in_progress"
 }

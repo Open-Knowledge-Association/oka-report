@@ -160,26 +160,44 @@ export const fetchOutreachUsers = async () => {
   return data.course.users;
 };
 
-export type OutreachArticle = {
+// Article source enum (unified across MediaWiki and Outreach articles)
+export enum ArticleSource {
+  MEDIAWIKI = "MEDIAWIKI",
+  OUTREACH_DASHBOARD = "OUTREACH_DASHBOARD",
+}
+
+// Pageview type enum for daily vs cumulative data
+export enum PageviewType {
+  DAILY = "DAILY",
+  CUMULATIVE = "CUMULATIVE",
+}
+
+// Unified Article type supporting both MediaWiki and Outreach Dashboard articles
+export type Article = {
   id: string;
   title: string;
   wikiProject?: string;
   language?: string;
   project?: string;
-  url: string;
+  url?: string;
+  pageId?: number; // MediaWiki page ID
+  outreachId?: number; // Outreach Dashboard article ID
   characterSum: number;
   referencesCount: number;
   isNewArticle: boolean;
-  rating: string | null;
-  source?: "MEDIAWIKI" | "OUTREACH_DASHBOARD";
+  rating?: string | null;
+  source: ArticleSource | "MEDIAWIKI" | "OUTREACH_DASHBOARD";
   pageviews: Array<{
-    cumulativeViews: number | null;
+    cumulativeViews?: number | null;
     date: string;
     views?: number;
-    type?: "DAILY" | "CUMULATIVE";
+    type?: PageviewType | "DAILY" | "CUMULATIVE";
   }>;
   editors?: OutreachArticleEditor[];
 };
+
+// Backward compatibility alias
+export type OutreachArticle = Article;
 
 export type PaginationMetadata = {
   total: number;
@@ -189,7 +207,7 @@ export type PaginationMetadata = {
 };
 
 export type ArticlesResponse = {
-  articles: OutreachArticle[];
+  articles: Article[];
   pagination: PaginationMetadata;
 };
 
@@ -209,21 +227,25 @@ export const fetchOutreachArticles = async (params?: {
   limit?: number;
   search?: string;
   wiki?: string;
+  source?: ArticleSource | "MEDIAWIKI" | "OUTREACH_DASHBOARD";
+  wikiProject?: string;
 }): Promise<ArticlesResponse> => {
   const queryString = new URLSearchParams();
   if (params?.page) queryString.set("page", String(params.page));
   if (params?.limit) queryString.set("limit", String(params.limit));
   if (params?.search) queryString.set("search", params.search);
   if (params?.wiki) queryString.set("wiki", params.wiki);
+  if (params?.source) queryString.set("source", params.source);
+  if (params?.wikiProject) queryString.set("wikiProject", params.wikiProject);
 
   const query = queryString.toString();
-  const path = `/outreach/articles/db${query ? `?${query}` : ""}`;
+  const path = `/articles${query ? `?${query}` : ""}`;
 
   return apiFetch<ArticlesResponse>(path);
 };
 
 export const fetchArticleStats = async (): Promise<ArticleStats> => {
-  return apiFetch<ArticleStats>("/outreach/articles/stats");
+  return apiFetch<ArticleStats>("/articles/stats");
 };
 
 export type DailyHistoryPoint = {
@@ -270,7 +292,7 @@ export const fetchStatsHistory = async (params: {
   startDate?: string;
   endDate?: string;
   wikiProject?: string;
-  source?: "MEDIAWIKI" | "OUTREACH_DASHBOARD";
+  source?: ArticleSource | "MEDIAWIKI" | "OUTREACH_DASHBOARD";
   withDelta?: boolean;
 }): Promise<{ series: DailyHistoryPoint[] }> => {
   const query = buildHistoryQuery({

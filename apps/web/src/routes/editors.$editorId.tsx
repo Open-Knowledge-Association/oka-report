@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Users, FileText, BookOpen, Eye, Calendar, Hash, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 import {
   Table,
@@ -11,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ArticleSource } from "@/lib/api";
 
 interface EditorProfile {
   editor: {
@@ -39,6 +41,9 @@ interface EditorProfile {
     project?: string;
     characterSum: number;
     referencesCount: number;
+    isNewArticle?: boolean;
+    rating?: string | null;
+    source?: ArticleSource;
   }>;
 }
 
@@ -225,6 +230,7 @@ function EditorProfilePage() {
           <TableHeader>
             <TableRow>
               <TableHead>Title</TableHead>
+              <TableHead>Source</TableHead>
               <TableHead>Wiki</TableHead>
               <TableHead className="text-right">Characters</TableHead>
               <TableHead className="text-right">References</TableHead>
@@ -233,7 +239,7 @@ function EditorProfilePage() {
           <TableBody>
             {articles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-slate-500">
+                <TableCell colSpan={5} className="text-center py-8 text-slate-500">
                   No articles found for this editor.
                 </TableCell>
               </TableRow>
@@ -241,14 +247,33 @@ function EditorProfilePage() {
               articles.map((article) => (
                 <TableRow key={article.id}>
                   <TableCell className="font-medium">
-                    <a
-                      href={article.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      {article.title}
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {article.title}
+                      </a>
+                      {article.isNewArticle && <Badge variant="secondary">Created</Badge>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {article.source === ArticleSource.MEDIAWIKI ? (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        MediaWiki
+                      </Badge>
+                    ) : article.source === ArticleSource.OUTREACH_DASHBOARD ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-green-50 text-green-700 border-green-200"
+                      >
+                        Outreach
+                      </Badge>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {article.wikiProject

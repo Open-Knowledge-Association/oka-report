@@ -23,7 +23,12 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
-import { fetchOutreachArticles, fetchArticleStats, fetchDashboardStats } from "@/lib/api";
+import {
+  fetchOutreachArticles,
+  fetchArticleStats,
+  fetchDashboardStats,
+  ArticleSource,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/articles")({
   component: ArticlesPage,
@@ -289,6 +294,7 @@ function ArticlesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Title</TableHead>
+              <TableHead>Source</TableHead>
               <TableHead>Wiki</TableHead>
               <TableHead>Editors</TableHead>
               <TableHead className="text-right">Pageviews</TableHead>
@@ -299,13 +305,13 @@ function ArticlesPage() {
           <TableBody>
             {articlesLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
+                <TableCell colSpan={7} className="text-center py-8">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : articles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                <TableCell colSpan={7} className="text-center py-8 text-slate-500">
                   {debouncedSearch
                     ? `No articles match "${debouncedSearch}"`
                     : "No articles available."}
@@ -326,6 +332,20 @@ function ArticlesPage() {
                       </a>
                       {article.isNewArticle && <Badge variant="secondary">Created</Badge>}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {article.source === ArticleSource.MEDIAWIKI ? (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        MediaWiki
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="bg-green-50 text-green-700 border-green-200"
+                      >
+                        Outreach
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     {article.wikiProject
