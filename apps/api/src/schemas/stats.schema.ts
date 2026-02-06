@@ -86,6 +86,41 @@ export const ReportExportQuerySchema = z.object({
   wikiProject: z.string().min(1).optional(),
 });
 
+export const MonthlyStatsQuerySchema = z.object({
+  year: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z
+      .number()
+      .int()
+      .min(2000)
+      .max(new Date().getFullYear() + 1),
+  ),
+  month: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z.number().int().min(1).max(12),
+  ),
+  wikiProject: z.string().min(1).optional(),
+  source: z.enum(["MEDIAWIKI", "OUTREACH_DASHBOARD"]).optional(),
+  includeMoM: z.coerce.boolean().optional(),
+});
+
+export const MonthlyExportQuerySchema = z.object({
+  year: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z
+      .number()
+      .int()
+      .min(2000)
+      .max(new Date().getFullYear() + 1),
+  ),
+  month: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z.number().int().min(1).max(12),
+  ),
+  format: z.enum(["pdf", "csv", "json"]),
+  wikiProject: z.string().min(1).optional(),
+});
+
 export const AnnualStatsResponseSchema = z.object({
   year: z.number().int(),
   totalEditors: z.number().int(),
