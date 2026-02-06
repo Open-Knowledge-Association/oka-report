@@ -12,6 +12,8 @@ import {
   EditorHistoryQuerySchema,
   ArticleHistoryQuerySchema,
   AnnualStatsQuerySchema,
+  MonthlyStatsQuerySchema,
+  MonthlyExportQuerySchema,
   TopArticlesQuerySchema,
   ReportExportQuerySchema,
 } from "../schemas";
@@ -182,6 +184,77 @@ statsRoutes.get("/annual/export", async (c) => {
   }
 });
 
+statsRoutes.get("/monthly/export", async (c) => {
+  try {
+    const parsed = MonthlyExportQuerySchema.parse(c.req.query());
+    const { year, month, format, wikiProject } = parsed;
+
+    const stats = await statsService.getMonthlyStats(year, month, { wikiProject });
+    const topArticles = await statsService.getTopArticlesByYear(year, 10, wikiProject);
+
+    const reportData = {
+      year,
+      month,
+      byWikiProject: stats.byWikiProject,
+      totals: stats.totals,
+      topArticles,
+    };
+
+    if (format === "pdf") {
+      const pdfBuffer = await reportExportService.exportPDF(reportData as any);
+      return new Response(new Uint8Array(pdfBuffer), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="oka-monthly-report-${year}-${month}.pdf"`,
+        },
+      });
+    }
+
+    if (format === "csv") {
+      const csvContent = await reportExportService.exportCSV(reportData as any);
+      return new Response(csvContent, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": `attachment; filename="oka-monthly-report-${year}-${month}.csv"`,
+        },
+      });
+    }
+
+    if (format === "json") {
+      const jsonContent = await reportExportService.exportJSON(reportData as any);
+      return new Response(jsonContent, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="oka-monthly-report-${year}-${month}.json"`,
+        },
+      });
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: "Invalid format",
+      },
+      400,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error exporting monthly report:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to export monthly report",
+        details: message,
+      },
+      500,
+    );
+  }
+});
+
 statsRoutes.get("/timeseries", async (c) => {
   const parsed = TimeSeriesSchema.parse(c.req.query());
   const filters = parseFilters(parsed);
@@ -239,6 +312,87 @@ statsRoutes.get("/annual", async (c) => {
       ...(yoy && { yoy }),
     },
   });
+});
+
+statsRoutes.get("/monthly", async (c) => {
+  try {
+    const parsed = MonthlyStatsQuerySchema.parse(c.req.query());
+    const { year, month } = parsed;
+
+    const stats = await statsService.getMonthlyStats(year, month, {
+      wikiProject: parsed.wikiProject,
+      source: parsed.source,
+    });
+
+    let mom = undefined;
+    if (parsed.includeMoM) {
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevYear = month === 1 ? year - 1 : year;
+      const prevStats = await statsService.getMonthlyStats(prevYear, prevMonth, {
+        wikiProject: parsed.wikiProject,
+        source: parsed.source,
+      });
+
+      mom = {
+        articlesCreated: {
+          current: stats.totals.articlesCreated,
+          previous: prevStats.totals.articlesCreated,
+          changePercent:
+            prevStats.totals.articlesCreated > 0
+              ? ((stats.totals.articlesCreated - prevStats.totals.articlesCreated) /
+                  prevStats.totals.articlesCreated) *
+                100
+              : 0,
+        },
+        articlesEdited: {
+          current: stats.totals.articlesEdited,
+          previous: prevStats.totals.articlesEdited,
+          changePercent:
+            prevStats.totals.articlesEdited > 0
+              ? ((stats.totals.articlesEdited - prevStats.totals.articlesEdited) /
+                  prevStats.totals.articlesEdited) *
+                100
+              : 0,
+        },
+        edits: {
+          current: stats.totals.edits,
+          previous: prevStats.totals.edits,
+          changePercent:
+            prevStats.totals.edits > 0
+              ? ((stats.totals.edits - prevStats.totals.edits) / prevStats.totals.edits) * 100
+              : 0,
+        },
+        wordsAdded: {
+          current: stats.totals.wordsAdded,
+          previous: prevStats.totals.wordsAdded,
+          changePercent:
+            prevStats.totals.wordsAdded > 0
+              ? ((stats.totals.wordsAdded - prevStats.totals.wordsAdded) /
+                  prevStats.totals.wordsAdded) *
+                100
+              : 0,
+        },
+      };
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        year,
+        month,
+        byWikiProject: stats.byWikiProject,
+        totals: stats.totals,
+        ...(mom && { mom }),
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching monthly stats:", message);
+    return c.json(
+      { success: false, error: "Failed to fetch monthly stats", details: message },
+      500,
+    );
+  }
 });
 
 statsRoutes.get("/top-articles", async (c) => {

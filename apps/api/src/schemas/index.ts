@@ -15,6 +15,8 @@ export {
   WikiStatSchema,
   OutreachArticleStatsResponseSchema,
   AnnualStatsQuerySchema,
+  MonthlyStatsQuerySchema,
+  MonthlyExportQuerySchema,
   TopArticlesQuerySchema,
   ReportExportQuerySchema,
   AnnualStatsResponseSchema,
