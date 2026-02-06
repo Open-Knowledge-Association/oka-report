@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { StatsService } from "../services";
+import { ReportExportService } from "../services/report-export.service";
 import {
   PaginationSchema,
   StatsFilterSchema,
@@ -12,6 +13,7 @@ import {
   ArticleHistoryQuerySchema,
   AnnualStatsQuerySchema,
   TopArticlesQuerySchema,
+  ReportExportQuerySchema,
 } from "../schemas";
 
 const dashboardClient = new OutreachDashboardClient({
@@ -19,6 +21,7 @@ const dashboardClient = new OutreachDashboardClient({
 });
 
 const statsService = new StatsService(prisma);
+const reportExportService = new ReportExportService(prisma);
 export const statsRoutes = new Hono();
 
 const withDelta = <T extends Record<string, number | string | Date | null | undefined>>(
@@ -107,8 +110,58 @@ statsRoutes.get("/editors/:id", async (c) => {
       404,
     );
   }
+});
 
-  return c.json({ success: true, data: stats[0] });
+statsRoutes.get("/annual/export", async (c) => {
+  try {
+    const parsed = ReportExportQuerySchema.parse(c.req.query());
+    const { year, format, wikiProject } = parsed;
+
+    const stats = await statsService.getAnnualStats(year, { wikiProject });
+    const topArticles = await statsService.getTopArticlesByYear(year, 10, wikiProject);
+
+    const reportData = {
+      year,
+      byWikiProject: stats.byWikiProject,
+      totals: stats.totals,
+      topArticles,
+    };
+
+    if (format === "pdf") {
+      const pdfBuffer = await reportExportService.exportPDF(reportData);
+      c.header("Content-Type", "application/pdf");
+      c.header("Content-Disposition", `attachment; filename="oka-annual-report-${year}.pdf"`);
+      return c.body(pdfBuffer);
+    }
+
+    if (format === "csv") {
+      throw new Error("CSV export not yet implemented");
+    }
+
+    if (format === "json") {
+      throw new Error("JSON export not yet implemented");
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: "Invalid format",
+      },
+      400,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error exporting report:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to export report",
+        details: message,
+      },
+      500,
+    );
+  }
 });
 
 statsRoutes.get("/timeseries", async (c) => {
