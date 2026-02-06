@@ -287,6 +287,28 @@ The platform uses PostgreSQL with Prisma ORM. Key entities:
 - `format` (required): Export format (pdf, csv, json)
 - `wikiProject` (optional): Filter by wiki project
 
+### Monthly Reports
+
+| Method | Endpoint                    | Description                              |
+| ------ | --------------------------- | ---------------------------------------- |
+| GET    | `/api/stats/monthly`        | Get monthly statistics with optional MoM |
+| GET    | `/api/stats/monthly/export` | Export monthly report (PDF, CSV, JSON)   |
+
+**Monthly Stats Parameters:**
+
+- `year` (required): Year to report on (e.g., 2024)
+- `month` (required): Month to report on (1-12)
+- `wikiProject` (optional): Filter by wiki project (e.g., id.wikipedia.org)
+- `source` (optional): Filter by source (MEDIAWIKI, OUTREACH_DASHBOARD)
+- `includeMoM` (optional): Include month-over-month comparison (true/false)
+
+**Export Parameters:**
+
+- `year` (required): Year to export
+- `month` (required): Month to export (1-12)
+- `format` (required): Export format (pdf, csv, json)
+- `wikiProject` (optional): Filter by wiki project
+
 ### Editors Management
 
 | Method | Endpoint            | Description                 |
