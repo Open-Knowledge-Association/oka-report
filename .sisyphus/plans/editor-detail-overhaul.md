@@ -835,7 +835,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 10. **Enhanced Article Table**
+- [x] 10. **Enhanced Article Table**
 
   **What to do**:
   - Refactor articles section in editor profile
@@ -917,7 +917,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 11. **Stats Cards Redesign**
+- [x] 11. **Stats Cards Redesign**
 
   **What to do**:
   - Create `apps/web/src/components/editor/EditorStatsCards.tsx`
