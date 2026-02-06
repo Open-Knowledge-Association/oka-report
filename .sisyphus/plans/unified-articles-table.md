@@ -298,7 +298,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ### Wave 2: Migration and Utilities
 
-- [ ] 2. Create data migration script
+- [x] 2. Create data migration script
 
   **What to do**:
   - Create `packages/db/scripts/migrate-unified-articles.ts`
@@ -393,7 +393,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 3. Create wikiProject normalization utilities
+- [x] 3. Create wikiProject normalization utilities
 
   **What to do**:
   - Create `packages/utils/src/wiki-project.ts` with:
