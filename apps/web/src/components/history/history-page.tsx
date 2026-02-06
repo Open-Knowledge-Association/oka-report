@@ -21,6 +21,7 @@ import {
   fetchArticleStats,
 } from "@/lib/api";
 import { AnnualReportSection } from "./annual-report-section";
+import { MonthlyReportSection } from "./monthly-report-section";
 
 const toIsoDate = (value: string) => `${value}T00:00:00.000Z`;
 
@@ -115,6 +116,8 @@ export function HistoryPage() {
       </div>
 
       <AnnualReportSection />
+
+      <MonthlyReportSection />
 
       <Card className="mb-8">
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
