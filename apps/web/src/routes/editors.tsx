@@ -10,7 +10,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchEditorsListStats, type EditorsListStats } from "@/lib/api";
+import { fetchOutreachUsers, type OutreachUser } from "@/lib/api";
+
+type EditorStats = {
+  id: string;
+  username: string;
+  characterSum: number;
+  referencesCount: number;
+  uploadsCount: number;
+};
 
 type StatsTotals = {
   characters: number;
@@ -23,12 +31,22 @@ export const Route = createFileRoute("/editors")({
 });
 
 function EditorsStatsPage() {
-  const { data, isLoading } = useQuery({
+  const { data: outreachUsers = [], isLoading } = useQuery({
     queryKey: ["stats", "editors"],
-    queryFn: fetchEditorsListStats,
+    queryFn: fetchOutreachUsers,
   });
 
-  const editors: EditorsListStats[] = data ?? [];
+  // Filter for students only (role === 0)
+  const students: OutreachUser[] = outreachUsers.filter((u) => u.role === 0);
+
+  // Transform Outreach API response to match table format
+  const editors: EditorStats[] = students.map((user, index) => ({
+    id: `outreach-${user.id}`,
+    username: user.username,
+    characterSum: user.character_sum_ms || 0,
+    referencesCount: user.references_count || 0,
+    uploadsCount: user.total_uploads || 0,
+  }));
 
   const totalStats = editors.reduce<StatsTotals>(
     (acc, editor) => ({
@@ -43,7 +61,11 @@ function EditorsStatsPage() {
     <div className="mx-auto w-full max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Editor Statistics</h1>
-        <p className="text-slate-600 mt-1">Detailed stats for each tracked editor</p>
+        <p className="text-slate-600 mt-1">
+          {isLoading
+            ? "Loading editors from Outreach Dashboard..."
+            : `Real-time stats for ${editors.length} OKA students from Outreach Dashboard`}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -105,20 +127,21 @@ function EditorsStatsPage() {
             ) : editors.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-8 text-slate-500">
-                  No editor statistics available.
+                  No editors found. Check your Outreach Dashboard connection.
                 </TableCell>
               </TableRow>
             ) : (
               editors.map((editor) => (
                 <TableRow key={editor.id}>
                   <TableCell className="font-medium">
-                    <Link
-                      to="/editors/$editorId"
-                      params={{ editorId: editor.id }}
-                      className="hover:underline"
+                    <a
+                      href={`https://en.wikipedia.org/wiki/User:${editor.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline text-blue-600"
                     >
                       {editor.username}
-                    </Link>
+                    </a>
                   </TableCell>
                   <TableCell className="text-right">
                     {editor.characterSum.toLocaleString()}
