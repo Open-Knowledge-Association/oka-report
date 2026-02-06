@@ -10,10 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { apiFetch } from "@/lib/api";
+import { fetchOutreachUsers } from "@/lib/api";
 
 type EditorStats = {
-  id: string;
+  id: number;
   username: string;
   characterSum: number;
   referencesCount: number;
@@ -39,8 +39,17 @@ function EditorsStatsPage() {
   } = useQuery({
     queryKey: ["stats", "editors"],
     queryFn: async () => {
-      const data = await apiFetch<EditorStats[]>("/editors?school=OKA&slug=OKA");
-      return data;
+      const users = await fetchOutreachUsers();
+      // Filter for students only (role=0) and map to EditorStats format
+      return users
+        .filter((user) => user.role === 0)
+        .map((user) => ({
+          id: user.id,
+          username: user.username,
+          characterSum: user.character_sum_ms,
+          referencesCount: user.references_count,
+          uploadsCount: user.total_uploads,
+        }));
     },
   });
 
