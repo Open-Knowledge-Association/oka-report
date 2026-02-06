@@ -694,7 +694,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ### Wave 4: Routes and Stats
 
-- [ ] 7. Update stats.service.ts for unified queries
+- [x] 7. Update stats.service.ts for unified queries
 
   **What to do**:
   - Update pageview aggregations to handle both DAILY and CUMULATIVE types
@@ -759,7 +759,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 8. Create unified articles route
+- [x] 8. Create unified articles route
 
   **What to do**:
   - Create `apps/api/src/routes/articles.ts` with:
@@ -839,7 +839,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 9. Update outreach routes to use unified model
+- [x] 9. Update outreach routes to use unified model
 
   **What to do**:
   - Update `apps/api/src/routes/outreach.ts` to query unified Article table
@@ -900,7 +900,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ---
 
-- [ ] 10. Update editors routes for unified article relations
+- [x] 10. Update editors routes for unified article relations
 
   **What to do**:
   - Update `apps/api/src/routes/editors.ts` to include articles from unified table
