@@ -127,33 +127,55 @@ export class OutreachArticleSyncService {
                 dashboardArticle.language,
                 dashboardArticle.project,
               );
-              const article = await this.prisma.article.upsert({
-                where: { outreachId: dashboardArticle.id },
-                create: {
-                  outreachId: dashboardArticle.id,
-                  pageId: null,
+              const existingArticle = await this.prisma.article.findFirst({
+                where: {
                   title: dashboardArticle.title,
                   wikiProject,
-                  source: "OUTREACH_DASHBOARD",
-                  url: dashboardArticle.url,
-                  characterSum: dashboardArticle.character_sum,
-                  referencesCount: dashboardArticle.references_count,
-                  isNewArticle: dashboardArticle.new_article,
-                  rating: dashboardArticle.rating,
-                },
-                update: {
-                  pageId: null,
-                  title: dashboardArticle.title,
-                  wikiProject,
-                  source: "OUTREACH_DASHBOARD",
-                  url: dashboardArticle.url,
-                  characterSum: dashboardArticle.character_sum,
-                  referencesCount: dashboardArticle.references_count,
-                  isNewArticle: dashboardArticle.new_article,
-                  rating: dashboardArticle.rating,
-                  updatedAt: new Date(),
                 },
               });
+
+              const article = existingArticle
+                ? await this.prisma.article.update({
+                    where: { id: existingArticle.id },
+                    data: {
+                      outreachId: existingArticle.outreachId ?? dashboardArticle.id,
+                      title: dashboardArticle.title,
+                      wikiProject,
+                      source: "OUTREACH_DASHBOARD",
+                      url: dashboardArticle.url,
+                      characterSum: dashboardArticle.character_sum,
+                      referencesCount: dashboardArticle.references_count,
+                      isNewArticle: dashboardArticle.new_article,
+                      rating: dashboardArticle.rating,
+                      updatedAt: new Date(),
+                    },
+                  })
+                : await this.prisma.article.upsert({
+                    where: { outreachId: dashboardArticle.id },
+                    create: {
+                      outreachId: dashboardArticle.id,
+                      pageId: null,
+                      title: dashboardArticle.title,
+                      wikiProject,
+                      source: "OUTREACH_DASHBOARD",
+                      url: dashboardArticle.url,
+                      characterSum: dashboardArticle.character_sum,
+                      referencesCount: dashboardArticle.references_count,
+                      isNewArticle: dashboardArticle.new_article,
+                      rating: dashboardArticle.rating,
+                    },
+                    update: {
+                      title: dashboardArticle.title,
+                      wikiProject,
+                      source: "OUTREACH_DASHBOARD",
+                      url: dashboardArticle.url,
+                      characterSum: dashboardArticle.character_sum,
+                      referencesCount: dashboardArticle.references_count,
+                      isNewArticle: dashboardArticle.new_article,
+                      rating: dashboardArticle.rating,
+                      updatedAt: new Date(),
+                    },
+                  });
 
               const createdJustNow = article.createdAt.getTime() > startTime - 1000;
               const isNewlyCreated = createdJustNow;

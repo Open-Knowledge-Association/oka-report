@@ -22,7 +22,15 @@ describe("OutreachArticleSyncService", () => {
         findUnique: mock(() => Promise.resolve({ id: "job-123", status: "running" })),
       },
       article: {
+        findFirst: mock(() => Promise.resolve(null)),
         upsert: mock(() =>
+          Promise.resolve({
+            id: "article-1",
+            outreachId: 100,
+            createdAt: new Date(jobCreatedAt.getTime() + 500),
+          }),
+        ),
+        update: mock(() =>
           Promise.resolve({
             id: "article-1",
             outreachId: 100,
@@ -152,6 +160,59 @@ describe("OutreachArticleSyncService", () => {
           updatedAt: expect.any(Date),
         },
       });
+    });
+
+    it("should merge existing article by title and wikiProject", async () => {
+      const wikiProject = normalizeWikiProject("en", "wikipedia");
+      const mockArticles: OutreachArticle[] = [
+        {
+          id: 100,
+          title: "Test_Article",
+          language: "en",
+          project: "wikipedia",
+          view_count: 1000,
+          average_views: 50,
+          character_sum: 5000,
+          references_count: 10,
+          new_article: true,
+          rating: "B",
+          url: "https://en.wikipedia.org/wiki/Test_Article",
+          user_ids: [],
+        },
+      ];
+
+      mockDashboardClient.getArticles = mock(() =>
+        Promise.resolve({
+          course: { articles: mockArticles },
+        } as ArticleData),
+      );
+
+      mockPrisma.article.findFirst = mock(() =>
+        Promise.resolve({
+          id: "article-existing",
+          outreachId: null,
+          createdAt: new Date(jobCreatedAt.getTime() - 5000),
+        }),
+      ) as unknown as PrismaClient["article"]["findFirst"];
+
+      await service.syncArticlesFromDashboard("OKA", "oka");
+
+      expect(mockPrisma.article.update).toHaveBeenCalledWith({
+        where: { id: "article-existing" },
+        data: {
+          outreachId: 100,
+          title: "Test_Article",
+          wikiProject,
+          source: "OUTREACH_DASHBOARD",
+          url: "https://en.wikipedia.org/wiki/Test_Article",
+          characterSum: 5000,
+          referencesCount: 10,
+          isNewArticle: true,
+          rating: "B",
+          updatedAt: expect.any(Date),
+        },
+      });
+      expect(mockPrisma.article.upsert).not.toHaveBeenCalled();
     });
 
     it("should create pageview snapshot with current date", async () => {

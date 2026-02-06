@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 import { app } from "../index";
-
-const baseUrl = "http://localhost:3001";
 
 describe("API Integration Tests", () => {
   describe("GET /api", () => {
@@ -180,6 +178,8 @@ describe("API Integration Tests", () => {
 
       OutreachDashboardClient.prototype.getArticles = async () => mockArticlesData;
       WikimediaClient.prototype.getArticleInfo = async () => ({
+        pageId: 12345,
+        title: "Test_Integration_Article",
         creator: "TestUser",
         createdAt: "2024-01-01T00:00:00Z",
       });
