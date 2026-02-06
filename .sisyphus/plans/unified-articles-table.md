@@ -194,7 +194,7 @@ Parallel Speedup: ~35% faster than sequential
 
 ### Wave 1: Schema Foundation
 
-- [ ] 1. Design unified schema and create migration file
+- [x] 1. Design unified schema and create migration file
 
   **What to do**:
   - Add `ArticleSource` enum with values `MEDIAWIKI`, `OUTREACH_DASHBOARD`
