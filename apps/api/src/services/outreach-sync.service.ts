@@ -184,6 +184,7 @@ export class OutreachSyncService {
                 article.language || "en",
                 article.project || "wikipedia",
               ),
+              source: "OUTREACH_DASHBOARD",
               url: article.url || "",
               characterSum: article.character_sum || 0,
               referencesCount: article.references_count || 0,

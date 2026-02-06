@@ -221,6 +221,7 @@ export class SyncService {
             views: item.views,
           },
           update: {
+            type: "DAILY",
             views: item.views,
           },
         });
