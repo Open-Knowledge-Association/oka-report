@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@repo/db";
+import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import {
   BulkCreateEditorSchema,
   CreateEditorSchema,
@@ -9,8 +10,100 @@ import {
 
 export const editorsRoutes = new Hono();
 
+// Initialize Outreach Dashboard client
+const dashboardClient = new OutreachDashboardClient({
+  baseUrl: "https://outreachdashboard.wmflabs.org",
+});
+
+/**
+ * Fetch Outreach stats and create a map by externalId and username
+ * Handles both main space (character_sum_ms) and user space characters
+ */
+async function getOutreachStatsMap(
+  school?: string,
+  slug?: string,
+): Promise<
+  Map<
+    string,
+    {
+      characterSum: number;
+      referencesCount: number;
+      uploadsCount: number;
+    }
+  >
+> {
+  const statsMap = new Map<
+    string,
+    {
+      characterSum: number;
+      referencesCount: number;
+      uploadsCount: number;
+    }
+  >();
+
+  try {
+    let courseSchool = school;
+    let courseSlug = slug;
+
+    // If not provided, try to infer from environment or first sync job
+    if (!courseSchool || !courseSlug) {
+      const lastSync = await prisma.syncJob.findFirst({
+        where: {
+          jobType: "editors",
+          status: "completed",
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      if (!lastSync) {
+        return statsMap;
+      }
+
+      // Try to parse from sync job metadata if available
+      const metadata = lastSync.metadata as any;
+      courseSchool = metadata?.school || process.env.OUTREACH_SCHOOL;
+      courseSlug = metadata?.slug || process.env.OUTREACH_SLUG;
+    }
+
+    if (!courseSchool || !courseSlug) {
+      return statsMap;
+    }
+
+    // Fetch users from Outreach Dashboard
+    const userData = await dashboardClient.getUsers(courseSchool, courseSlug);
+    const outreachUsers = userData.users || userData.course?.users || [];
+
+    // Build map with externalId as key (since that's what's in DB)
+    for (const user of outreachUsers) {
+      const externalId = String(user.id);
+      statsMap.set(externalId, {
+        characterSum: user.character_sum_ms || 0,
+        referencesCount: user.references_count || 0,
+        uploadsCount: user.total_uploads || 0,
+      });
+
+      // Also map by username for fallback matching
+      const userKey = `username:${user.username}`;
+      statsMap.set(userKey, {
+        characterSum: user.character_sum_ms || 0,
+        referencesCount: user.references_count || 0,
+        uploadsCount: user.total_uploads || 0,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to fetch Outreach stats:", error);
+  }
+
+  return statsMap;
+}
+
 editorsRoutes.get("/", async (c) => {
   const query = EditorQuerySchema.parse(c.req.query());
+  const school = c.req.query("school");
+  const slug = c.req.query("slug");
+
   const editors = await prisma.editor.findMany({
     where: {
       ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
@@ -19,7 +112,26 @@ editorsRoutes.get("/", async (c) => {
     orderBy: { username: "asc" },
   });
 
-  return c.json({ success: true, data: editors });
+  // Enrich editors with Outreach stats
+  const statsMap = await getOutreachStatsMap(school, slug);
+  const enrichedEditors = editors.map((editor) => {
+    // Try to match by externalId first (primary key in Outreach)
+    let stats = editor.externalId ? statsMap.get(editor.externalId) : null;
+
+    // Fallback to username if externalId not found
+    if (!stats) {
+      stats = statsMap.get(`username:${editor.username}`);
+    }
+
+    return {
+      ...editor,
+      characterSum: stats?.characterSum ?? 0,
+      referencesCount: stats?.referencesCount ?? 0,
+      uploadsCount: stats?.uploadsCount ?? 0,
+    };
+  });
+
+  return c.json({ success: true, data: enrichedEditors });
 });
 
 editorsRoutes.post("/", async (c) => {
