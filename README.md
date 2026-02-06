@@ -266,6 +266,27 @@ The platform uses PostgreSQL with Prisma ORM. Key entities:
 | GET    | `/api/stats/editors`    | Stats grouped by editor          |
 | GET    | `/api/stats/timeseries` | Time-series data for charts      |
 
+### Annual Reports
+
+| Method | Endpoint                   | Description                              |
+| ------ | -------------------------- | ---------------------------------------- |
+| GET    | `/api/stats/annual`        | Get annual statistics with optional YoY  |
+| GET    | `/api/stats/top-articles`  | Get top articles by pageviews for a year |
+| GET    | `/api/stats/annual/export` | Export annual report (PDF, CSV, JSON)    |
+
+**Annual Stats Parameters:**
+
+- `year` (required): Year to report on (e.g., 2024)
+- `wikiProject` (optional): Filter by wiki project (e.g., id.wikipedia.org)
+- `source` (optional): Filter by source (MEDIAWIKI, OUTREACH_DASHBOARD)
+- `includeYoY` (optional): Include year-over-year comparison (true/false)
+
+**Export Parameters:**
+
+- `year` (required): Year to export
+- `format` (required): Export format (pdf, csv, json)
+- `wikiProject` (optional): Filter by wiki project
+
 ### Editors Management
 
 | Method | Endpoint            | Description                 |
