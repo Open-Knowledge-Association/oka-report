@@ -295,7 +295,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ### Wave 1: API Endpoints
 
-- [ ] 1. **Daily Stats API Endpoint**
+- [x] 1. **Daily Stats API Endpoint**
 
   **What to do**:
   - Create `GET /api/editors/:id/daily-stats` endpoint
@@ -365,7 +365,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 2. **Commons Uploads API Endpoint**
+- [x] 2. **Commons Uploads API Endpoint**
 
   **What to do**:
   - Create `GET /api/editors/:id/commons-uploads` endpoint
@@ -417,7 +417,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 3. **Achievements API Endpoint**
+- [x] 3. **Achievements API Endpoint**
 
   **What to do**:
   - Create `GET /api/editors/:id/achievements` endpoint
