@@ -719,7 +719,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ### Wave 3: Feature Components
 
-- [ ] 8. **Commons Gallery Component**
+- [x] 8. **Commons Gallery Component**
 
   **What to do**:
   - Create `apps/web/src/components/editor/CommonsGallery.tsx`
@@ -777,7 +777,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ---
 
-- [ ] 9. **Achievement Badges Component**
+- [x] 9. **Achievement Badges Component**
 
   **What to do**:
   - Create `apps/web/src/components/editor/AchievementBadges.tsx`
