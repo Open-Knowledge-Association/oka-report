@@ -2,11 +2,7 @@ import { getArticleInfo } from "./articles";
 import { getCommonsUploads } from "./commons";
 import { getUserContributions } from "./contributions";
 import { getPageviews } from "./pageviews";
-import {
-  calculateRetryDelayMs,
-  RateLimiter,
-  type RateLimiterOptions,
-} from "./rate-limiter";
+import { calculateRetryDelayMs, RateLimiter, type RateLimiterOptions } from "./rate-limiter";
 import type {
   ArticleInfo,
   CommonsUpload,
@@ -15,8 +11,7 @@ import type {
   UserContribution,
 } from "./types";
 
-const DEFAULT_USER_AGENT =
-  "OKA-Stats/1.0 (https://oka.wiki; contact@oka.wiki)";
+const DEFAULT_USER_AGENT = "OKA-Stats/1.0 (https://oka.wiki; contact@oka.wiki)";
 const DEFAULT_MAX_RETRIES = 3;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -63,8 +58,7 @@ export class WikimediaClient {
   constructor(config: WikimediaClientConfig) {
     this.baseUrl = config.baseUrl;
     this.userAgent = config.userAgent ?? DEFAULT_USER_AGENT;
-    this.rateLimiter =
-      config.rateLimiter ?? new RateLimiter(config.rateLimiterOptions);
+    this.rateLimiter = config.rateLimiter ?? new RateLimiter(config.rateLimiterOptions);
     this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
   }
 
@@ -133,8 +127,9 @@ export class WikimediaClient {
     project: string,
     startDate: string,
     endDate: string,
+    agentType?: import("./pageviews").PageviewAgentType,
   ): Promise<PageviewData[]> {
-    return getPageviews(this, article, project, startDate, endDate);
+    return getPageviews(this, article, project, startDate, endDate, agentType);
   }
 
   async getCommonsUploads(username: string): Promise<CommonsUpload[]> {
@@ -145,10 +140,7 @@ export class WikimediaClient {
     return this.baseUrl;
   }
 
-  private async fetchWithRetry(
-    url: string,
-    init: RequestInit,
-  ): Promise<Response> {
+  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
     let attempt = 0;
 
     while (true) {
@@ -162,10 +154,7 @@ export class WikimediaClient {
         return response;
       }
 
-      const delayMs = calculateRetryDelayMs(
-        attempt,
-        response.headers.get("retry-after"),
-      );
+      const delayMs = calculateRetryDelayMs(attempt, response.headers.get("retry-after"));
       await sleep(delayMs);
       attempt += 1;
     }

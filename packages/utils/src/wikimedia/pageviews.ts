@@ -3,6 +3,8 @@ import type { WikimediaClient } from "./client";
 
 const PAGEVIEWS_BASE_URL = "https://wikimedia.org/api/rest_v1";
 
+export type PageviewAgentType = "user" | "all-agents";
+
 type PageviewsResponse = {
   items?: Array<{
     timestamp: string;
@@ -27,11 +29,12 @@ export const getPageviews = async (
   project: string,
   startDate: string,
   endDate: string,
+  agentType: PageviewAgentType = "all-agents",
 ): Promise<PageviewData[]> => {
   // Normalize title: Wikimedia Pageviews API expects underscores instead of spaces
   const normalizedTitle = article.replace(/ /g, "_");
   const encodedArticle = encodeURIComponent(normalizedTitle);
-  const endpoint = `${PAGEVIEWS_BASE_URL}/metrics/pageviews/per-article/${project}/all-access/user/${encodedArticle}/daily/${startDate}/${endDate}`;
+  const endpoint = `${PAGEVIEWS_BASE_URL}/metrics/pageviews/per-article/${project}/all-access/${agentType}/${encodedArticle}/daily/${startDate}/${endDate}`;
 
   const response = await client.request<PageviewsResponse>(endpoint);
 
