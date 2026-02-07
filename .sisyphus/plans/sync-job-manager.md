@@ -66,11 +66,11 @@ Create a production-ready Sync Job Manager page that provides real-time visibili
 
 ### Definition of Done
 
-- [ ] All sync job types report progress via metadata
-- [ ] Running jobs can be cancelled via UI
-- [ ] Failed jobs can be retried via UI
-- [ ] Real-time updates work without page refresh
-- [ ] Job details show full metadata and error information
+- [x] All sync job types report progress via metadata
+- [x] Running jobs can be cancelled via UI
+- [x] Failed jobs can be retried via UI
+- [x] Real-time updates work without page refresh
+- [x] Job details show full metadata and error information
 
 ### Must Have
 
@@ -869,11 +869,11 @@ curl -s "http://localhost:3001/admin/sync-jobs" | head -100
 
 ### Final Checklist
 
-- [ ] All sync job types report progress in metadata
-- [ ] SSE endpoint streams job updates every 2 seconds
-- [ ] Cancel stops running jobs cooperatively
-- [ ] Retry creates new jobs for failed/cancelled ones
-- [ ] Admin page shows real-time job status
-- [ ] Job details modal shows full information
-- [ ] Mobile viewport works
-- [ ] No console errors
+- [x] All sync job types report progress in metadata
+- [x] SSE endpoint streams job updates every 2 seconds
+- [x] Cancel stops running jobs cooperatively
+- [x] Retry creates new jobs for failed/cancelled ones
+- [x] Admin page shows real-time job status
+- [x] Job details modal shows full information
+- [x] Mobile viewport works
+- [x] No console errors

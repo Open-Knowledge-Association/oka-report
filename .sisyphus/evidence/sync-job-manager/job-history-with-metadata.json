@@ -1,0 +1,50 @@
+{
+  "id": "cmlaggbsg00byo1jgko0pk5g7",
+  "jobType": "contributions",
+  "status": "running",
+  "metadata": null
+}
+{
+  "id": "cmlagcvby0000o1jgedx545qr",
+  "jobType": "contributions",
+  "status": "failed",
+  "metadata": null
+}
+{
+  "id": "cmlaca8l10001yujgst5yrysi",
+  "jobType": "editors",
+  "status": "completed",
+  "metadata": {
+    "errors": 0,
+    "updated": 53,
+    "imported": 0,
+    "errorDetails": []
+  }
+}
+{
+  "id": "cmlaca8gk0000yujgt9aoa3r5",
+  "jobType": "full",
+  "status": "running",
+  "metadata": {
+    "stage": "Syncing outreach articles",
+    "children": {
+      "editors": {
+        "id": "cmlaca8l10001yujgst5yrysi",
+        "status": "completed"
+      }
+    },
+    "processed": 1,
+    "totalExpected": 5
+  }
+}
+{
+  "id": "cmla82qik0ty6vgjgqaax9go6",
+  "jobType": "editors",
+  "status": "completed",
+  "metadata": {
+    "errors": 0,
+    "updated": 0,
+    "imported": 53,
+    "errorDetails": []
+  }
+}

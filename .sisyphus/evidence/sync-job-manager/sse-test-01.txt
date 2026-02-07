@@ -1,0 +1,16 @@
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0event: job-update
+data: [{"id":"cmlaca8gk0000yujgt9aoa3r5","parentJobId":null,"jobType":"full","status":"running","isCancelled":false,"startedAt":"2026-02-06T03:42:13.870Z","completedAt":null,"error":null,"metadata":{"stage":"Syncing outreach articles","children":{"editors":{"id":"cmlaca8l10001yujgst5yrysi","status":"completed"}},"processed":1,"totalExpected":5},"createdAt":"2026-02-06T03:42:13.843Z"}]
+id: 1770356155349
+
+100    425   0    425   0      0    353      0           00:01            352event: job-update
+data: [{"id":"cmlaca8gk0000yujgt9aoa3r5","parentJobId":null,"jobType":"full","status":"running","isCancelled":false,"startedAt":"2026-02-06T03:42:13.870Z","completedAt":null,"error":null,"metadata":{"stage":"Syncing outreach articles","children":{"editors":{"id":"cmlaca8l10001yujgst5yrysi","status":"completed"}},"processed":1,"totalExpected":5},"createdAt":"2026-02-06T03:42:13.843Z"}]
+id: 1770356157393
+
+100    850   0    850   0      0    274      0           00:03            274100    850   0    850   0      0    207      0           00:04            207event: job-update
+data: [{"id":"cmlaca8gk0000yujgt9aoa3r5","parentJobId":null,"jobType":"full","status":"running","isCancelled":false,"startedAt":"2026-02-06T03:42:13.870Z","completedAt":null,"error":null,"metadata":{"stage":"Syncing outreach articles","children":{"editors":{"id":"cmlaca8l10001yujgst5yrysi","status":"completed"}},"processed":1,"totalExpected":5},"createdAt":"2026-02-06T03:42:13.843Z"}]
+id: 1770356159433
+
+
+curl: (28) Operation timed out after 5005 milliseconds with 1275 bytes received

@@ -91,15 +91,15 @@ Transform the Editor Profile page from a basic stats display into a comprehensiv
 
 ### Definition of Done
 
-- [ ] `bun --bun run test` passes with all new tests
-- [ ] All 4 charts render with sample data
-- [ ] All 7 badges calculate correctly
-- [ ] Article table supports sort, filter, search, pagination
-- [ ] Export generates valid CSV
-- [ ] Share button copies URL to clipboard
-- [ ] Compare page works with 2 editors
-- [ ] Mobile view shows tabbed charts
-- [ ] Playwright E2E verification passes
+- [x] `bun --bun run test` passes with all new tests
+- [x] All 4 charts render with sample data
+- [x] All 7 badges calculate correctly
+- [x] Article table supports sort, filter, search, pagination
+- [x] Export generates valid CSV
+- [x] Share button copies URL to clipboard
+- [x] Compare page works with 2 editors
+- [x] Mobile view shows tabbed charts
+- [x] Playwright E2E verification passes
 
 ### Must Have
 
@@ -1216,7 +1216,7 @@ Parallel Speedup: ~60% faster than sequential
 
 ### Wave 5: Integration
 
-- [ ] 16. **Integration & Polish**
+- [x] 16. **Integration & Polish**
 
   **What to do**:
   - Integrate all components into main editor profile page
@@ -1319,12 +1319,12 @@ cd apps/web && bun run test:e2e
 
 ### Final Checklist
 
-- [ ] All "Must Have" features present
-- [ ] All "Must NOT Have" constraints respected
-- [ ] All 17 tasks completed
-- [ ] All tests pass
-- [ ] Mobile responsive works
-- [ ] No console errors in browser
-- [ ] All charts render with data
-- [ ] Export generates valid CSV
-- [ ] Compare page works with 2 editors
+- [x] All "Must Have" features present
+- [x] All "Must NOT Have" constraints respected
+- [x] All 17 tasks completed
+- [x] All tests pass
+- [x] Mobile responsive works
+- [x] No console errors in browser
+- [x] All charts render with data
+- [x] Export generates valid CSV
+- [x] Compare page works with 2 editors

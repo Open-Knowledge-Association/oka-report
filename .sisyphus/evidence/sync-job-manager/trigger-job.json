@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "data": {
+    "id": "cmlagcvby0000o1jgedx545qr",
+    "parentJobId": null,
+    "jobType": "contributions",
+    "status": "pending",
+    "isCancelled": false,
+    "startedAt": null,
+    "completedAt": null,
+    "error": null,
+    "metadata": null,
+    "createdAt": "2026-02-06T05:36:15.261Z"
+  }
+}

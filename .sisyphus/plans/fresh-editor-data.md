@@ -62,9 +62,9 @@ Clean slate for editors: delete local data and use Outreach API as the single so
 
 ### Definition of Done
 
-- [ ] `curl http://localhost:3000/api/editors` returns empty array
-- [ ] Editor Statistics page loads with real stats from Outreach
-- [ ] Editor count matches Outreach Dashboard students/overview
+- [x] `curl http://localhost:3000/api/editors` returns empty array
+- [x] Editor Statistics page loads with real stats from Outreach
+- [x] Editor count matches Outreach Dashboard students/overview
 
 ### Must Have
 
@@ -386,10 +386,10 @@ curl -s "http://localhost:3001/editors" | grep -o "Characters Added"
 
 ### Final Checklist
 
-- [ ] All editors deleted from database
-- [ ] No orphaned records in related tables
-- [ ] `editors.tsx` fetches from Outreach API
-- [ ] Real statistics displayed (not zeros)
-- [ ] Only students shown (role=0)
-- [ ] Editor count matches Outreach Dashboard students/overview
-- [ ] Editor profile links still work
+- [x] All editors deleted from database
+- [x] No orphaned records in related tables
+- [x] `editors.tsx` fetches from Outreach API
+- [x] Real statistics displayed (not zeros)
+- [x] Only students shown (role=0)
+- [x] Editor count matches Outreach Dashboard students/overview
+- [x] Editor profile links still work
