@@ -23,6 +23,11 @@ enum PageviewType {
   CUMULATIVE
 }
 
+enum PageviewAgentType {
+  USER       // Human views only
+  ALL_AGENTS // All views (human + bot)
+}
+
 /// Registered Wikipedia editors to track
 /// These are OKA members, grantees, or other editors whose contributions we monitor
 model Editor {
@@ -187,6 +192,9 @@ model Pageview {
   /// Pageview record type (daily or cumulative snapshot)
   type PageviewType @default(DAILY)
 
+  /// Agent type for this pageview count (human-only or all traffic including bots)
+  agentType PageviewAgentType @default(ALL_AGENTS)
+
   /// Number of pageviews on this date
   /// Source: Wikimedia Pageviews API (user traffic only, excludes bots)
   /// Example: 1523
@@ -198,8 +206,9 @@ model Pageview {
 
   createdAt DateTime @default(now())
 
-  @@unique([articleId, date])
+  @@unique([articleId, date, type, agentType])
   @@index([date])
+  @@index([agentType])
   @@map("pageviews")
 }
 
