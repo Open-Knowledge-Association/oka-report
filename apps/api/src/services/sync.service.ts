@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@repo/db/generated/prisma/client";
 import type { CommonsUpload, UserContribution, WikimediaClient } from "@repo/utils";
+import { WikimediaClientError } from "@repo/utils";
 
 type SyncSummary = {
   editorsSynced?: number;
@@ -156,6 +157,8 @@ export class SyncService {
           continue;
         }
 
+        const isCreation = contribution.parentId == null || contribution.parentId === 0;
+
         await this.prisma.contribution.upsert({
           where: {
             revisionId_articleId: {
@@ -170,11 +173,20 @@ export class SyncService {
             parentId: contribution.parentId,
             bytesChanged: contribution.sizeDiff,
             wordsAdded: bytesToWords(contribution.sizeDiff),
-            isCreation: contribution.parentId == null || contribution.parentId === 0,
+            isCreation,
             editTimestamp: new Date(contribution.timestamp),
           },
           update: {},
         });
+
+        // If this is a creation contribution, set createdByEditorId on the article
+        if (isCreation && !article.createdByEditorId) {
+          await this.prisma.article.update({
+            where: { id: article.id },
+            data: { createdByEditorId: editor.id },
+          });
+        }
+
         syncedCount += 1;
       }
     }
@@ -199,12 +211,24 @@ export class SyncService {
 
       const startDate = since ?? article.articleCreatedAt ?? new Date();
       const endDate = new Date();
-      const pageviews = await this.wikimediaClient.getPageviews(
-        article.title,
-        toPageviewsProject(article.wikiProject),
-        formatDateForPageviews(startDate),
-        formatDateForPageviews(endDate),
-      );
+
+      let pageviews: Array<{ date: string; views: number }>;
+      try {
+        pageviews = await this.wikimediaClient.getPageviews(
+          article.title,
+          toPageviewsProject(article.wikiProject),
+          formatDateForPageviews(startDate),
+          formatDateForPageviews(endDate),
+        );
+      } catch (error) {
+        if (error instanceof WikimediaClientError && error.status === 404) {
+          console.warn(
+            `Pageviews unavailable for article "${article.title}" (${article.id}) on ${article.wikiProject}: 404 Not Found`,
+          );
+          continue;
+        }
+        throw error;
+      }
 
       for (const item of pageviews) {
         await this.prisma.pageview.upsert({
