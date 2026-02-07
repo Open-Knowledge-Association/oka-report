@@ -1,7 +1,8 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/editor-detail-overhaul.md",
-  "started_at": "2026-02-06T02:56:17.234Z",
-  "session_ids": ["ses_3cf33961dffeuj2QSC4PrDXdgH"],
-  "plan_name": "editor-detail-overhaul",
-  "status": "in_progress"
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/fix-pageviews-agent-type.md",
+  "started_at": "2026-02-07T02:53:29.552Z",
+  "session_ids": [
+    "ses_3ccd66013ffewNIRDAmT7CklHF"
+  ],
+  "plan_name": "fix-pageviews-agent-type"
 }

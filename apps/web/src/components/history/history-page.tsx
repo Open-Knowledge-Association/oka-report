@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   fetchArticleHistory,
   fetchEditorHistory,
@@ -61,6 +62,7 @@ export function HistoryPage() {
   const [articleStart, setArticleStart] = useState(defaultRange.startDate);
   const [articleEnd, setArticleEnd] = useState(defaultRange.endDate);
   const [articleDelta, setArticleDelta] = useState(true);
+  const [snapshotStatus, setSnapshotStatus] = useState<string>("");
 
   const { data: wikiStats } = useQuery({
     queryKey: ["stats", "articles", "wiki"],
@@ -106,505 +108,707 @@ export function HistoryPage() {
   const series = historyData?.series ?? [];
   const latest = series[series.length - 1];
 
+  const handleBackfillSnapshots = async () => {
+    try {
+      setSnapshotStatus("Submitting snapshot backfill job...");
+      const payload = {
+        startDate: toIsoDate(startDate),
+        endDate: toIsoDate(endDate),
+      };
+
+      const response = await fetch("/api/stats/history/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        setSnapshotStatus("Failed to queue snapshot backfill.");
+        return;
+      }
+
+      setSnapshotStatus(`Snapshot backfill queued (job: ${result.data?.jobId ?? "unknown"}).`);
+    } catch {
+      setSnapshotStatus("Failed to queue snapshot backfill.");
+    }
+  };
+
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-8">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
+      <div>
         <h1 className="text-3xl font-bold text-slate-900">History & Reports</h1>
         <p className="text-slate-600 mt-1">
-          Daily snapshots for global, editor, and article performance.
+          Monitor daily snapshots, generate period reports, and debug specific editor/article
+          trends.
         </p>
       </div>
 
-      <AnnualReportSection />
-
-      <MonthlyReportSection />
-
-      <Card className="mb-8">
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-lg">Global Daily History</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Filter by date, wiki, or source to build reports.
+      <Card className="border-slate-200 bg-slate-50">
+        <CardContent className="pt-6 text-sm text-slate-700">
+          <div className="grid gap-2 md:grid-cols-2">
+            <p>
+              <strong>1) Reports:</strong> Annual and monthly summaries for leadership.
+            </p>
+            <p>
+              <strong>2) Daily History:</strong> Day-to-day operational monitoring.
+            </p>
+            <p>
+              <strong>3) Entity Lookup:</strong> Drill into one editor or one article.
+            </p>
+            <p>
+              <strong>4) Snapshot Utilities:</strong> Backfill missing periods after sync runs.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            {startDate} to {endDate}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="space-y-2">
-              <Label>Start Date</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>End Date</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Wiki Project</Label>
-              <select
-                value={wikiProject}
-                onChange={(e) => setWikiProject(e.target.value)}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="all">All Wikis</option>
-                {(wikiStats?.wikiStats ?? []).map((stat) => (
-                  <option key={stat.wiki} value={stat.wiki}>
-                    {stat.wiki}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Source</Label>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="all">All Sources</option>
-                <option value="OUTREACH_DASHBOARD">Outreach Dashboard</option>
-                <option value="MEDIAWIKI">MediaWiki</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 mb-6 text-sm text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={withDelta}
-                onChange={(e) => setWithDelta(e.target.checked)}
-              />
-              Show daily delta
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Articles Created</CardTitle>
-                <FileText className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.articlesCreated)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.articlesCreated)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Articles Edited</CardTitle>
-                <LineChart className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.articlesEdited)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.articlesEdited)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Editors Active</CardTitle>
-                <Users className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.editors)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.editors)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Edits</CardTitle>
-                <LineChart className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.edits)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.edits)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Words Added</CardTitle>
-                <LineChart className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.wordsAdded)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.wordsAdded)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">References Added</CardTitle>
-                <BookOpen className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.referencesAdded)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.referencesAdded)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Article Views</CardTitle>
-                <Eye className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.pageviews)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.pageviews)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Commons Uploads</CardTitle>
-                <Upload className="h-4 w-4 text-slate-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatNumber(latest?.commonsUploads)}</div>
-                {withDelta && (
-                  <p className="text-xs text-muted-foreground">
-                    delta {formatDelta(latest?.delta?.commonsUploads)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Edits</TableHead>
-                  <TableHead className="text-right">Words</TableHead>
-                  <TableHead className="text-right">Articles Created</TableHead>
-                  <TableHead className="text-right">Articles Edited</TableHead>
-                  <TableHead className="text-right">Editors</TableHead>
-                  <TableHead className="text-right">Refs</TableHead>
-                  <TableHead className="text-right">Views</TableHead>
-                  <TableHead className="text-right">Uploads</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historyLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">
-                      Loading history...
-                    </TableCell>
-                  </TableRow>
-                ) : series.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">
-                      No history data available for this range.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  series.map((row) => (
-                    <TableRow key={row.date}>
-                      <TableCell className="font-medium">{row.date.slice(0, 10)}</TableCell>
-                      <TableCell className="text-right">{formatNumber(row.edits)}</TableCell>
-                      <TableCell className="text-right">{formatNumber(row.wordsAdded)}</TableCell>
-                      <TableCell className="text-right">
-                        {formatNumber(row.articlesCreated)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatNumber(row.articlesEdited)}
-                      </TableCell>
-                      <TableCell className="text-right">{formatNumber(row.editors)}</TableCell>
-                      <TableCell className="text-right">
-                        {formatNumber(row.referencesAdded)}
-                      </TableCell>
-                      <TableCell className="text-right">{formatNumber(row.pageviews)}</TableCell>
-                      <TableCell className="text-right">
-                        {formatNumber(row.commonsUploads)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Editor History</CardTitle>
-            <p className="text-sm text-muted-foreground">Track daily performance per editor.</p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="space-y-2">
-                <Label>Editor ID</Label>
-                <Input
-                  value={editorId}
-                  onChange={(e) => setEditorId(e.target.value)}
-                  placeholder="Paste editor ID"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Copy from{" "}
-                  <Link to="/editors" className="underline">
-                    Editors list
-                  </Link>
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Start Date</Label>
-                <Input
-                  type="date"
-                  value={editorStart}
-                  onChange={(e) => setEditorStart(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>End Date</Label>
-                <Input
-                  type="date"
-                  value={editorEnd}
-                  onChange={(e) => setEditorEnd(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={editorDelta}
-                    onChange={(e) => setEditorDelta(e.target.checked)}
-                  />
-                  Show delta
-                </label>
-              </div>
-            </div>
-
-            {!editorId ? (
-              <div className="text-sm text-muted-foreground">
-                Enter an editor ID to view history.
-              </div>
-            ) : editorLoading ? (
-              <div className="text-sm text-muted-foreground">Loading editor history...</div>
-            ) : (editorHistory?.series?.length ?? 0) === 0 ? (
-              <div className="text-sm text-muted-foreground">No history data for this editor.</div>
-            ) : (
-              <div className="rounded-lg border border-slate-200 bg-white">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Edits</TableHead>
-                      <TableHead className="text-right">Words</TableHead>
-                      <TableHead className="text-right">Articles</TableHead>
-                      <TableHead className="text-right">Uploads</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(editorHistory?.series ?? []).map((row) => (
-                      <TableRow key={row.date}>
-                        <TableCell className="font-medium">{row.date.slice(0, 10)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.edits)}
-                          {editorDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.edits)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.wordsAdded)}
-                          {editorDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.wordsAdded)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.articlesCreated)}
-                          {editorDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.articlesCreated)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.commonsUploads)}
-                          {editorDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.commonsUploads)}
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Article History</CardTitle>
-            <p className="text-sm text-muted-foreground">Daily pageviews and metadata snapshot.</p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="space-y-2">
-                <Label>Article ID</Label>
-                <Input
-                  value={articleId}
-                  onChange={(e) => setArticleId(e.target.value)}
-                  placeholder="Paste article ID"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Copy from{" "}
-                  <Link to="/articles" className="underline">
-                    Articles list
-                  </Link>
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Start Date</Label>
-                <Input
-                  type="date"
-                  value={articleStart}
-                  onChange={(e) => setArticleStart(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>End Date</Label>
-                <Input
-                  type="date"
-                  value={articleEnd}
-                  onChange={(e) => setArticleEnd(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={articleDelta}
-                    onChange={(e) => setArticleDelta(e.target.checked)}
-                  />
-                  Show delta
-                </label>
-              </div>
-            </div>
-
-            {!articleId ? (
-              <div className="text-sm text-muted-foreground">
-                Enter an article ID to view history.
-              </div>
-            ) : articleLoading ? (
-              <div className="text-sm text-muted-foreground">Loading article history...</div>
-            ) : (articleHistory?.series?.length ?? 0) === 0 ? (
-              <div className="text-sm text-muted-foreground">No history data for this article.</div>
-            ) : (
-              <div className="rounded-lg border border-slate-200 bg-white">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Pageviews</TableHead>
-                      <TableHead className="text-right">Characters</TableHead>
-                      <TableHead className="text-right">References</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(articleHistory?.series ?? []).map((row) => (
-                      <TableRow key={row.date}>
-                        <TableCell className="font-medium">{row.date.slice(0, 10)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.pageviews)}
-                          {articleDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.pageviews)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.characterSum)}
-                          {articleDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.characterSum)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatNumber(row.referencesCount)}
-                          {articleDelta && (
-                            <span className="block text-xs text-muted-foreground">
-                              delta {formatDelta(row.delta?.referencesCount)}
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Snapshot Utilities</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Use this page after running sync to fill historical snapshots.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => {
-              const payload = {
-                startDate: toIsoDate(startDate),
-                endDate: toIsoDate(endDate),
-              };
-              fetch("/api/stats/history/backfill", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              });
-            }}
+      <Tabs defaultValue="reports" className="w-full space-y-6">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto p-1 bg-slate-100 rounded-lg">
+          <TabsTrigger
+            value="reports"
+            className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm py-2"
           >
-            Backfill Current Range
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            This queues a snapshot backfill for the selected date range.
-          </span>
-        </CardContent>
-      </Card>
+            Reports
+          </TabsTrigger>
+          <TabsTrigger
+            value="daily"
+            className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm py-2"
+          >
+            Daily History
+          </TabsTrigger>
+          <TabsTrigger
+            value="entity"
+            className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm py-2"
+          >
+            Entity Lookup
+          </TabsTrigger>
+          <TabsTrigger
+            value="utilities"
+            className="data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm py-2"
+          >
+            Snapshot Utilities
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="reports" className="space-y-8">
+          <AnnualReportSection />
+          <MonthlyReportSection />
+        </TabsContent>
+
+        <TabsContent value="daily" className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 bg-slate-50/50 pb-4">
+              <div>
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Global Daily History
+                </CardTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  Daily snapshot table with optional source/wiki filter.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-medium bg-white px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 shadow-sm">
+                <Calendar className="h-3.5 w-3.5" />
+                {startDate} to {endDate}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Start Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    End Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Wiki Project
+                  </Label>
+                  <select
+                    value={wikiProject}
+                    onChange={(e) => setWikiProject(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none"
+                  >
+                    <option value="all">All Wikis</option>
+                    {(wikiStats?.wikiStats ?? []).map((stat) => (
+                      <option key={stat.wiki} value={stat.wiki}>
+                        {stat.wiki}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Source
+                  </Label>
+                  <select
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none"
+                  >
+                    <option value="all">All Sources</option>
+                    <option value="OUTREACH_DASHBOARD">Outreach Dashboard</option>
+                    <option value="MEDIAWIKI">MediaWiki</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 text-sm text-slate-600">
+                  <Filter className="h-4 w-4" />
+                  <span className="font-medium">View Options:</span>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={withDelta}
+                    onChange={(e) => setWithDelta(e.target.checked)}
+                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                  Show daily delta
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                {[
+                  {
+                    title: "Articles Created",
+                    value: latest?.articlesCreated,
+                    delta: latest?.delta?.articlesCreated,
+                    icon: FileText,
+                  },
+                  {
+                    title: "Articles Edited",
+                    value: latest?.articlesEdited,
+                    delta: latest?.delta?.articlesEdited,
+                    icon: LineChart,
+                  },
+                  {
+                    title: "Editors Active",
+                    value: latest?.editors,
+                    delta: latest?.delta?.editors,
+                    icon: Users,
+                  },
+                  {
+                    title: "Total Edits",
+                    value: latest?.edits,
+                    delta: latest?.delta?.edits,
+                    icon: LineChart,
+                  },
+                  {
+                    title: "Words Added",
+                    value: latest?.wordsAdded,
+                    delta: latest?.delta?.wordsAdded,
+                    icon: LineChart,
+                  },
+                  {
+                    title: "References Added",
+                    value: latest?.referencesAdded,
+                    delta: latest?.delta?.referencesAdded,
+                    icon: BookOpen,
+                  },
+                  {
+                    title: "Article Views",
+                    value: latest?.pageviews,
+                    delta: latest?.delta?.pageviews,
+                    icon: Eye,
+                  },
+                  {
+                    title: "Commons Uploads",
+                    value: latest?.commonsUploads,
+                    delta: latest?.delta?.commonsUploads,
+                    icon: Upload,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.title}
+                    className="rounded-lg border border-slate-200 p-4 bg-white shadow-sm"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                        {item.title}
+                      </span>
+                      <item.icon className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-slate-900">
+                      {formatNumber(item.value)}
+                    </div>
+                    {withDelta && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        delta {formatDelta(item.delta)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-slate-50">
+                    <TableRow>
+                      <TableHead className="w-[120px] font-semibold text-slate-700">Date</TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Total contribution edits recorded on this day"
+                      >
+                        Edits
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Estimated words added from contribution byte deltas"
+                      >
+                        Words
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Articles first created on this day"
+                      >
+                        Articles Created
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Unique articles edited on this day"
+                      >
+                        Articles Edited
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Unique active editors on this day"
+                      >
+                        Editors
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="References added by newly created articles on this day"
+                      >
+                        Refs
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Pageviews captured for this day"
+                      >
+                        Views
+                      </TableHead>
+                      <TableHead
+                        className="text-right font-semibold text-slate-700"
+                        title="Commons uploads made on this day"
+                      >
+                        Uploads
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-12 text-sm text-slate-500">
+                          Loading history...
+                        </TableCell>
+                      </TableRow>
+                    ) : series.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-12 text-sm text-slate-500">
+                          No history data available for this range.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      series.map((row) => (
+                        <TableRow key={row.date} className="hover:bg-slate-50/50">
+                          <TableCell className="font-medium text-slate-900">
+                            {row.date.slice(0, 10)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.edits)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.wordsAdded)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.articlesCreated)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.articlesEdited)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.editors)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.referencesAdded)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.pageviews)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-slate-700">
+                            {formatNumber(row.commonsUploads)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="entity" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <Card>
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Editor History
+                </CardTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  Paste an editor ID to inspect daily edits, words, created articles, and uploads.
+                </p>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="space-y-2 col-span-1 md:col-span-2">
+                    <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Editor ID
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={editorId}
+                        onChange={(e) => setEditorId(e.target.value)}
+                        placeholder="Paste editor ID"
+                        className="bg-white"
+                      />
+                      <Button variant="outline" asChild>
+                        <Link to="/editors">List</Link>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Start Date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={editorStart}
+                      onChange={(e) => setEditorStart(e.target.value)}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      End Date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={editorEnd}
+                      onChange={(e) => setEditorEnd(e.target.value)}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="flex items-end col-span-1 md:col-span-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editorDelta}
+                        onChange={(e) => setEditorDelta(e.target.checked)}
+                        className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                      />
+                      Show daily delta
+                    </label>
+                  </div>
+                </div>
+
+                {!editorId ? (
+                  <div className="p-8 text-center text-sm text-slate-500 bg-slate-50 rounded-lg border border-slate-100 border-dashed">
+                    Enter an editor ID to view history.
+                  </div>
+                ) : editorLoading ? (
+                  <div className="p-8 text-center text-sm text-slate-500">
+                    Loading editor history...
+                  </div>
+                ) : (editorHistory?.series?.length ?? 0) === 0 ? (
+                  <div className="p-8 text-center text-sm text-slate-500">
+                    No history data for this editor.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-white overflow-hidden max-h-[500px] overflow-y-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-50 sticky top-0">
+                        <TableRow>
+                          <TableHead className="font-semibold text-slate-700">Date</TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            Edits
+                          </TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            Words
+                          </TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            Articles
+                          </TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            Uploads
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(editorHistory?.series ?? []).map((row) => (
+                          <TableRow key={row.date} className="hover:bg-slate-50/50">
+                            <TableCell className="font-medium text-slate-900">
+                              {row.date.slice(0, 10)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.edits)}
+                              {editorDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.edits)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.wordsAdded)}
+                              {editorDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.wordsAdded)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.articlesCreated)}
+                              {editorDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.articlesCreated)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.commonsUploads)}
+                              {editorDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.commonsUploads)}
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Article History
+                </CardTitle>
+                <p className="text-sm text-slate-500 mt-1">
+                  Paste an article ID to inspect day-by-day pageviews and content metrics.
+                </p>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="space-y-2 col-span-1 md:col-span-2">
+                    <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Article ID
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={articleId}
+                        onChange={(e) => setArticleId(e.target.value)}
+                        placeholder="Paste article ID"
+                        className="bg-white"
+                      />
+                      <Button variant="outline" asChild>
+                        <Link to="/articles">List</Link>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Start Date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={articleStart}
+                      onChange={(e) => setArticleStart(e.target.value)}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      End Date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={articleEnd}
+                      onChange={(e) => setArticleEnd(e.target.value)}
+                      className="bg-white"
+                    />
+                  </div>
+                  <div className="flex items-end col-span-1 md:col-span-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={articleDelta}
+                        onChange={(e) => setArticleDelta(e.target.checked)}
+                        className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                      />
+                      Show daily delta
+                    </label>
+                  </div>
+                </div>
+
+                {!articleId ? (
+                  <div className="p-8 text-center text-sm text-slate-500 bg-slate-50 rounded-lg border border-slate-100 border-dashed">
+                    Enter an article ID to view history.
+                  </div>
+                ) : articleLoading ? (
+                  <div className="p-8 text-center text-sm text-slate-500">
+                    Loading article history...
+                  </div>
+                ) : (articleHistory?.series?.length ?? 0) === 0 ? (
+                  <div className="p-8 text-center text-sm text-slate-500">
+                    No history data for this article.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-white overflow-hidden max-h-[500px] overflow-y-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-50 sticky top-0">
+                        <TableRow>
+                          <TableHead className="font-semibold text-slate-700">Date</TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            Pageviews
+                          </TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            Characters
+                          </TableHead>
+                          <TableHead className="text-right font-semibold text-slate-700">
+                            References
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(articleHistory?.series ?? []).map((row) => (
+                          <TableRow key={row.date} className="hover:bg-slate-50/50">
+                            <TableCell className="font-medium text-slate-900">
+                              {row.date.slice(0, 10)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.pageviews)}
+                              {articleDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.pageviews)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.characterSum)}
+                              {articleDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.characterSum)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-slate-700">
+                              {formatNumber(row.referencesCount)}
+                              {articleDelta && (
+                                <span className="block text-xs text-muted-foreground">
+                                  delta {formatDelta(row.delta?.referencesCount)}
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="utilities" className="space-y-6">
+          <Card>
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
+              <CardTitle className="text-lg font-semibold text-slate-900">
+                Snapshot Utilities
+              </CardTitle>
+              <p className="text-sm text-slate-500 mt-1">
+                Use after sync runs to fill missing historical days for the selected date range.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Backfill Start Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Backfill End Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-4 text-sm text-blue-900">
+                <p className="font-semibold mb-2">How to use</p>
+                <ol className="list-decimal pl-4 space-y-1 text-blue-800">
+                  <li>Set the start and end date above.</li>
+                  <li>
+                    Click <strong>Backfill Current Range</strong> below.
+                  </li>
+                  <li>Monitor progress in Sync Job Manager.</li>
+                </ol>
+                <p className="mt-2 text-xs text-blue-700">
+                  Re-running the same date updates snapshots for that day (no duplicate day rows).
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="default" onClick={handleBackfillSnapshots}>
+                  Backfill Current Range
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/admin/sync-jobs">Open Sync Job Manager</Link>
+                </Button>
+              </div>
+
+              {snapshotStatus ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">
+                  {snapshotStatus}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
