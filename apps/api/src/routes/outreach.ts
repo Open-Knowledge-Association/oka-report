@@ -133,6 +133,12 @@ outreachRoutes.post("/backfill-authors", async (c) => {
               where: { id: record.id },
               data: { isAuthor: true },
             });
+
+            await prisma.article.update({
+              where: { id: record.article.id },
+              data: { createdByEditorId: record.editor.id },
+            });
+
             authorsFound++;
           }
         }

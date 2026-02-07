@@ -240,6 +240,14 @@ export class OutreachArticleSyncService {
                           where: { id: articleEditor.id },
                           data: { isAuthor: true },
                         });
+
+                        // Also set createdByEditorId on the article for consistency
+                        if (!article.createdByEditorId) {
+                          await this.prisma.article.update({
+                            where: { id: article.id },
+                            data: { createdByEditorId: editor.id },
+                          });
+                        }
                       }
                     }
                   } catch (error) {

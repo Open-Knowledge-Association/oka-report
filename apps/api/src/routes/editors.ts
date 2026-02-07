@@ -157,7 +157,14 @@ editorsRoutes.post("/", async (c) => {
 
 editorsRoutes.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const editor = await prisma.editor.findUnique({ where: { id } });
+  let editor = await prisma.editor.findUnique({ where: { id } });
+
+  // If not found by ID, try finding by externalId (for Outreach IDs)
+  if (!editor) {
+    editor = await prisma.editor.findFirst({
+      where: { externalId: id },
+    });
+  }
 
   if (!editor) {
     return c.json(
@@ -166,8 +173,8 @@ editorsRoutes.get("/:id", async (c) => {
     );
   }
 
-  const contributions = await prisma.contribution.count({ where: { editorId: id } });
-  const uploads = await prisma.commonsUpload.count({ where: { editorId: id } });
+  const contributions = await prisma.contribution.count({ where: { editorId: editor.id } });
+  const uploads = await prisma.commonsUpload.count({ where: { editorId: editor.id } });
 
   return c.json({
     success: true,
@@ -309,7 +316,7 @@ editorsRoutes.get("/:id/commons-uploads", async (c) => {
 editorsRoutes.get("/:id/profile", async (c) => {
   const id = c.req.param("id");
 
-  const editor = await prisma.editor.findUnique({
+  let editor = await prisma.editor.findUnique({
     where: { id },
     include: {
       articles: {
@@ -330,6 +337,28 @@ editorsRoutes.get("/:id/profile", async (c) => {
   });
 
   if (!editor) {
+    editor = await prisma.editor.findFirst({
+      where: { externalId: id },
+      include: {
+        articles: {
+          include: {
+            article: {
+              include: {
+                pageviews: { orderBy: { date: "desc" }, take: 1 },
+              },
+            },
+          },
+        },
+        createdArticles: {
+          include: {
+            pageviews: { orderBy: { date: "desc" }, take: 1 },
+          },
+        },
+      },
+    });
+  }
+
+  if (!editor) {
     return c.json(
       {
         success: false,
@@ -339,18 +368,23 @@ editorsRoutes.get("/:id/profile", async (c) => {
     );
   }
 
-  const attachedArticles = editor.articles.map((ae) => ae.article);
-  const articleMap = new Map(attachedArticles.map((article) => [article.id, article]));
-  for (const article of editor.createdArticles) {
-    articleMap.set(article.id, article);
-  }
+  const createdArticles = editor.createdArticles;
+  const editedArticles = editor.articles
+    .filter((ae) => !createdArticles.some((ca) => ca.id === ae.article.id))
+    .map((ae) => ae.article);
 
-  const articles = Array.from(articleMap.values());
-  const articlesCount = articles.length;
-  const totalEdits = articles.reduce((sum, article) => sum + (article.characterSum > 0 ? 1 : 0), 0);
-  const charactersAdded = articles.reduce((sum, article) => sum + article.characterSum, 0);
-  const referencesAdded = articles.reduce((sum, article) => sum + article.referencesCount, 0);
-  const pageviews = articles.reduce((sum, article) => {
+  const articles = createdArticles;
+  const articlesCount = createdArticles.length;
+  const totalEdits = createdArticles.reduce(
+    (sum, article) => sum + (article.characterSum > 0 ? 1 : 0),
+    0,
+  );
+  const charactersAdded = createdArticles.reduce((sum, article) => sum + article.characterSum, 0);
+  const referencesAdded = createdArticles.reduce(
+    (sum, article) => sum + article.referencesCount,
+    0,
+  );
+  const pageviews = createdArticles.reduce((sum, article) => {
     const latestPageview = article.pageviews[0];
     return sum + (latestPageview?.cumulativeViews ?? latestPageview?.views ?? 0);
   }, 0);
@@ -361,6 +395,7 @@ editorsRoutes.get("/:id/profile", async (c) => {
     charactersAdded,
     referencesAdded,
     pageviews,
+    editedArticlesCount: editedArticles.length,
   };
 
   let wikimediaProfile = null;
@@ -442,6 +477,23 @@ editorsRoutes.get("/:id/profile", async (c) => {
           referencesCount: article.referencesCount,
           isNewArticle: article.isNewArticle,
           rating: article.rating,
+          isCreated: true,
+        };
+      }),
+      editedArticles: editedArticles.map((article) => {
+        const { language, project } = parseWikiProject(article.wikiProject);
+        return {
+          id: article.id,
+          title: article.title,
+          wikiProject: article.wikiProject,
+          language,
+          project,
+          url: article.url,
+          characterSum: article.characterSum,
+          referencesCount: article.referencesCount,
+          isNewArticle: article.isNewArticle,
+          rating: article.rating,
+          isCreated: false,
         };
       }),
     },
@@ -453,9 +505,16 @@ editorsRoutes.get("/:id/daily-stats", async (c) => {
   const from = c.req.query("from");
   const to = c.req.query("to");
 
-  const editor = await prisma.editor.findUnique({
+  let editor = await prisma.editor.findUnique({
     where: { id },
   });
+
+  // If not found by ID, try finding by externalId (for Outreach IDs)
+  if (!editor) {
+    editor = await prisma.editor.findFirst({
+      where: { externalId: id },
+    });
+  }
 
   if (!editor) {
     return c.json(
@@ -468,7 +527,7 @@ editorsRoutes.get("/:id/daily-stats", async (c) => {
   }
 
   const where: { editorId: string; date?: { gte?: Date; lte?: Date } } = {
-    editorId: id,
+    editorId: editor.id,
   };
 
   if (from || to) {
