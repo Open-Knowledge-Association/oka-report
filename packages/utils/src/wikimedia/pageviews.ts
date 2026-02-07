@@ -28,7 +28,9 @@ export const getPageviews = async (
   startDate: string,
   endDate: string,
 ): Promise<PageviewData[]> => {
-  const encodedArticle = encodeURIComponent(article);
+  // Normalize title: Wikimedia Pageviews API expects underscores instead of spaces
+  const normalizedTitle = article.replace(/ /g, "_");
+  const encodedArticle = encodeURIComponent(normalizedTitle);
   const endpoint = `${PAGEVIEWS_BASE_URL}/metrics/pageviews/per-article/${project}/all-access/user/${encodedArticle}/daily/${startDate}/${endDate}`;
 
   const response = await client.request<PageviewsResponse>(endpoint);
