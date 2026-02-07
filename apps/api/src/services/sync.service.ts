@@ -203,6 +203,7 @@ export class SyncService {
     });
 
     let syncedCount = 0;
+    const skipped404: { title: string; wikiProject: string; agentType: string }[] = [];
 
     for (const article of articles) {
       if (jobId && (await this.checkCancelled(jobId))) {
@@ -212,45 +213,65 @@ export class SyncService {
       const startDate = since ?? article.articleCreatedAt ?? new Date();
       const endDate = new Date();
 
-      let pageviews: Array<{ date: string; views: number }>;
-      try {
-        pageviews = await this.wikimediaClient.getPageviews(
-          article.title,
-          toPageviewsProject(article.wikiProject),
-          formatDateForPageviews(startDate),
-          formatDateForPageviews(endDate),
-        );
-      } catch (error) {
-        if (error instanceof WikimediaClientError && error.status === 404) {
-          console.warn(
-            `Pageviews unavailable for article "${article.title}" (${article.id}) on ${article.wikiProject}: 404 Not Found`,
+      for (const agentType of ["all-agents", "user"] as const) {
+        let pageviews: Array<{ date: string; views: number }>;
+        try {
+          pageviews = await this.wikimediaClient.getPageviews(
+            article.title,
+            toPageviewsProject(article.wikiProject),
+            formatDateForPageviews(startDate),
+            formatDateForPageviews(endDate),
+            agentType,
           );
-          continue;
+        } catch (error) {
+          if (error instanceof WikimediaClientError && error.status === 404) {
+            skipped404.push({
+              title: article.title,
+              wikiProject: article.wikiProject,
+              agentType,
+            });
+            continue;
+          }
+          throw error;
         }
-        throw error;
-      }
 
-      for (const item of pageviews) {
-        await this.prisma.pageview.upsert({
-          where: {
-            articleId_date: {
+        for (const item of pageviews) {
+          await this.prisma.pageview.upsert({
+            where: {
+              articleId_date_type_agentType: {
+                articleId: article.id,
+                date: parsePageviewDate(item.date),
+                type: "DAILY",
+                agentType: agentType === "user" ? "USER" : "ALL_AGENTS",
+              },
+            },
+            create: {
               articleId: article.id,
               date: parsePageviewDate(item.date),
+              type: "DAILY",
+              agentType: agentType === "user" ? "USER" : "ALL_AGENTS",
+              views: item.views,
             },
-          },
-          create: {
-            articleId: article.id,
-            date: parsePageviewDate(item.date),
-            type: "DAILY",
-            views: item.views,
-          },
-          update: {
-            type: "DAILY",
-            views: item.views,
-          },
-        });
-        syncedCount += 1;
+            update: {
+              views: item.views,
+            },
+          });
+          syncedCount += 1;
+        }
       }
+    }
+
+    if (jobId && skipped404.length > 0) {
+      await this.prisma.syncJob.update({
+        where: { id: jobId },
+        data: {
+          metadata: {
+            skipped404Count: skipped404.length,
+            skipped404Sample: skipped404.slice(0, 10),
+          },
+        },
+      });
+      console.log(`Pageview sync: ${skipped404.length} article/agent combinations returned 404`);
     }
 
     return syncedCount;

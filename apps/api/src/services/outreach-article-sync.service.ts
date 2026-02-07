@@ -185,20 +185,22 @@ export class OutreachArticleSyncService {
 
               await this.prisma.pageview.upsert({
                 where: {
-                  articleId_date: {
+                  articleId_date_type_agentType: {
                     articleId: article.id,
                     date: today,
+                    type: "CUMULATIVE",
+                    agentType: "ALL_AGENTS",
                   },
                 },
                 create: {
                   articleId: article.id,
                   date: today,
                   type: "CUMULATIVE",
+                  agentType: "ALL_AGENTS",
                   views: dashboardArticle.view_count,
                   cumulativeViews: dashboardArticle.view_count,
                 },
                 update: {
-                  type: "CUMULATIVE",
                   views: dashboardArticle.view_count,
                   cumulativeViews: dashboardArticle.view_count,
                 },
