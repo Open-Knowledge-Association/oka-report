@@ -246,32 +246,6 @@ export function AnnualReportSection() {
             </select>
           </div>
         </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Wiki Project
-            </Label>
-            <Input
-              value={wikiProject}
-              onChange={(e) => setWikiProject(e.target.value)}
-              placeholder="e.g. id.wikipedia.org"
-              className="bg-white"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Format
-            </Label>
-            <select
-              value={format}
-              onChange={(e) => setFormat(e.target.value as "pdf" | "csv" | "json")}
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none"
-            >
-              <option value="pdf">PDF Report</option>
-              <option value="csv">CSV Data</option>
-              <option value="json">JSON Data</option>
-            </select>
-          </div>
-        </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
