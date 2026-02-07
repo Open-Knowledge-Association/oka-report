@@ -1,0 +1,5 @@
+export default {
+  routesDirectory: "./src/routes",
+  generatedRouteTree: "./src/routeTree.gen.ts",
+  routeFileIgnorePattern: "\\.(test|spec)\\.(tsx?|js)$",
+};
