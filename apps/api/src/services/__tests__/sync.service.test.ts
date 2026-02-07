@@ -102,9 +102,8 @@ describe("SyncService", () => {
 
       const result = await service.syncArticlePageviews();
 
-      // Expect 2 pageviews synced (first and third articles)
-      expect(result).toBe(2);
-      expect(mockPrisma.pageview.upsert).toHaveBeenCalledTimes(2);
+      expect(result).toBe(5);
+      expect(mockPrisma.pageview.upsert).toHaveBeenCalledTimes(5);
     });
 
     it("should propagate non-404 errors and fail sync", async () => {
@@ -225,9 +224,15 @@ describe("SyncService", () => {
 
       const result = await service.syncArticlePageviews();
 
-      // Expect both articles synced with 4 pageview entries (2 dates × 2 articles)
-      expect(result).toBe(4);
-      expect(mockPrisma.pageview.upsert).toHaveBeenCalledTimes(4);
+      expect(result).toBe(8);
+      expect(mockPrisma.pageview.upsert).toHaveBeenCalledTimes(8);
+
+      const getPageviewsCalls = mockWikimediaClient.getPageviews.mock.calls;
+      expect(getPageviewsCalls.length).toBe(4);
+
+      const agentTypes = getPageviewsCalls.map((call: any) => call[4]);
+      expect(agentTypes).toContain("all-agents");
+      expect(agentTypes).toContain("user");
     });
   });
 });

@@ -148,7 +148,6 @@ describe("OutreachArticleSyncService", () => {
           rating: "B",
         },
         update: {
-          pageId: null,
           title: "Test_Article",
           wikiProject,
           source: "OUTREACH_DASHBOARD",
@@ -246,20 +245,22 @@ describe("OutreachArticleSyncService", () => {
 
       expect(mockPrisma.pageview.upsert).toHaveBeenCalledWith({
         where: {
-          articleId_date: {
+          articleId_date_type_agentType: {
             articleId: "article-1",
             date: today,
+            type: "CUMULATIVE",
+            agentType: "ALL_AGENTS",
           },
         },
         create: {
           articleId: "article-1",
           date: today,
           type: "CUMULATIVE",
+          agentType: "ALL_AGENTS",
           views: 1000,
           cumulativeViews: 1000,
         },
         update: {
-          type: "CUMULATIVE",
           views: 1000,
           cumulativeViews: 1000,
         },
