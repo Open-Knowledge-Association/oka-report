@@ -3,6 +3,10 @@ import "dotenv/config";
 import { apiRoutes } from "./routes";
 import { errorHandler } from "./middleware/error-handler";
 import { startScheduler } from "./jobs/scheduler";
+import { prisma, checkDatabase } from "@repo/db";
+import { BootstrapService } from "./services/bootstrap.service";
+import { startBootstrapWatcher } from "./jobs/bootstrap-watcher";
+import { triggerBootstrapSync } from "./jobs/bootstrap-trigger";
 
 const app = new Hono();
 
@@ -13,7 +17,45 @@ app.get("/", (c) => {
   return c.json({ message: "OKA Stats API" });
 });
 
-startScheduler();
+const initializeServer = async () => {
+  try {
+    await checkDatabase();
+    console.log("[Server] Database connection verified");
+
+    const bootstrapService = new BootstrapService(prisma);
+
+    await bootstrapService.reconcileStaleRunningState();
+    console.log("[Server] Bootstrap state reconciled");
+
+    const state = await bootstrapService.getState();
+
+    if (!state || state.state === "pending") {
+      console.log("[Server] Bootstrap pending - triggering first-deploy sync");
+      await triggerBootstrapSync(bootstrapService);
+    } else if (state.state === "failed") {
+      console.warn(
+        `[Server] Bootstrap failed previously: ${state.failureReason ?? "unknown"}. Manual retry required.`,
+      );
+    } else if (state.state === "running") {
+      console.log(
+        `[Server] Bootstrap running (job ${state.rootJobId}) - watcher will monitor completion`,
+      );
+    } else if (state.state === "completed") {
+      console.log("[Server] Bootstrap completed - scheduled jobs enabled");
+    }
+
+    startBootstrapWatcher(prisma, bootstrapService);
+    console.log("[Server] Bootstrap watcher started");
+
+    startScheduler();
+    console.log("[Server] Scheduler started");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Server] Initialization error: ${message}`);
+  }
+};
+
+initializeServer();
 
 // Export app for tests
 export { app };
@@ -24,4 +66,3 @@ export default {
   fetch: app.fetch,
   idleTimeout: 60,
 };
-// Force rebuild Kam 05 Feb 2026 19:18:25 WIB

@@ -27,6 +27,7 @@ export type OutreachArticleEditor = {
 
 export const apiFetch = async <T>(path: string, init?: RequestInit) => {
   const response = await fetch(`/api${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -116,6 +117,7 @@ export type SyncStatus = {
     wordsAdded: number;
     referencesAdded: number;
     pageviews: number;
+    commonsUploads: number;
   };
   external: {
     editorsCount: number;
@@ -132,6 +134,58 @@ export type SyncStatus = {
     completedAt: string;
     metadata: Record<string, unknown>;
   } | null;
+  deltas: {
+    editors: number;
+    articles: number;
+    articlesCreated: number;
+    wordsAdded: number;
+    referencesAdded: number;
+    pageviews: number;
+    commonsUploads: number;
+  } | null;
+  jobs: {
+    active: Array<{
+      id: string;
+      jobType: string;
+      status: string;
+      createdAt: string;
+      startedAt?: string | null;
+      metadata?: Record<string, unknown> | null;
+    }>;
+    latestByType: Array<{
+      id: string;
+      jobType: string;
+      status: string;
+      createdAt: string;
+      startedAt?: string | null;
+      completedAt?: string | null;
+      error?: string | null;
+      metadata?: Record<string, unknown> | null;
+    }>;
+  };
+  sources: {
+    localSyncStatusApi: string;
+    outreachCourseApi: string;
+    outreachCoursePage: string;
+  };
+  raw: {
+    local: {
+      editorsCount: number;
+      articlesCount: number;
+      articlesCreated: number;
+      wordsAdded: number;
+      referencesAdded: number;
+      pageviews: number;
+      commonsUploads: number;
+      commonsUploadsComparable?: number;
+    };
+    external: Record<string, unknown> | null;
+  };
+  syncHealth: {
+    staleHours: number | null;
+    hasActiveJobs: boolean;
+    latestFailedJobs: string[];
+  };
   syncRequired: boolean;
 };
 
@@ -362,6 +416,17 @@ export type AnnualStats = {
     referencesAdded: number;
     commonsUploads: number;
   };
+  monthlyPerformance?: Array<{
+    period: string;
+    edits: number;
+    wordsAdded: number;
+    pageviews: number;
+    articlesCreated: number;
+    articlesEdited: number;
+    editors: number;
+    referencesAdded: number;
+    commonsUploads: number;
+  }>;
   yoy?: {
     articlesCreated: { current: number; previous: number; changePercent: number };
     pageviews: { current: number; previous: number; changePercent: number };
@@ -379,6 +444,7 @@ export type TopArticle = {
 
 export type TopArticlesResponse = {
   year: number;
+  month?: number | null;
   wikiProject: string | null;
   articles: TopArticle[];
   totalCount: number;
@@ -399,11 +465,13 @@ export const fetchAnnualStats = async (params: {
 
 export const fetchTopArticles = async (params: {
   year: number;
+  month?: number;
   wikiProject?: string;
   limit?: number;
 }): Promise<TopArticlesResponse> => {
   const query = new URLSearchParams();
   query.set("year", String(params.year));
+  if (params.month) query.set("month", String(params.month));
   if (params.wikiProject) query.set("wikiProject", params.wikiProject);
   if (params.limit) query.set("limit", String(params.limit));
 
@@ -451,6 +519,17 @@ export type MonthlyStats = {
     referencesAdded: number;
     commonsUploads: number;
   };
+  dailyPerformance?: Array<{
+    period: string;
+    edits: number;
+    wordsAdded: number;
+    pageviews: number;
+    articlesCreated: number;
+    articlesEdited: number;
+    editors: number;
+    referencesAdded: number;
+    commonsUploads: number;
+  }>;
   mom?: {
     articlesCreated: { current: number; previous: number; changePercent: number };
     pageviews: { current: number; previous: number; changePercent: number };
@@ -549,4 +628,19 @@ export type SchedulerEvent = {
 
 export const fetchSchedulerEvents = async (id: string, limit = 20) => {
   return apiFetch<{ events: SchedulerEvent[] }>(`/scheduler/${id}/events?limit=${limit}`);
+};
+
+export type SchedulerRunLog = {
+  id: string;
+  jobType: string;
+  status: string;
+  createdAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  error?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export const fetchSchedulerLogs = async (id: string, limit = 20) => {
+  return apiFetch<{ logs: SchedulerRunLog[] }>(`/scheduler/${id}/logs?limit=${limit}`);
 };

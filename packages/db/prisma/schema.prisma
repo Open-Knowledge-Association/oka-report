@@ -441,6 +441,45 @@ model SchedulerSettingEvent {
   @@map("scheduler_setting_events")
 }
 
+/// Bootstrap state singleton for first-deploy full sync lifecycle
+/// Ensures only one bootstrap runs and gates all scheduled jobs until completion
+model BootstrapState {
+  /// Singleton ID - always "singleton" to enforce single row
+  id String @id @default("singleton")
+
+  /// Current bootstrap state: pending, running, completed, failed
+  /// - pending: not yet started
+  /// - running: bootstrap in progress
+  /// - completed: bootstrap finished successfully
+  /// - failed: bootstrap failed and requires retry
+  state String @default("pending")
+
+  /// When bootstrap was started
+  startedAt DateTime?
+
+  /// When bootstrap completed successfully
+  completedAt DateTime?
+
+  /// Lease expiration timestamp for timeout safeguard (default 48h)
+  /// If running state exists past this time, considered stale
+  leaseExpiresAt DateTime?
+
+  /// Root sync job ID for the bootstrap full sync
+  /// Used to track bootstrap progress and completion
+  rootJobId String?
+
+  /// When bootstrap failed
+  failedAt DateTime?
+
+  /// Reason for bootstrap failure
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bootstrap_state")
+}
+
 /// Daily stats per editor for reporting
 model EditorDailyStat {
   id String @id @default(cuid())
@@ -499,17 +538,69 @@ model User {
   /// Example: "Admin User"
   name String?
 
-  /// Hashed password (bcrypt)
+  /// Google OAuth ID for Google sign-in
+  googleId String? @unique
+
+  /// Hashed password (bcrypt) - optional for OAuth-only users
   /// Never store plain text passwords
-  password String
+  password String?
 
   /// User role for access control
-  /// Values: "admin" (full access), "viewer" (read-only)
-  /// Example: "admin"
+  /// Values: "admin" (full access), "editor" (can trigger syncs), "viewer" (read-only)
+  /// Example: "viewer"
   role String @default("viewer")
+
+  /// Whether the user account is active
+  isActive Boolean @default(true)
+
+  /// User sessions
+  sessions Session[]
+
+  /// Audit logs created by this user
+  audits AuditLog[] @relation("ActorAudits")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+/// User sessions for cookie-based auth
+model Session {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+/// Audit log for auth and admin actions
+model AuditLog {
+  id String @id @default(cuid())
+
+  actorId String?
+  actor   User?   @relation("ActorAudits", fields: [actorId], references: [id])
+
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
 }

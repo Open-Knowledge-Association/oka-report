@@ -1,8 +1,9 @@
 {
-  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/fix-pageviews-agent-type.md",
-  "started_at": "2026-02-07T02:53:29.552Z",
+  "active_plan": "/home/rio/Works/oka/report/.sisyphus/plans/google-auth-rbac-audit.md",
+  "started_at": "2026-02-08T08:08:45.144Z",
   "session_ids": [
-    "ses_3ccd66013ffewNIRDAmT7CklHF"
+    "ses_3c7d9d1d4ffe8z92f9YyQ5Oz68"
   ],
-  "plan_name": "fix-pageviews-agent-type"
+  "plan_name": "google-auth-rbac-audit",
+  "agent": "atlas"
 }

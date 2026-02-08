@@ -12,6 +12,25 @@ Based on [HIGH_LEVEL_DESIGN.md](HIGH_LEVEL_DESIGN.md), the platform requires:
 - REST API for data access
 - Frontend dashboard for visualization
 
+## Sync Ops Cheat Sheet (Daily Use)
+
+Use this as the fastest operational decision guide.
+
+| If you see this                                   | Run this first              | Then run                                   | Notes                                               |
+| ------------------------------------------------- | --------------------------- | ------------------------------------------ | --------------------------------------------------- |
+| Views exist but edits/words are zero on some wiki | `contributions`             | `history_backfill` (affected range)        | Usually means contribution sync is stale/incomplete |
+| Uploads are zero on Dashboard/Editors/History     | `commons`                   | `history_backfill`                         | `commons_uploads` must be populated first           |
+| Pageviews stale/missing                           | `pageviews`                 | `history_backfill` (if history pages used) | Refresh raw pageviews before snapshots              |
+| New participants not visible                      | `editors`                   | `full` or `contributions`                  | Roster must exist before contribution linkage       |
+| New Outreach articles not visible                 | `outreach_articles`         | `contributions` + `pageviews`              | Article catalog updates first                       |
+| Full sync failed midway                           | Retry failed child job only | `history_backfill` if reports look off     | Faster than rerunning entire full sync              |
+
+Recommended manual recovery order:
+
+1. Source jobs: `editors` -> `outreach_articles` -> `contributions` -> `pageviews` -> `commons`
+2. Rebuild snapshots: `history_backfill`
+3. Validate UI: Dashboard, Editors, Articles, History
+
 ---
 
 ## Phase 1: Database & Core Infrastructure ✅

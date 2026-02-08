@@ -27,6 +27,7 @@ export const syncRoutes = new Hono();
 syncRoutes.post("/trigger", async (c) => {
   const body = TriggerSyncSchema.parse(await c.req.json());
   const jobType = body.jobType ?? "full";
+  const syncMode = body.syncMode ?? "manual_full";
 
   const activeJob = await syncService.findActiveJob(jobType);
   if (activeJob) {
@@ -61,6 +62,7 @@ syncRoutes.post("/trigger", async (c) => {
           undefined,
           undefined,
           job.id,
+          syncMode,
         );
         await syncService.completeSyncJob(job.id, { pageviewsSynced });
         return;
@@ -115,6 +117,7 @@ syncRoutes.post("/trigger", async (c) => {
           articlesSynced: articlesResult.imported + articlesResult.updated,
         },
         FULL_SYNC_CHILD_JOB_TYPES,
+        syncMode,
       );
     } catch (error) {
       await syncService.failSyncJob(job.id, error);
@@ -187,13 +190,7 @@ syncRoutes.post("/jobs/:id/cancel", async (c) => {
     );
   }
 
-  await prisma.syncJob.update({
-    where: { id: jobId },
-    data: {
-      status: "cancelled",
-      completedAt: new Date(),
-    },
-  });
+  await syncService.cancelSyncJob(jobId);
 
   return c.json({
     success: true,
@@ -278,6 +275,13 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
 
   await syncService.startSyncJob(job.id);
 
+  // Determine sync mode from original metadata
+  const metadata = job.metadata;
+  const syncMode =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? ((metadata as Record<string, unknown>).mode ?? "manual_full")
+      : "manual_full";
+
   // Trigger sync async based on jobType
   setTimeout(async () => {
     try {
@@ -295,6 +299,7 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
           undefined,
           undefined,
           job.id,
+          syncMode as any,
         );
         await syncService.completeSyncJob(job.id, { pageviewsSynced });
         return;
@@ -363,6 +368,7 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
           articlesSynced: articlesResult.imported + articlesResult.updated,
         },
         FULL_SYNC_CHILD_JOB_TYPES,
+        syncMode as any,
       );
     } catch (error) {
       await syncService.failSyncJob(job.id, error);

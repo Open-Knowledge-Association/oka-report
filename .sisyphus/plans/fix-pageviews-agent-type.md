@@ -65,10 +65,10 @@ Fix pageview 404 errors by using `all-agents` AND maintain distinction between h
 
 ### Definition of Done
 
-- [ ] Pageview sync runs with significantly fewer 404 errors
-- [ ] Database stores both `user` and `all-agents` pageviews
-- [ ] 404 articles logged to sync job metadata (not console spam)
-- [ ] All tests pass
+- [x] Pageview sync runs with significantly fewer 404 errors
+- [x] Database stores both `user` and `all-agents` pageviews
+- [x] 404 articles logged to sync job metadata (not console spam)
+- [x] All tests pass
 
 ### Must Have
 
@@ -132,7 +132,7 @@ Task 4: Update tests and verify
 
 ## TODOs
 
-- [ ] 1. Add agentType field to Pageview model
+- [x] 1. Add agentType field to Pageview model
 
   **What to do**:
   - Add `PageviewAgentType` enum with values `USER`, `ALL_AGENTS`
@@ -212,7 +212,7 @@ Task 4: Update tests and verify
 
 ---
 
-- [ ] 2. Modify getPageviews to accept agent type parameter
+- [x] 2. Modify getPageviews to accept agent type parameter
 
   **What to do**:
   - Add optional `agentType` parameter to `getPageviews()` function
@@ -293,7 +293,7 @@ Task 4: Update tests and verify
 
 ---
 
-- [ ] 3. Update sync service to fetch both agent types and log 404s to metadata
+- [x] 3. Update sync service to fetch both agent types and log 404s to metadata
 
   **What to do**:
   - Modify `syncArticlePageviews()` to fetch BOTH `all-agents` and `user` views
@@ -429,7 +429,7 @@ Task 4: Update tests and verify
 
 ---
 
-- [ ] 4. Update tests and final verification
+- [x] 4. Update tests and final verification
 
   **What to do**:
   - Update `packages/utils/src/wikimedia/__tests__/client.test.ts` for new parameter
@@ -528,9 +528,9 @@ curl -s "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/pt.wiki
 
 ### Final Checklist
 
-- [ ] Pageview model has `agentType` field with `USER` and `ALL_AGENTS` values
-- [ ] `getPageviews()` accepts `agentType` parameter, defaults to `all-agents`
-- [ ] Sync fetches both agent types for each article
-- [ ] 404 errors logged to job metadata, not console spam
-- [ ] All tests pass
-- [ ] TypeScript compiles without errors
+- [x] Pageview model has `agentType` field with `USER` and `ALL_AGENTS` values
+- [x] `getPageviews()` accepts `agentType` parameter, defaults to `all-agents`
+- [x] Sync fetches both agent types for each article
+- [x] 404 errors logged to job metadata, not console spam
+- [x] All tests pass
+- [x] TypeScript compiles without errors

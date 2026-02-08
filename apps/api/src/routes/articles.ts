@@ -17,6 +17,10 @@ const ArticlesStatsQuerySchema = z.object({
 
 export const articlesRoutes = new Hono();
 
+const getCurrentPageviewValue = (
+  row: { views: number; cumulativeViews?: number | null } | null | undefined,
+) => row?.cumulativeViews ?? row?.views ?? 0;
+
 // GET /api/articles - List articles with pagination
 articlesRoutes.get("/", async (c) => {
   const query = ArticlesQuerySchema.parse(c.req.query());
@@ -36,7 +40,6 @@ articlesRoutes.get("/", async (c) => {
       include: {
         createdByEditor: { select: { id: true, username: true } },
         editors: { include: { editor: { select: { id: true, username: true } } } },
-        pageviews: { orderBy: { date: "desc" }, take: 1 },
         _count: { select: { pageviews: true, contributions: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -44,10 +47,52 @@ articlesRoutes.get("/", async (c) => {
     prisma.article.count({ where }),
   ]);
 
+  const articleIds = articles.map((article) => article.id);
+
+  const [latestDaily, latestCumulative] = await Promise.all([
+    articleIds.length > 0
+      ? prisma.pageview.findMany({
+          where: {
+            articleId: { in: articleIds },
+            type: "DAILY",
+            agentType: "ALL_AGENTS",
+          },
+          orderBy: [{ articleId: "asc" }, { date: "desc" }],
+          distinct: ["articleId"],
+        })
+      : Promise.resolve([]),
+    articleIds.length > 0
+      ? prisma.pageview.findMany({
+          where: {
+            articleId: { in: articleIds },
+            type: "CUMULATIVE",
+            agentType: "ALL_AGENTS",
+          },
+          orderBy: [{ articleId: "asc" }, { date: "desc" }],
+          distinct: ["articleId"],
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
+  const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
+
+  const normalizedArticles = articles.map((article) => {
+    const selectedPageview =
+      article.source === "OUTREACH_DASHBOARD"
+        ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
+        : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
+
+    return {
+      ...article,
+      pageviews: selectedPageview ? [selectedPageview] : [],
+    };
+  });
+
   return c.json({
     success: true,
     data: {
-      articles,
+      articles: normalizedArticles,
       pagination: {
         total,
         page: query.page,
@@ -72,54 +117,52 @@ articlesRoutes.get("/stats", async (c) => {
   let totalPageviews = 0;
   const wikiPageviews = new Map<string, number>();
 
-  const includeDaily = query.source !== "OUTREACH_DASHBOARD";
-  const includeCumulative = query.source !== "MEDIAWIKI";
+  const articles = await prisma.article.findMany({
+    where: articleWhere,
+    select: {
+      id: true,
+      wikiProject: true,
+      source: true,
+    },
+  });
 
-  if (includeDaily) {
-    const dailyPageviews = await prisma.pageview.findMany({
+  const [latestDaily, latestCumulative] = await Promise.all([
+    prisma.pageview.findMany({
       where: {
         type: "DAILY",
-        article: {
-          source: query.source ?? "MEDIAWIKI",
-          ...(query.wikiProject ? { wikiProject: query.wikiProject } : {}),
-        },
+        agentType: "ALL_AGENTS",
       },
-      select: { views: true, article: { select: { wikiProject: true } } },
-    });
-
-    for (const pageview of dailyPageviews) {
-      totalPageviews += pageview.views;
-      const project = pageview.article.wikiProject;
-      wikiPageviews.set(project, (wikiPageviews.get(project) ?? 0) + pageview.views);
-    }
-  }
-
-  if (includeCumulative) {
-    const snapshots = await prisma.pageview.findMany({
-      where: {
-        type: "CUMULATIVE",
-        article: {
-          source: query.source ?? "OUTREACH_DASHBOARD",
-          ...(query.wikiProject ? { wikiProject: query.wikiProject } : {}),
-        },
-      },
-      select: {
-        articleId: true,
-        date: true,
-        views: true,
-        cumulativeViews: true,
-        article: { select: { wikiProject: true } },
-      },
+      select: { articleId: true, date: true, views: true },
       orderBy: [{ articleId: "asc" }, { date: "desc" }],
       distinct: ["articleId"],
-    });
+    }),
+    prisma.pageview.findMany({
+      where: {
+        type: "CUMULATIVE",
+        agentType: "ALL_AGENTS",
+      },
+      select: { articleId: true, date: true, views: true, cumulativeViews: true },
+      orderBy: [{ articleId: "asc" }, { date: "desc" }],
+      distinct: ["articleId"],
+    }),
+  ]);
 
-    for (const snapshot of snapshots) {
-      const value = snapshot.cumulativeViews ?? snapshot.views ?? 0;
-      totalPageviews += value;
-      const project = snapshot.article.wikiProject;
-      wikiPageviews.set(project, (wikiPageviews.get(project) ?? 0) + value);
+  const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
+  const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
+
+  for (const article of articles) {
+    const selected =
+      article.source === "OUTREACH_DASHBOARD"
+        ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
+        : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
+
+    if (!selected) {
+      continue;
     }
+
+    const value = getCurrentPageviewValue(selected);
+    totalPageviews += value;
+    wikiPageviews.set(article.wikiProject, (wikiPageviews.get(article.wikiProject) ?? 0) + value);
   }
 
   const wikiCounts = await prisma.article.groupBy({

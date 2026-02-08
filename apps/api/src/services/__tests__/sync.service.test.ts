@@ -227,7 +227,7 @@ describe("SyncService", () => {
       expect(result).toBe(8);
       expect(mockPrisma.pageview.upsert).toHaveBeenCalledTimes(8);
 
-      const getPageviewsCalls = mockWikimediaClient.getPageviews.mock.calls;
+      const getPageviewsCalls = (mockWikimediaClient.getPageviews as any).mock.calls;
       expect(getPageviewsCalls.length).toBe(4);
 
       const agentTypes = getPageviewsCalls.map((call: any) => call[4]);

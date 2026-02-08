@@ -69,6 +69,10 @@ export const TopArticlesQuerySchema = z.object({
       .min(2000)
       .max(new Date().getFullYear() + 1),
   ),
+  month: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z.number().int().min(1).max(12).optional(),
+  ),
   wikiProject: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });

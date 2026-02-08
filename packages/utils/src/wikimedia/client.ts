@@ -13,12 +13,14 @@ import type {
 
 const DEFAULT_USER_AGENT = "OKA-Stats/1.0 (https://oka.wiki; contact@oka.wiki)";
 const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface WikimediaClientConfig {
   baseUrl: string;
   userAgent?: string;
   maxRetries?: number;
+  requestTimeoutMs?: number;
   rateLimiter?: RateLimiter;
   rateLimiterOptions?: RateLimiterOptions;
 }
@@ -54,12 +56,14 @@ export class WikimediaClient {
   private readonly userAgent: string;
   private readonly rateLimiter: RateLimiter;
   private readonly maxRetries: number;
+  private readonly requestTimeoutMs: number;
 
   constructor(config: WikimediaClientConfig) {
     this.baseUrl = config.baseUrl;
     this.userAgent = config.userAgent ?? DEFAULT_USER_AGENT;
     this.rateLimiter = config.rateLimiter ?? new RateLimiter(config.rateLimiterOptions);
     this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   async request<T>(
@@ -144,7 +148,27 @@ export class WikimediaClient {
     let attempt = 0;
 
     while (true) {
-      const response = await fetch(url, init);
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          ...init,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        clearTimeout(timeoutHandle);
+        if (attempt >= this.maxRetries) {
+          throw error;
+        }
+        const delayMs = calculateRetryDelayMs(attempt, null);
+        await sleep(delayMs);
+        attempt += 1;
+        continue;
+      }
+
+      clearTimeout(timeoutHandle);
 
       if (response.status !== 429) {
         return response;

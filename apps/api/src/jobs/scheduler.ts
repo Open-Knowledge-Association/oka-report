@@ -3,6 +3,7 @@ import { prisma, checkDatabase } from "@repo/db";
 import { WikimediaClient, OutreachDashboardClient } from "@repo/utils";
 import { StatsService, SyncService } from "../services";
 import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
+import { BootstrapService } from "../services/bootstrap.service";
 
 const schedule = process.env.SYNC_SCHEDULE ?? "0 2 * * *";
 const outreachSchool = process.env.OUTREACH_SCHOOL ?? "OKA";
@@ -15,6 +16,7 @@ export const startScheduler = () => {
   });
   const syncService = new SyncService(prisma, wikimediaClient);
   const statsService = new StatsService(prisma);
+  const bootstrapService = new BootstrapService(prisma);
 
   const getScheduleSetting = async (id: string) => {
     return prisma.schedulerSetting.findUnique({ where: { id } });
@@ -44,11 +46,18 @@ export const startScheduler = () => {
       );
       return;
     }
+    const bootstrapState = await bootstrapService.getState();
+    if (!bootstrapState || bootstrapState.state !== "completed") {
+      console.log(
+        `[Scheduler] Skipping full-sync: bootstrap incomplete (state: ${bootstrapState?.state || "unknown"})`,
+      );
+      return;
+    }
     if (!(await ensureDatabase("full sync"))) {
       return;
     }
     try {
-      await syncService.runFullSync();
+      await syncService.runFullSync(undefined, undefined, undefined, "scheduled_incremental");
     } catch (error) {
       console.error("Scheduled sync failed", error);
     }
@@ -64,6 +73,13 @@ export const startScheduler = () => {
     if (setting && !setting.enabled) {
       console.log(
         `[Scheduler] Skipping outreach article sync: disabled${setting.disabledReason ? ` (${setting.disabledReason})` : ""}`,
+      );
+      return;
+    }
+    const bootstrapState = await bootstrapService.getState();
+    if (!bootstrapState || bootstrapState.state !== "completed") {
+      console.log(
+        `[Scheduler] Skipping outreach-articles: bootstrap incomplete (state: ${bootstrapState?.state || "unknown"})`,
       );
       return;
     }
@@ -94,6 +110,13 @@ export const startScheduler = () => {
       );
       return;
     }
+    const bootstrapState = await bootstrapService.getState();
+    if (!bootstrapState || bootstrapState.state !== "completed") {
+      console.log(
+        `[Scheduler] Skipping daily-stats: bootstrap incomplete (state: ${bootstrapState?.state || "unknown"})`,
+      );
+      return;
+    }
     if (!(await ensureDatabase("daily stats snapshot"))) {
       return;
     }
@@ -114,6 +137,13 @@ export const startScheduler = () => {
     if (setting && !setting.enabled) {
       console.log(
         `[Scheduler] Skipping daily stats backfill: disabled${setting.disabledReason ? ` (${setting.disabledReason})` : ""}`,
+      );
+      return;
+    }
+    const bootstrapState = await bootstrapService.getState();
+    if (!bootstrapState || bootstrapState.state !== "completed") {
+      console.log(
+        `[Scheduler] Skipping daily-backfill: bootstrap incomplete (state: ${bootstrapState?.state || "unknown"})`,
       );
       return;
     }
