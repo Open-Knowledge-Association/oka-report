@@ -23,8 +23,131 @@ const dashboardClient = new OutreachDashboardClient({
 });
 
 const statsService = new StatsService(prisma);
+
+const parseExternalMetric = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  const raw = String(value ?? "0").trim();
+  if (!raw) {
+    return 0;
+  }
+
+  const suffixMatch = raw.match(/^(-?[0-9]+(?:\.[0-9]+)?)\s*([kKmMbB])$/);
+  if (suffixMatch) {
+    const numeric = Number.parseFloat(suffixMatch[1]);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+
+    const suffix = suffixMatch[2].toUpperCase();
+    const multiplier = suffix === "K" ? 1_000 : suffix === "M" ? 1_000_000 : 1_000_000_000;
+    return Math.round(numeric * multiplier);
+  }
+
+  const normalized = raw.replace(/,/g, "");
+  const numeric = Number.parseFloat(normalized);
+  if (Number.isFinite(numeric)) {
+    return Math.round(numeric);
+  }
+
+  const cleaned = raw.replace(/[^0-9-]/g, "");
+  if (!cleaned || cleaned === "-") {
+    return 0;
+  }
+
+  const parsed = Number.parseInt(cleaned, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 const reportExportService = new ReportExportService(prisma);
 export const statsRoutes = new Hono();
+
+type ExternalSnapshot = {
+  fetchedAt: string;
+  participants: Array<{
+    username: string;
+    enrolledAt: string | null;
+    totalUploads: number;
+  }>;
+  courseRaw: {
+    student_count: unknown;
+    article_count: unknown;
+    created_count: unknown;
+    edit_count: unknown;
+    word_count: unknown;
+    references_count: unknown;
+    view_count: unknown;
+    upload_count: unknown;
+  };
+  precise: {
+    editorsCount: number;
+    articlesCount: number;
+    articlesCreated: number;
+    wordsAdded: number;
+    referencesAdded: number;
+    pageviews: number;
+    commonsUploads: number;
+  };
+};
+
+let externalSnapshotCache: { value: ExternalSnapshot; fetchedAtMs: number } | null = null;
+const EXTERNAL_SNAPSHOT_TTL_MS = 10 * 60 * 1000;
+
+const getExternalSnapshot = async (): Promise<ExternalSnapshot | null> => {
+  const now = Date.now();
+  if (externalSnapshotCache && now - externalSnapshotCache.fetchedAtMs < EXTERNAL_SNAPSHOT_TTL_MS) {
+    return externalSnapshotCache.value;
+  }
+
+  const [courseData, usersData, articleData] = await Promise.all([
+    dashboardClient.getCourse("OKA", "OKA"),
+    dashboardClient.getUsers("OKA", "OKA"),
+    dashboardClient.getArticles("OKA", "OKA"),
+  ]);
+
+  const course = courseData.course;
+  const participants = (usersData.course?.users ?? usersData.users ?? []).filter(
+    (user) => user.role === 0,
+  );
+  const normalizedParticipants = participants.map((user) => ({
+    username: String(user.username).replace(/\s+/g, "_").toLowerCase(),
+    enrolledAt: typeof user.enrolled_at === "string" ? user.enrolled_at : null,
+    totalUploads: parseExternalMetric(user.total_uploads),
+  }));
+  const articles = articleData.course?.articles ?? [];
+
+  const precise = {
+    editorsCount: parseExternalMetric(course.student_count),
+    articlesCount: articles.length,
+    articlesCreated: articles.filter((article) => Boolean(article.new_article)).length,
+    wordsAdded: Math.round(
+      articles.reduce((sum, article) => sum + (article.character_sum ?? 0), 0) / 6,
+    ),
+    referencesAdded: articles.reduce((sum, article) => sum + (article.references_count ?? 0), 0),
+    pageviews: articles.reduce((sum, article) => sum + (article.view_count ?? 0), 0),
+    commonsUploads: normalizedParticipants.reduce((sum, user) => sum + user.totalUploads, 0),
+  };
+
+  const snapshot: ExternalSnapshot = {
+    fetchedAt: new Date().toISOString(),
+    participants: normalizedParticipants,
+    courseRaw: {
+      student_count: course.student_count,
+      article_count: course.article_count,
+      created_count: course.created_count,
+      edit_count: course.edit_count,
+      word_count: course.word_count,
+      references_count: course.references_count,
+      view_count: course.view_count,
+      upload_count: course.upload_count,
+    },
+    precise,
+  };
+
+  externalSnapshotCache = { value: snapshot, fetchedAtMs: now };
+  return snapshot;
+};
 
 const withDelta = <T extends Record<string, number | string | Date | null | undefined>>(
   series: T[],
@@ -190,7 +313,14 @@ statsRoutes.get("/monthly/export", async (c) => {
     const { year, month, format, wikiProject } = parsed;
 
     const stats = await statsService.getMonthlyStats(year, month, { wikiProject });
-    const topArticles = await statsService.getTopArticlesByYear(year, 10, wikiProject);
+    const startOfMonth = new Date(Date.UTC(year, month - 1, 1));
+    const endOfMonth = new Date(Date.UTC(year, month, 0));
+    const topArticles = await statsService.getTopArticlesByPeriod(
+      startOfMonth,
+      endOfMonth,
+      10,
+      wikiProject,
+    );
 
     const reportData = {
       year,
@@ -309,6 +439,7 @@ statsRoutes.get("/annual", async (c) => {
       year,
       byWikiProject: stats.byWikiProject,
       totals: stats.totals,
+      monthlyPerformance: stats.monthlyPerformance,
       ...(yoy && { yoy }),
     },
   });
@@ -382,6 +513,7 @@ statsRoutes.get("/monthly", async (c) => {
         month,
         byWikiProject: stats.byWikiProject,
         totals: stats.totals,
+        dailyPerformance: stats.dailyPerformance,
         ...(mom && { mom }),
       },
     });
@@ -398,14 +530,22 @@ statsRoutes.get("/monthly", async (c) => {
 statsRoutes.get("/top-articles", async (c) => {
   try {
     const parsed = TopArticlesQuerySchema.parse(c.req.query());
-    const { year, wikiProject, limit } = parsed;
+    const { year, month, wikiProject, limit } = parsed;
 
-    const articles = await statsService.getTopArticlesByYear(year, limit, wikiProject);
+    const articles = month
+      ? await statsService.getTopArticlesByPeriod(
+          new Date(Date.UTC(year, month - 1, 1)),
+          new Date(Date.UTC(year, month, 0)),
+          limit,
+          wikiProject,
+        )
+      : await statsService.getTopArticlesByYear(year, limit, wikiProject);
 
     return c.json({
       success: true,
       data: {
         year,
+        month: month ?? null,
         wikiProject: wikiProject ?? null,
         articles: articles.map((article) => ({
           rank: article.rank,
@@ -437,9 +577,99 @@ statsRoutes.post("/history/backfill", async (c) => {
   const startDate = new Date(parsed.startDate);
   const endDate = new Date(parsed.endDate);
 
-  await statsService.recordDailySnapshots(startDate, endDate);
+  const job = await prisma.syncJob.create({
+    data: {
+      jobType: "history_backfill",
+      status: "pending",
+      metadata: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      } as any,
+    },
+  });
 
-  return c.json({ success: true, data: { startDate, endDate } }, 202);
+  setTimeout(async () => {
+    try {
+      const toUtcDay = (date: Date) =>
+        new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+      const addUtcDays = (date: Date, days: number) => {
+        const next = new Date(date);
+        next.setUTCDate(next.getUTCDate() + days);
+        return next;
+      };
+
+      const start = toUtcDay(startDate);
+      const end = toUtcDay(endDate);
+      const totalDays = Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
+      await prisma.syncJob.update({
+        where: { id: job.id },
+        data: {
+          status: "running",
+          startedAt: new Date(),
+          metadata: {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            total: totalDays,
+            processed: 0,
+            stage: `Backfilling snapshots (0/${totalDays} days)`,
+          } as any,
+        },
+      });
+
+      let processed = 0;
+      let current = start;
+
+      while (current <= end) {
+        await statsService.recordDailySnapshot(current);
+        processed += 1;
+
+        if (processed % 7 === 0 || processed === totalDays) {
+          await prisma.syncJob.update({
+            where: { id: job.id },
+            data: {
+              metadata: {
+                startDate: start.toISOString(),
+                endDate: end.toISOString(),
+                total: totalDays,
+                processed,
+                stage: `Backfilling snapshots (${processed}/${totalDays} days)`,
+              } as any,
+            },
+          });
+        }
+
+        current = addUtcDays(current, 1);
+      }
+
+      await prisma.syncJob.update({
+        where: { id: job.id },
+        data: {
+          status: "completed",
+          completedAt: new Date(),
+          metadata: {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            total: totalDays,
+            processed: totalDays,
+            stage: `Completed snapshot backfill (${totalDays}/${totalDays} days)`,
+          } as any,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await prisma.syncJob.update({
+        where: { id: job.id },
+        data: {
+          status: "failed",
+          completedAt: new Date(),
+          error: message,
+        },
+      });
+    }
+  }, 0);
+
+  return c.json({ success: true, data: { jobId: job.id, startDate, endDate } }, 202);
 });
 
 statsRoutes.post("/snapshot", async (c) => {
@@ -492,37 +722,98 @@ statsRoutes.get("/articles/history", async (c) => {
 
 statsRoutes.get("/dashboard", async (c) => {
   try {
-    const [editorsCount, articlesCreated, articlesEdited, commonsUploads, articleSums, articles] =
-      await Promise.all([
-        prisma.editor.count({ where: { isActive: true } }),
-        prisma.article.count({ where: { isNewArticle: true } }),
-        prisma.article.count(),
-        prisma.commonsUpload.count(),
-        prisma.article.aggregate({
-          _sum: {
-            characterSum: true,
-            referencesCount: true,
-          },
-        }),
-        prisma.article.findMany({
-          select: {
-            pageviews: {
-              where: { type: "CUMULATIVE" },
-              orderBy: { date: "desc" },
-              take: 1,
-              select: { cumulativeViews: true },
-            },
-          },
-        }),
-      ]);
+    const [
+      editorsCount,
+      articlesCreated,
+      articlesEdited,
+      totalEdits,
+      commonsUploads,
+      articleSums,
+      articles,
+      createdArticles,
+      editedOnlyArticles,
+    ] = await Promise.all([
+      prisma.editor.count({ where: { isActive: true } }),
+      prisma.article.count({ where: { isNewArticle: true } }),
+      prisma.article.count(),
+      prisma.contribution.count(),
+      prisma.commonsUpload.count(),
+      prisma.article.aggregate({
+        _sum: {
+          characterSum: true,
+          referencesCount: true,
+        },
+      }),
+      prisma.article.findMany({
+        select: {
+          id: true,
+          source: true,
+        },
+      }),
+      prisma.article.findMany({
+        where: { createdByEditorId: { not: null } },
+        select: {
+          id: true,
+          source: true,
+        },
+      }),
+      prisma.article.findMany({
+        where: {
+          createdByEditorId: null,
+          editors: { some: { editor: { isActive: true } } },
+        },
+        select: {
+          id: true,
+          source: true,
+        },
+      }),
+    ]);
 
     const totalCharacterSum = articleSums._sum.characterSum ?? 0;
     const referencesAdded = articleSums._sum.referencesCount ?? 0;
     const wordsAdded = Math.round(totalCharacterSum / 6);
-    const pageviews = articles.reduce(
-      (sum, article) => sum + (article.pageviews[0]?.cumulativeViews ?? 0),
-      0,
-    );
+    const [latestDaily, latestCumulative] = await Promise.all([
+      prisma.pageview.findMany({
+        where: {
+          type: "DAILY",
+          agentType: "ALL_AGENTS",
+        },
+        select: { articleId: true, views: true, date: true },
+        orderBy: [{ articleId: "asc" }, { date: "desc" }],
+        distinct: ["articleId"],
+      }),
+      prisma.pageview.findMany({
+        where: {
+          type: "CUMULATIVE",
+          agentType: "ALL_AGENTS",
+        },
+        select: { articleId: true, views: true, cumulativeViews: true, date: true },
+        orderBy: [{ articleId: "asc" }, { date: "desc" }],
+        distinct: ["articleId"],
+      }),
+    ]);
+
+    const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
+    const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
+
+    const calculatePageviews = (articleList: typeof articles) => {
+      return articleList.reduce((sum, article) => {
+        const selected =
+          article.source === "OUTREACH_DASHBOARD"
+            ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
+            : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
+        const value = selected
+          ? (((selected as any).cumulativeViews as number | null | undefined) ??
+            selected.views ??
+            0)
+          : 0;
+        return sum + value;
+      }, 0);
+    };
+
+    const pageviews = calculatePageviews(articles);
+    const pageviewsFromCreatedArticles = calculatePageviews(createdArticles);
+    const pageviewsFromEditedArticles = calculatePageviews(editedOnlyArticles);
 
     return c.json({
       success: true,
@@ -530,10 +821,12 @@ statsRoutes.get("/dashboard", async (c) => {
         editorsCount,
         articlesCreated,
         articlesEdited,
-        totalEdits: articlesEdited,
+        totalEdits,
         wordsAdded,
         referencesAdded,
         pageviews,
+        pageviewsFromCreatedArticles,
+        pageviewsFromEditedArticles,
         commonsUploads,
       },
     });
@@ -618,14 +911,27 @@ statsRoutes.get("/editors-list", async (c) => {
  */
 statsRoutes.get("/sync-status", async (c) => {
   try {
+    const trackedJobTypes = [
+      "full",
+      "editors",
+      "outreach_articles",
+      "contributions",
+      "pageviews",
+      "commons",
+      "history_backfill",
+    ] as const;
+
     const [
       localEditorsCount,
       localArticlesCount,
       localArticlesCreated,
       localSums,
       localArticles,
+      localEditors,
+      localCommonsUploads,
       lastSyncJob,
-      externalCourse,
+      externalSnapshot,
+      recentJobs,
     ] = await Promise.all([
       prisma.editor.count({ where: { isActive: true } }),
       prisma.article.count(),
@@ -638,14 +944,15 @@ statsRoutes.get("/sync-status", async (c) => {
       }),
       prisma.article.findMany({
         select: {
-          pageviews: {
-            where: { type: "CUMULATIVE" },
-            orderBy: { date: "desc" },
-            take: 1,
-            select: { cumulativeViews: true },
-          },
+          id: true,
+          source: true,
         },
       }),
+      prisma.editor.findMany({
+        where: { isActive: true },
+        select: { id: true, username: true },
+      }),
+      prisma.commonsUpload.count(),
       prisma.syncJob.findFirst({
         where: { status: "completed" },
         orderBy: { completedAt: "desc" },
@@ -656,31 +963,179 @@ statsRoutes.get("/sync-status", async (c) => {
           metadata: true,
         },
       }),
-      dashboardClient.getCourse("OKA", "OKA").catch(() => null),
+      getExternalSnapshot().catch(() => null),
+      prisma.syncJob.findMany({
+        where: { jobType: { in: [...trackedJobTypes] } },
+        orderBy: { createdAt: "desc" },
+        take: 80,
+        select: {
+          id: true,
+          jobType: true,
+          status: true,
+          createdAt: true,
+          startedAt: true,
+          completedAt: true,
+          error: true,
+          metadata: true,
+        },
+      }),
     ]);
 
-    const localPageviews = localArticles.reduce(
-      (sum, article) => sum + (article.pageviews[0]?.cumulativeViews ?? 0),
-      0,
-    );
+    const [latestDaily, latestCumulative] = await Promise.all([
+      prisma.pageview.findMany({
+        where: {
+          type: "DAILY",
+          agentType: "ALL_AGENTS",
+        },
+        select: { articleId: true, views: true, date: true },
+        orderBy: [{ articleId: "asc" }, { date: "desc" }],
+        distinct: ["articleId"],
+      }),
+      prisma.pageview.findMany({
+        where: {
+          type: "CUMULATIVE",
+          agentType: "ALL_AGENTS",
+        },
+        select: { articleId: true, views: true, cumulativeViews: true, date: true },
+        orderBy: [{ articleId: "asc" }, { date: "desc" }],
+        distinct: ["articleId"],
+      }),
+    ]);
+
+    const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
+    const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
+
+    const localPageviews = localArticles.reduce((sum, article) => {
+      const selected =
+        article.source === "OUTREACH_DASHBOARD"
+          ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
+          : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
+      const value = selected
+        ? (((selected as any).cumulativeViews as number | null | undefined) ?? selected.views ?? 0)
+        : 0;
+      return sum + value;
+    }, 0);
 
     const localCharacterSum = localSums._sum.characterSum ?? 0;
     const localReferencesCount = localSums._sum.referencesCount ?? 0;
 
-    const external = externalCourse?.course
+    const localUploadsComparable = externalSnapshot
+      ? await (async () => {
+          const participantMap = new Map(
+            externalSnapshot.participants.map((participant) => [
+              participant.username,
+              participant.enrolledAt ? new Date(participant.enrolledAt) : null,
+            ]),
+          );
+
+          const participantEditors = localEditors
+            .map((editor) => ({
+              id: editor.id,
+              enrolledAt: participantMap.get(editor.username.toLowerCase()),
+            }))
+            .filter((editor) => editor.enrolledAt !== undefined);
+
+          const participantEditorIds = participantEditors.map((editor) => editor.id);
+
+          if (participantEditorIds.length === 0) {
+            return 0;
+          }
+
+          const uploads = await prisma.commonsUpload.findMany({
+            where: {
+              editorId: { in: participantEditorIds },
+            },
+            select: {
+              editorId: true,
+              uploadedAt: true,
+            },
+          });
+
+          const enrolledAtByEditorId = new Map(
+            participantEditors.map((editor) => [editor.id, editor.enrolledAt]),
+          );
+
+          return uploads.reduce((sum, upload) => {
+            const enrolledAt = enrolledAtByEditorId.get(upload.editorId);
+            if (!enrolledAt || upload.uploadedAt >= enrolledAt) {
+              return sum + 1;
+            }
+            return sum;
+          }, 0);
+        })()
+      : localCommonsUploads;
+
+    const external = externalSnapshot
       ? {
-          editorsCount: externalCourse.course.student_count ?? 0,
-          articlesCount: externalCourse.course.article_count ?? 0,
-          articlesCreated: externalCourse.course.created_count ?? 0,
-          totalEdits:
-            parseInt(String(externalCourse.course.edit_count ?? "0").replace(/,/g, ""), 10) || 0,
-          wordsAdded:
-            parseInt(String(externalCourse.course.word_count ?? "0").replace(/,/g, ""), 10) || 0,
-          referencesAdded: externalCourse.course.references_count ?? 0,
-          pageviews:
-            parseInt(String(externalCourse.course.view_count ?? "0").replace(/,/g, ""), 10) || 0,
-          commonsUploads: externalCourse.course.upload_count ?? 0,
+          editorsCount: externalSnapshot.precise.editorsCount,
+          articlesCount: externalSnapshot.precise.articlesCount,
+          articlesCreated: externalSnapshot.precise.articlesCreated,
+          totalEdits: parseExternalMetric(externalSnapshot.courseRaw.edit_count),
+          wordsAdded: externalSnapshot.precise.wordsAdded,
+          referencesAdded: externalSnapshot.precise.referencesAdded,
+          pageviews: externalSnapshot.precise.pageviews,
+          commonsUploads: externalSnapshot.precise.commonsUploads,
         }
+      : null;
+
+    const externalRaw = externalSnapshot
+      ? {
+          ...externalSnapshot.courseRaw,
+          fetchedAt: externalSnapshot.fetchedAt,
+          precise_from_articles: {
+            editorsCount: externalSnapshot.precise.editorsCount,
+            articlesCount: externalSnapshot.precise.articlesCount,
+            articlesCreated: externalSnapshot.precise.articlesCreated,
+            wordsAdded: externalSnapshot.precise.wordsAdded,
+            referencesAdded: externalSnapshot.precise.referencesAdded,
+            pageviews: externalSnapshot.precise.pageviews,
+            commonsUploads: externalSnapshot.precise.commonsUploads,
+          },
+        }
+      : null;
+
+    const latestByType = trackedJobTypes
+      .map((jobType) => {
+        const job = recentJobs.find((candidate) => candidate.jobType === jobType);
+        if (!job) return null;
+        return {
+          jobType,
+          id: job.id,
+          status: job.status,
+          createdAt: job.createdAt,
+          startedAt: job.startedAt,
+          completedAt: job.completedAt,
+          error: job.error,
+          metadata: job.metadata,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    const activeJobs = recentJobs
+      .filter((job) => job.status === "running" || job.status === "pending")
+      .map((job) => ({
+        id: job.id,
+        jobType: job.jobType,
+        status: job.status,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        metadata: job.metadata,
+      }));
+
+    const deltas = external
+      ? {
+          editors: localEditorsCount - Number(external.editorsCount),
+          articles: localArticlesCount - Number(external.articlesCount),
+          articlesCreated: localArticlesCreated - Number(external.articlesCreated),
+          wordsAdded: Math.round(localCharacterSum / 6) - Number(external.wordsAdded),
+          referencesAdded: localReferencesCount - Number(external.referencesAdded),
+          pageviews: localPageviews - Number(external.pageviews),
+          commonsUploads: localUploadsComparable - Number(external.commonsUploads),
+        }
+      : null;
+
+    const staleHours = lastSyncJob?.completedAt
+      ? Math.floor((Date.now() - new Date(lastSyncJob.completedAt).getTime()) / (1000 * 60 * 60))
       : null;
 
     return c.json({
@@ -694,8 +1149,11 @@ statsRoutes.get("/sync-status", async (c) => {
           wordsAdded: Math.round(localCharacterSum / 6),
           referencesAdded: localReferencesCount,
           pageviews: localPageviews,
+          commonsUploads: localCommonsUploads,
+          commonsUploadsComparable: localUploadsComparable,
         },
         external,
+        deltas,
         lastSync: lastSyncJob
           ? {
               jobType: lastSyncJob.jobType,
@@ -703,6 +1161,34 @@ statsRoutes.get("/sync-status", async (c) => {
               metadata: lastSyncJob.metadata,
             }
           : null,
+        jobs: {
+          active: activeJobs,
+          latestByType,
+        },
+        sources: {
+          localSyncStatusApi: "/api/stats/sync-status",
+          outreachCourseApi: "/api/outreach/course?school=OKA&slug=OKA",
+          outreachCoursePage: "https://outreachdashboard.wmflabs.org/courses/OKA/OKA/",
+        },
+        raw: {
+          local: {
+            editorsCount: localEditorsCount,
+            articlesCount: localArticlesCount,
+            articlesCreated: localArticlesCreated,
+            wordsAdded: Math.round(localCharacterSum / 6),
+            referencesAdded: localReferencesCount,
+            pageviews: localPageviews,
+            commonsUploads: localCommonsUploads,
+          },
+          external: externalRaw,
+        },
+        syncHealth: {
+          staleHours,
+          hasActiveJobs: activeJobs.length > 0,
+          latestFailedJobs: latestByType
+            .filter((job) => job.status === "failed")
+            .map((job) => job.jobType),
+        },
         syncRequired:
           external !== null &&
           (localEditorsCount === 0 ||
@@ -719,6 +1205,96 @@ statsRoutes.get("/sync-status", async (c) => {
       {
         success: false,
         error: "Failed to fetch sync status",
+        details: message,
+      },
+      500,
+    );
+  }
+});
+
+statsRoutes.get("/uploads-reconcile", async (c) => {
+  try {
+    const limitQuery = Number(c.req.query("limit") ?? 20);
+    const limit = Number.isFinite(limitQuery) ? Math.min(Math.max(limitQuery, 1), 200) : 20;
+
+    const [externalSnapshot, localEditors] = await Promise.all([
+      getExternalSnapshot(),
+      prisma.editor.findMany({
+        where: { isActive: true },
+        select: {
+          username: true,
+          _count: { select: { commonsUploads: true } },
+        },
+      }),
+    ]);
+
+    if (!externalSnapshot) {
+      return c.json({
+        success: false,
+        error: "External snapshot unavailable",
+      });
+    }
+
+    const externalByUser = new Map(
+      externalSnapshot.participants.map((participant) => [
+        participant.username,
+        participant.totalUploads,
+      ]),
+    );
+
+    const localRows = localEditors.map((editor) => ({
+      username: editor.username,
+      normalizedUsername: editor.username.toLowerCase(),
+      localUploads: editor._count.commonsUploads,
+      externalUploads: externalByUser.get(editor.username.toLowerCase()) ?? 0,
+    }));
+
+    const diffs = localRows
+      .map((row) => ({
+        username: row.username,
+        localUploads: row.localUploads,
+        externalUploads: row.externalUploads,
+        diff: row.localUploads - row.externalUploads,
+      }))
+      .filter((row) => row.diff !== 0)
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+    const localTotal = localRows.reduce((sum, row) => sum + row.localUploads, 0);
+    const externalTotal = externalSnapshot.participants.reduce(
+      (sum, participant) => sum + participant.totalUploads,
+      0,
+    );
+
+    const localOnlyUsers = diffs.filter((row) => row.externalUploads === 0).length;
+    const externalOnlyUsers = externalSnapshot.participants.filter(
+      (participant) => !localRows.some((row) => row.normalizedUsername === participant.username),
+    ).length;
+
+    return c.json({
+      success: true,
+      data: {
+        totals: {
+          localUploads: localTotal,
+          externalUploads: externalTotal,
+          diff: localTotal - externalTotal,
+        },
+        population: {
+          localEditors: localRows.length,
+          externalParticipants: externalSnapshot.participants.length,
+          localOnlyUsers,
+          externalOnlyUsers,
+        },
+        topDiffs: diffs.slice(0, limit),
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error reconciling uploads:", message);
+
+    return c.json(
+      {
+        success: false,
+        error: "Failed to reconcile uploads",
         details: message,
       },
       500,
