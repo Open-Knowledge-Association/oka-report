@@ -51,8 +51,6 @@ export function HistoryPage() {
   const [endDate, setEndDate] = useState(defaultRange.endDate);
   const [wikiProject, setWikiProject] = useState<string>("all");
   const [source, setSource] = useState<string>("all");
-  const [withDelta, setWithDelta] = useState(true);
-
   const [editorId, setEditorId] = useState("");
   const [editorStart, setEditorStart] = useState(defaultRange.startDate);
   const [editorEnd, setEditorEnd] = useState(defaultRange.endDate);
@@ -70,14 +68,13 @@ export function HistoryPage() {
   });
 
   const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ["stats", "history", startDate, endDate, wikiProject, source, withDelta],
+    queryKey: ["stats", "history", startDate, endDate, wikiProject, source],
     queryFn: () =>
       fetchStatsHistory({
         startDate: startDate ? toIsoDate(startDate) : undefined,
         endDate: endDate ? toIsoDate(endDate) : undefined,
         wikiProject: wikiProject !== "all" ? wikiProject : undefined,
         source: source !== "all" ? (source as "MEDIAWIKI" | "OUTREACH_DASHBOARD") : undefined,
-        withDelta,
       }),
   });
 
@@ -106,7 +103,7 @@ export function HistoryPage() {
   });
 
   const series = historyData?.series ?? [];
-  const latest = series[series.length - 1];
+  const summary = historyData?.summary;
 
   const handleBackfillSnapshots = async () => {
     try {
@@ -274,65 +271,51 @@ export function HistoryPage() {
                   <Filter className="h-4 w-4" />
                   <span className="font-medium">View Options:</span>
                 </div>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={withDelta}
-                    onChange={(e) => setWithDelta(e.target.checked)}
-                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                  />
-                  Show daily delta
-                </label>
+                <span className="text-sm text-slate-600">
+                  Summary cards aggregate the selected range; table rows show daily activity.
+                </span>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
                   {
                     title: "Articles Created",
-                    value: latest?.articlesCreated,
-                    delta: latest?.delta?.articlesCreated,
+                    value: summary?.articlesCreated,
                     icon: FileText,
                   },
                   {
                     title: "Articles Edited",
-                    value: latest?.articlesEdited,
-                    delta: latest?.delta?.articlesEdited,
+                    value: summary?.articlesEdited,
                     icon: LineChart,
                   },
                   {
                     title: "Editors Active",
-                    value: latest?.editors,
-                    delta: latest?.delta?.editors,
+                    value: summary?.editors,
                     icon: Users,
                   },
                   {
                     title: "Total Edits",
-                    value: latest?.edits,
-                    delta: latest?.delta?.edits,
+                    value: summary?.edits,
                     icon: LineChart,
                   },
                   {
                     title: "Words Added",
-                    value: latest?.wordsAdded,
-                    delta: latest?.delta?.wordsAdded,
+                    value: summary?.wordsAdded,
                     icon: LineChart,
                   },
                   {
                     title: "References Added",
-                    value: latest?.referencesAdded,
-                    delta: latest?.delta?.referencesAdded,
+                    value: summary?.referencesAdded,
                     icon: BookOpen,
                   },
                   {
                     title: "Article Views",
-                    value: latest?.pageviews,
-                    delta: latest?.delta?.pageviews,
+                    value: summary?.pageviews,
                     icon: Eye,
                   },
                   {
                     title: "Commons Uploads",
-                    value: latest?.commonsUploads,
-                    delta: latest?.delta?.commonsUploads,
+                    value: summary?.commonsUploads,
                     icon: Upload,
                   },
                 ].map((item) => (
@@ -349,11 +332,7 @@ export function HistoryPage() {
                     <div className="text-2xl font-bold text-slate-900">
                       {formatNumber(item.value)}
                     </div>
-                    {withDelta && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        delta {formatDelta(item.delta)}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground mt-1">selected date range</p>
                   </div>
                 ))}
               </div>

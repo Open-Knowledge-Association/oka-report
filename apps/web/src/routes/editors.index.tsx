@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchEditorsListStats } from "@/lib/api";
+import { fetchDashboardStats, fetchEditorsListStats } from "@/lib/api";
 
 type EditorStats = {
   id: string; // CUID from database
@@ -21,12 +21,6 @@ type EditorStats = {
   characterSum: number;
   referencesCount: number;
   uploadsCount: number;
-};
-
-type StatsTotals = {
-  characters: number;
-  references: number;
-  uploads: number;
 };
 
 export const Route = createFileRoute("/editors/")({
@@ -66,6 +60,10 @@ function EditorsStatsPage() {
   });
 
   const editors: EditorStats[] = editorsData;
+  const { data: dashboardStats } = useQuery({
+    queryKey: ["stats", "dashboard"],
+    queryFn: fetchDashboardStats,
+  });
 
   const toggleEditorSelection = (id: string) => {
     setSelectedEditors((prev) => {
@@ -88,15 +86,6 @@ function EditorsStatsPage() {
     }
   };
 
-  const totalStats = editors.reduce<StatsTotals>(
-    (acc, editor) => ({
-      characters: acc.characters + (editor.characterSum || 0),
-      references: acc.references + (editor.referencesCount || 0),
-      uploads: acc.uploads + (editor.uploadsCount || 0),
-    }),
-    { characters: 0, references: 0, uploads: 0 },
-  );
-
   return (
     <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -110,6 +99,10 @@ function EditorsStatsPage() {
                   ? "Failed to load editors"
                   : `Real-time stats for ${editors.length} OKA editors`}
             </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Article metadata is attributed to the verified author only; global cards are
+              deduplicated across editors.
+            </p>
           </div>
           {selectedEditors.length === 2 && (
             <Button onClick={handleCompare} className="gap-2">
@@ -122,18 +115,18 @@ function EditorsStatsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <SummaryCard title="Total Editors" value={editors.length} icon={Users} />
           <SummaryCard
-            title="Characters Added"
-            value={totalStats.characters.toLocaleString()}
+            title="Estimated Words Added"
+            value={(dashboardStats?.wordsAdded ?? 0).toLocaleString()}
             icon={FileText}
           />
           <SummaryCard
             title="References Added"
-            value={totalStats.references.toLocaleString()}
+            value={(dashboardStats?.referencesAdded ?? 0).toLocaleString()}
             icon={BookOpen}
           />
           <SummaryCard
             title="Total Uploads"
-            value={totalStats.uploads.toLocaleString()}
+            value={(dashboardStats?.commonsUploads ?? 0).toLocaleString()}
             icon={HardDrive}
           />
         </div>

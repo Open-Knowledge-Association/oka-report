@@ -170,7 +170,8 @@ export const startScheduler = () => {
 
     try {
       await statsService.backfillMissingDailySnapshots();
-      console.log("[Scheduler] Daily stats backfill completed");
+      await statsService.refreshRecentDailySnapshots(35);
+      console.log("[Scheduler] Daily stats backfill and rolling reconciliation completed");
     } catch (error) {
       console.error("[Scheduler] Daily stats backfill failed:", error);
     }

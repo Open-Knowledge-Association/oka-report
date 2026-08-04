@@ -179,9 +179,9 @@ function AnnualReportsPage() {
                   statistics database for the selected calendar year.
                 </p>
                 <p>
-                  Articles created means records marked as new by the Outreach source. Articles
-                  edited includes tracked contribution activity. Pageviews are daily Wikimedia
-                  pageview records aggregated for the period.
+                  Articles created means articles with a tracked first-revision contribution in the
+                  selected year. Articles edited means unique articles with tracked contribution
+                  activity. Pageviews are Wikimedia ALL_AGENTS records aggregated for the period.
                 </p>
                 <p>
                   Estimated words added are derived from net byte changes and are an estimate, not a

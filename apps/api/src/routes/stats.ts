@@ -439,20 +439,14 @@ statsRoutes.get("/history", async (c) => {
     source: parsed.source,
   });
 
-  const data = parsed.withDelta
-    ? withDelta(series, [
-        "edits",
-        "wordsAdded",
-        "pageviews",
-        "articlesCreated",
-        "articlesEdited",
-        "editors",
-        "referencesAdded",
-        "commonsUploads",
-      ])
-    : series;
+  const data = series;
+  const summary = await statsService.getPeriodActivitySummary(
+    parsed.startDate ? new Date(parsed.startDate) : (series[0]?.date ?? new Date()),
+    parsed.endDate ? new Date(parsed.endDate) : (series.at(-1)?.date ?? new Date()),
+    { wikiProject: parsed.wikiProject, source: parsed.source },
+  );
 
-  return c.json({ success: true, data: { series: data } });
+  return c.json({ success: true, data: { series: data, summary } });
 });
 
 statsRoutes.get("/annual-impact", async (c) => {
@@ -695,113 +689,11 @@ statsRoutes.get("/articles/history", async (c) => {
 
 statsRoutes.get("/dashboard", async (c) => {
   try {
-    const [
-      editorsCount,
-      articlesCreated,
-      articlesEdited,
-      totalEdits,
-      commonsUploads,
-      articleSums,
-      articles,
-      createdArticles,
-      editedOnlyArticles,
-    ] = await Promise.all([
-      prisma.editor.count({ where: { isActive: true } }),
-      prisma.article.count({ where: { isNewArticle: true } }),
-      prisma.article.count(),
-      prisma.contribution.count(),
-      prisma.commonsUpload.count(),
-      prisma.article.aggregate({
-        _sum: {
-          characterSum: true,
-          referencesCount: true,
-        },
-      }),
-      prisma.article.findMany({
-        select: {
-          id: true,
-          source: true,
-        },
-      }),
-      prisma.article.findMany({
-        where: { createdByEditorId: { not: null } },
-        select: {
-          id: true,
-          source: true,
-        },
-      }),
-      prisma.article.findMany({
-        where: {
-          createdByEditorId: null,
-          editors: { some: { editor: { isActive: true } } },
-        },
-        select: {
-          id: true,
-          source: true,
-        },
-      }),
-    ]);
-
-    const totalCharacterSum = articleSums._sum.characterSum ?? 0;
-    const referencesAdded = articleSums._sum.referencesCount ?? 0;
-    const wordsAdded = Math.round(totalCharacterSum / 6);
-    const [latestDaily, latestCumulative] = await Promise.all([
-      prisma.pageview.findMany({
-        where: {
-          type: "DAILY",
-          agentType: "ALL_AGENTS",
-        },
-        select: { articleId: true, views: true, date: true },
-        orderBy: [{ articleId: "asc" }, { date: "desc" }],
-        distinct: ["articleId"],
-      }),
-      prisma.pageview.findMany({
-        where: {
-          type: "CUMULATIVE",
-          agentType: "ALL_AGENTS",
-        },
-        select: { articleId: true, views: true, cumulativeViews: true, date: true },
-        orderBy: [{ articleId: "asc" }, { date: "desc" }],
-        distinct: ["articleId"],
-      }),
-    ]);
-
-    const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
-    const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
-
-    const calculatePageviews = (articleList: typeof articles) => {
-      return articleList.reduce((sum, article) => {
-        const selected =
-          article.source === "OUTREACH_DASHBOARD"
-            ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
-            : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
-        const value = selected
-          ? (((selected as any).cumulativeViews as number | null | undefined) ??
-            selected.views ??
-            0)
-          : 0;
-        return sum + value;
-      }, 0);
-    };
-
-    const pageviews = calculatePageviews(articles);
-    const pageviewsFromCreatedArticles = calculatePageviews(createdArticles);
-    const pageviewsFromEditedArticles = calculatePageviews(editedOnlyArticles);
+    const totals = await statsService.getCurrentDatasetStats();
 
     return c.json({
       success: true,
-      data: {
-        editorsCount,
-        articlesCreated,
-        articlesEdited,
-        totalEdits,
-        wordsAdded,
-        referencesAdded,
-        pageviews,
-        pageviewsFromCreatedArticles,
-        pageviewsFromEditedArticles,
-        commonsUploads,
-      },
+      data: totals,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -826,6 +718,7 @@ statsRoutes.get("/editors-list", async (c) => {
         id: true,
         username: true,
         articles: {
+          where: { isAuthor: true },
           select: {
             article: {
               select: {
@@ -894,100 +787,46 @@ statsRoutes.get("/sync-status", async (c) => {
       "history_backfill",
     ] as const;
 
-    const [
-      localEditorsCount,
-      localArticlesCount,
-      localArticlesCreated,
-      localSums,
-      localArticles,
-      localEditors,
-      localCommonsUploads,
-      lastSyncJob,
-      externalSnapshot,
-      recentJobs,
-    ] = await Promise.all([
-      prisma.editor.count({ where: { isActive: true } }),
-      prisma.article.count(),
-      prisma.article.count({ where: { isNewArticle: true } }),
-      prisma.article.aggregate({
-        _sum: {
-          characterSum: true,
-          referencesCount: true,
-        },
-      }),
-      prisma.article.findMany({
-        select: {
-          id: true,
-          source: true,
-        },
-      }),
-      prisma.editor.findMany({
-        where: { isActive: true },
-        select: { id: true, username: true },
-      }),
-      prisma.commonsUpload.count(),
-      prisma.syncJob.findFirst({
-        where: { status: "completed" },
-        orderBy: { completedAt: "desc" },
-        select: {
-          id: true,
-          jobType: true,
-          completedAt: true,
-          metadata: true,
-        },
-      }),
-      getExternalSnapshotWithTimeout(),
-      prisma.syncJob.findMany({
-        where: { jobType: { in: [...trackedJobTypes] } },
-        orderBy: { createdAt: "desc" },
-        take: 80,
-        select: {
-          id: true,
-          jobType: true,
-          status: true,
-          createdAt: true,
-          startedAt: true,
-          completedAt: true,
-          error: true,
-          metadata: true,
-        },
-      }),
-    ]);
-
-    const [latestDaily, latestCumulative] = await Promise.all([
-      prisma.pageview.findMany({
-        where: {
-          type: "DAILY",
-          agentType: "ALL_AGENTS",
-        },
-        select: { articleId: true, views: true, date: true },
-        orderBy: [{ articleId: "asc" }, { date: "desc" }],
-        distinct: ["articleId"],
-      }),
-      prisma.pageview.findMany({
-        where: {
-          type: "CUMULATIVE",
-          agentType: "ALL_AGENTS",
-        },
-        select: { articleId: true, views: true, cumulativeViews: true, date: true },
-        orderBy: [{ articleId: "asc" }, { date: "desc" }],
-        distinct: ["articleId"],
-      }),
-    ]);
-
-    const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
-    const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
-
-    const localPageviews = localArticles.reduce((sum, article) => {
-      const selected =
-        article.source === "OUTREACH_DASHBOARD"
-          ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
-          : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
-      const value = selected
-        ? (((selected as any).cumulativeViews as number | null | undefined) ?? selected.views ?? 0)
-        : 0;
-      return sum + value;
-    }, 0);
+    const [canonicalLocal, localSums, localEditors, lastSyncJob, externalSnapshot, recentJobs] =
+      await Promise.all([
+        statsService.getCurrentDatasetStats(),
+        prisma.article.aggregate({
+          _sum: {
+            characterSum: true,
+            referencesCount: true,
+          },
+        }),
+        prisma.editor.findMany({
+          where: { isActive: true },
+          select: { id: true, username: true },
+        }),
+        prisma.syncJob.findFirst({
+          where: { status: "completed" },
+          orderBy: { completedAt: "desc" },
+          select: {
+            id: true,
+            jobType: true,
+            completedAt: true,
+            metadata: true,
+          },
+        }),
+        getExternalSnapshotWithTimeout(),
+        prisma.syncJob.findMany({
+          where: { jobType: { in: [...trackedJobTypes] } },
+          orderBy: { createdAt: "desc" },
+          take: 80,
+          select: {
+            id: true,
+            jobType: true,
+            status: true,
+            createdAt: true,
+            startedAt: true,
+            completedAt: true,
+            error: true,
+            metadata: true,
+          },
+        }),
+      ]);
 
     const localCharacterSum = localSums._sum.characterSum ?? 0;
     const localReferencesCount = localSums._sum.referencesCount ?? 0;
@@ -1036,7 +875,7 @@ statsRoutes.get("/sync-status", async (c) => {
             return sum;
           }, 0);
         })()
-      : localCommonsUploads;
+      : canonicalLocal.commonsUploads;
 
     const external = externalSnapshot
       ? {
@@ -1097,12 +936,12 @@ statsRoutes.get("/sync-status", async (c) => {
 
     const deltas = external
       ? {
-          editors: localEditorsCount - Number(external.editorsCount),
-          articles: localArticlesCount - Number(external.articlesCount),
-          articlesCreated: localArticlesCreated - Number(external.articlesCreated),
-          wordsAdded: Math.round(localCharacterSum / 6) - Number(external.wordsAdded),
+          editors: canonicalLocal.editorsCount - Number(external.editorsCount),
+          articles: canonicalLocal.totalArticles - Number(external.articlesCount),
+          articlesCreated: canonicalLocal.articlesCreated - Number(external.articlesCreated),
+          wordsAdded: canonicalLocal.wordsAdded - Number(external.wordsAdded),
           referencesAdded: localReferencesCount - Number(external.referencesAdded),
-          pageviews: localPageviews - Number(external.pageviews),
+          pageviews: canonicalLocal.pageviews - Number(external.pageviews),
           commonsUploads: localUploadsComparable - Number(external.commonsUploads),
         }
       : null;
@@ -1115,14 +954,14 @@ statsRoutes.get("/sync-status", async (c) => {
       success: true,
       data: {
         local: {
-          editorsCount: localEditorsCount,
-          articlesCount: localArticlesCount,
-          articlesCreated: localArticlesCreated,
+          editorsCount: canonicalLocal.editorsCount,
+          articlesCount: canonicalLocal.totalArticles,
+          articlesCreated: canonicalLocal.articlesCreated,
           characterSum: localCharacterSum,
-          wordsAdded: Math.round(localCharacterSum / 6),
+          wordsAdded: canonicalLocal.wordsAdded,
           referencesAdded: localReferencesCount,
-          pageviews: localPageviews,
-          commonsUploads: localCommonsUploads,
+          pageviews: canonicalLocal.pageviews,
+          commonsUploads: canonicalLocal.commonsUploads,
           commonsUploadsComparable: localUploadsComparable,
         },
         external,
@@ -1145,13 +984,13 @@ statsRoutes.get("/sync-status", async (c) => {
         },
         raw: {
           local: {
-            editorsCount: localEditorsCount,
-            articlesCount: localArticlesCount,
-            articlesCreated: localArticlesCreated,
-            wordsAdded: Math.round(localCharacterSum / 6),
+            editorsCount: canonicalLocal.editorsCount,
+            articlesCount: canonicalLocal.totalArticles,
+            articlesCreated: canonicalLocal.articlesCreated,
+            wordsAdded: canonicalLocal.wordsAdded,
             referencesAdded: localReferencesCount,
-            pageviews: localPageviews,
-            commonsUploads: localCommonsUploads,
+            pageviews: canonicalLocal.pageviews,
+            commonsUploads: canonicalLocal.commonsUploads,
           },
           external: externalRaw,
         },
@@ -1164,10 +1003,10 @@ statsRoutes.get("/sync-status", async (c) => {
         },
         syncRequired:
           external !== null &&
-          (localEditorsCount === 0 ||
-            localArticlesCount === 0 ||
-            localEditorsCount < external.editorsCount ||
-            localArticlesCount < external.articlesCount),
+          (canonicalLocal.editorsCount === 0 ||
+            canonicalLocal.totalArticles === 0 ||
+            canonicalLocal.editorsCount < external.editorsCount ||
+            canonicalLocal.totalArticles < external.articlesCount),
       },
     });
   } catch (error) {

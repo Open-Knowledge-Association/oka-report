@@ -204,6 +204,8 @@ const cycle = async () => {
       try {
         console.log(`[Worker] Claimed/resuming root job ${rootJobId} as ${WORKER_ID}`);
         await runBootstrapJob(rootJobId);
+        await queuedStatsService.refreshRecentDailySnapshots(35);
+        console.log(`[Worker] Reconciled recent daily statistics after full sync ${rootJobId}`);
       } catch (error) {
         console.error(
           `[Worker] Root job failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,

@@ -121,7 +121,7 @@ function ArticlesPage() {
         page,
         limit: 50,
         search: debouncedSearch || undefined,
-        wiki: wikiFilter !== "all" ? wikiFilter : undefined,
+        wikiProject: wikiFilter !== "all" ? wikiFilter : undefined,
       }),
   });
 
@@ -164,7 +164,7 @@ function ArticlesPage() {
           <p className="text-slate-600 mt-1">Articles by wiki language with pageview metrics</p>
         </div>
 
-        {/* Summary Cards - 8 stats from Outreach Dashboard */}
+        {/* Canonical lifetime metrics shared with the dashboard. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <SummaryCard
             title="Articles Created"

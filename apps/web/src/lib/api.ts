@@ -89,6 +89,7 @@ export type DashboardStats = {
   editorsCount: number;
   articlesCreated: number;
   articlesEdited: number;
+  totalArticles: number;
   totalEdits: number;
   wordsAdded: number;
   referencesAdded: number;
@@ -348,7 +349,10 @@ export const fetchStatsHistory = async (params: {
   wikiProject?: string;
   source?: ArticleSource | "MEDIAWIKI" | "OUTREACH_DASHBOARD";
   withDelta?: boolean;
-}): Promise<{ series: DailyHistoryPoint[] }> => {
+}): Promise<{
+  series: DailyHistoryPoint[];
+  summary: Omit<DailyHistoryPoint, "date" | "delta">;
+}> => {
   const query = buildHistoryQuery({
     startDate: params.startDate,
     endDate: params.endDate,
@@ -356,7 +360,10 @@ export const fetchStatsHistory = async (params: {
     source: params.source,
     withDelta: params.withDelta ? "true" : undefined,
   });
-  return apiFetch<{ series: DailyHistoryPoint[] }>(`/stats/history${query ? `?${query}` : ""}`);
+  return apiFetch<{
+    series: DailyHistoryPoint[];
+    summary: Omit<DailyHistoryPoint, "date" | "delta">;
+  }>(`/stats/history${query ? `?${query}` : ""}`);
 };
 
 export const fetchEditorHistory = async (params: {

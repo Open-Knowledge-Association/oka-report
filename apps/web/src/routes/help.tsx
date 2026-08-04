@@ -81,9 +81,9 @@ const featureGuide = [
   },
   {
     name: "Articles",
-    purpose: "Article inventory and latest article-level metrics.",
+    purpose: "Article inventory and lifetime article-level metrics.",
     notes:
-      "Pageviews use source-aware latest logic: Outreach articles prefer cumulative snapshots, MediaWiki articles prefer daily latest.",
+      "Outreach articles prefer their latest cumulative total; MediaWiki articles sum daily ALL_AGENTS rows.",
     icon: BookOpen,
   },
   {
@@ -148,7 +148,7 @@ const metricDefinitions = [
   },
   {
     metric: "Articles Created",
-    definition: "Count of articles flagged as new in tracked dataset.",
+    definition: "Unique articles with a tracked first-revision contribution.",
   },
   {
     metric: "Edits",
@@ -156,11 +156,11 @@ const metricDefinitions = [
   },
   {
     metric: "Words Added",
-    definition: "Approximation from byte deltas or article character sums (context-dependent).",
+    definition: "Approximation from tracked contribution byte deltas (positive bytes / 6).",
   },
   {
     metric: "Views",
-    definition: "Latest pageview values per article (source-aware) with ALL_AGENTS as primary.",
+    definition: "Lifetime or selected-period ALL_AGENTS totals, according to page context.",
   },
   {
     metric: "Refs",

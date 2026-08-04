@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { z } from "zod";
+import { StatsService } from "../services/stats.service";
 
 const ArticlesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -16,10 +17,7 @@ const ArticlesStatsQuerySchema = z.object({
 });
 
 export const articlesRoutes = new Hono();
-
-const getCurrentPageviewValue = (
-  row: { views: number; cumulativeViews?: number | null } | null | undefined,
-) => row?.cumulativeViews ?? row?.views ?? 0;
+const statsService = new StatsService(prisma);
 
 // GET /api/articles - List articles with pagination
 articlesRoutes.get("/", async (c) => {
@@ -47,45 +45,17 @@ articlesRoutes.get("/", async (c) => {
     prisma.article.count({ where }),
   ]);
 
-  const articleIds = articles.map((article) => article.id);
-
-  const [latestDaily, latestCumulative] = await Promise.all([
-    articleIds.length > 0
-      ? prisma.pageview.findMany({
-          where: {
-            articleId: { in: articleIds },
-            type: "DAILY",
-            agentType: "ALL_AGENTS",
-          },
-          orderBy: [{ articleId: "asc" }, { date: "desc" }],
-          distinct: ["articleId"],
-        })
-      : Promise.resolve([]),
-    articleIds.length > 0
-      ? prisma.pageview.findMany({
-          where: {
-            articleId: { in: articleIds },
-            type: "CUMULATIVE",
-            agentType: "ALL_AGENTS",
-          },
-          orderBy: [{ articleId: "asc" }, { date: "desc" }],
-          distinct: ["articleId"],
-        })
-      : Promise.resolve([]),
-  ]);
-
-  const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
-  const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
+  const pageviewsByArticle = await statsService.getCurrentPageviewsForArticles(articles, true);
 
   const normalizedArticles = articles.map((article) => {
-    const selectedPageview =
-      article.source === "OUTREACH_DASHBOARD"
-        ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
-        : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
+    const totalPageviews = pageviewsByArticle.get(article.id);
 
     return {
       ...article,
-      pageviews: selectedPageview ? [selectedPageview] : [],
+      pageviews:
+        totalPageviews === undefined
+          ? []
+          : [{ views: totalPageviews, cumulativeViews: totalPageviews, type: "CUMULATIVE" }],
     };
   });
 
@@ -114,56 +84,11 @@ articlesRoutes.get("/stats", async (c) => {
 
   const totalArticles = await prisma.article.count({ where: articleWhere });
 
-  let totalPageviews = 0;
-  const wikiPageviews = new Map<string, number>();
-
-  const articles = await prisma.article.findMany({
-    where: articleWhere,
-    select: {
-      id: true,
-      wikiProject: true,
-      source: true,
-    },
-  });
-
-  const [latestDaily, latestCumulative] = await Promise.all([
-    prisma.pageview.findMany({
-      where: {
-        type: "DAILY",
-        agentType: "ALL_AGENTS",
-      },
-      select: { articleId: true, date: true, views: true },
-      orderBy: [{ articleId: "asc" }, { date: "desc" }],
-      distinct: ["articleId"],
-    }),
-    prisma.pageview.findMany({
-      where: {
-        type: "CUMULATIVE",
-        agentType: "ALL_AGENTS",
-      },
-      select: { articleId: true, date: true, views: true, cumulativeViews: true },
-      orderBy: [{ articleId: "asc" }, { date: "desc" }],
-      distinct: ["articleId"],
-    }),
-  ]);
-
-  const dailyByArticleId = new Map(latestDaily.map((row) => [row.articleId, row]));
-  const cumulativeByArticleId = new Map(latestCumulative.map((row) => [row.articleId, row]));
-
-  for (const article of articles) {
-    const selected =
-      article.source === "OUTREACH_DASHBOARD"
-        ? (cumulativeByArticleId.get(article.id) ?? dailyByArticleId.get(article.id))
-        : (dailyByArticleId.get(article.id) ?? cumulativeByArticleId.get(article.id));
-
-    if (!selected) {
-      continue;
-    }
-
-    const value = getCurrentPageviewValue(selected);
-    totalPageviews += value;
-    wikiPageviews.set(article.wikiProject, (wikiPageviews.get(article.wikiProject) ?? 0) + value);
-  }
+  const { pageviewsByArticle, wikiPageviews } = await statsService.getCurrentArticleStats(query);
+  const totalPageviews = Array.from(pageviewsByArticle.values()).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
 
   const wikiCounts = await prisma.article.groupBy({
     by: ["wikiProject"],
