@@ -15,7 +15,13 @@ export class HistoricalPageviewService {
         ? `${year}${String(now.getUTCMonth() + 1).padStart(2, "0")}${String(now.getUTCDate()).padStart(2, "0")}`
         : `${year}1231`;
     const articles = await this.prisma.article.findMany({
-      where: { pageId: { not: null } },
+      where: {
+        pageId: { not: null },
+        OR: [
+          { articleCreatedAt: { lt: new Date(Date.UTC(year + 1, 0, 1)) } },
+          { articleCreatedAt: null },
+        ],
+      },
       orderBy: { id: "asc" },
       select: { id: true, title: true, wikiProject: true },
     });

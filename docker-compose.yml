@@ -33,8 +33,26 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-oka}:${POSTGRES_PASSWORD:-oka}@db:5432/${POSTGRES_DB:-oka}
       SYNC_SCHEDULE: ${SYNC_SCHEDULE:-0 2 * * *}
+      HISTORICAL_BACKFILL_SCHEDULE: ${HISTORICAL_BACKFILL_SCHEDULE:-0 4 * * 0}
     ports:
       - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["./oka-worker"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-oka}:${POSTGRES_PASSWORD:-oka}@db:5432/${POSTGRES_DB:-oka}
+      SYNC_SCHEDULE: ${SYNC_SCHEDULE:-0 2 * * *}
+      OUTREACH_ARTICLE_SYNC_SCHEDULE: ${OUTREACH_ARTICLE_SYNC_SCHEDULE:-0 3 * * *}
+      HISTORICAL_BACKFILL_SCHEDULE: ${HISTORICAL_BACKFILL_SCHEDULE:-0 4 * * 0}
+      OUTREACH_SCHOOL: ${OUTREACH_SCHOOL:-OKA}
+      OUTREACH_SLUG: ${OUTREACH_SLUG:-OKA}
+      WORKER_ID: oka-report-worker
     depends_on:
       migrate:
         condition: service_completed_successfully

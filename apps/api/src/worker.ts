@@ -8,6 +8,7 @@ import { SyncService } from "./services/sync.service";
 import { OutreachSyncService } from "./services/outreach-sync.service";
 import { OutreachArticleSyncService } from "./services/outreach-article-sync.service";
 import { HistoricalPageviewService } from "./services/historical-pageview.service";
+import { HistoricalBackfillPlanner } from "./services/historical-backfill-planner.service";
 import { WikimediaClient, OutreachDashboardClient } from "@repo/utils";
 import { runBootstrapJob, triggerBootstrapSync } from "./jobs/bootstrap-trigger";
 
@@ -25,6 +26,7 @@ const queuedDashboardClient = new OutreachDashboardClient({
 });
 const queuedArticleService = new OutreachArticleSyncService(prisma, queuedDashboardClient);
 const historicalPageviewService = new HistoricalPageviewService(prisma, wikimediaClient);
+const historicalBackfillPlanner = new HistoricalBackfillPlanner(prisma);
 const queuedStatsService = new StatsService(prisma);
 let executing = false;
 let backfillForRoot: string | null = null;
@@ -142,6 +144,10 @@ const processQueuedJob = async () => {
       const year = Number(metadata.year ?? new Date().getUTCFullYear());
       const result = await historicalPageviewService.syncYear(year, job.id);
       await queuedSyncService.completeSyncJob(job.id, result as any);
+      const snapshotJob = await historicalBackfillPlanner.queueSnapshotRebuild(year, job.id);
+      console.log(
+        `[Worker] Queued snapshot rebuild ${snapshotJob.id} after historical pageviews ${year}`,
+      );
     }
   } catch (error) {
     await queuedSyncService.failSyncJob(job.id, error);

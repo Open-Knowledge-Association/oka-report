@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { BootstrapService } from "../services/bootstrap.service";
+import { HistoricalBackfillPlanner } from "../services/historical-backfill-planner.service";
 
 const schedule = process.env.SYNC_SCHEDULE ?? "0 2 * * *";
 const outreachSchool = process.env.OUTREACH_SCHOOL ?? "OKA";
 const outreachSlug = process.env.OUTREACH_SLUG ?? "OKA";
 const outreachSchedule = process.env.OUTREACH_ARTICLE_SYNC_SCHEDULE ?? "0 3 * * *";
+const historicalSchedule = process.env.HISTORICAL_BACKFILL_SCHEDULE ?? "0 4 * * 0";
 
 export const schedulerRoutes = new Hono();
 
@@ -65,6 +67,24 @@ schedulerRoutes.get("/", async (c) => {
           ],
         },
         {
+          id: "historical-backfill",
+          name: "Historical Data Backfill",
+          type: "cron",
+          schedule: historicalSchedule,
+          enabled: getSetting("historical-backfill")?.enabled ?? true,
+          disabledReason: getSetting("historical-backfill")?.disabledReason ?? null,
+          bootstrapBlocked: isBootstrapBlocked,
+          description:
+            "Fills one incomplete year at a time, then rebuilds that year's daily snapshots.",
+          triggers: [
+            {
+              method: "POST",
+              path: "/api/scheduler/historical-backfill/run",
+              payload: {},
+            },
+          ],
+        },
+        {
           id: "daily-stats",
           name: "Daily Stats Snapshot",
           type: "cron",
@@ -101,6 +121,22 @@ schedulerRoutes.get("/", async (c) => {
       ],
     },
   });
+});
+
+schedulerRoutes.post("/historical-backfill/run", async (c) => {
+  const bootstrapState = await new BootstrapService(prisma).getState();
+  if (!bootstrapState || bootstrapState.state !== "completed") {
+    return c.json(
+      {
+        success: false,
+        error: { code: "BOOTSTRAP_INCOMPLETE", message: "Bootstrap must complete first" },
+      },
+      409,
+    );
+  }
+
+  const result = await new HistoricalBackfillPlanner(prisma).queueNextYear();
+  return c.json({ success: true, data: result }, result.queued ? 202 : 200);
 });
 
 schedulerRoutes.patch("/:id", async (c) => {
@@ -166,6 +202,7 @@ schedulerRoutes.get("/:id/logs", async (c) => {
     "outreach-articles": ["outreach_articles"],
     "daily-stats": ["history_backfill"],
     "daily-backfill": ["history_backfill"],
+    "historical-backfill": ["historical_pageviews", "history_backfill"],
   };
 
   const jobTypes = jobTypeMap[id] ?? [];

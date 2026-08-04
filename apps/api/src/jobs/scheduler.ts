@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { prisma, checkDatabase } from "@repo/db";
 import { WikimediaClient, OutreachDashboardClient } from "@repo/utils";
-import { StatsService, SyncService } from "../services";
+import { HistoricalBackfillPlanner, StatsService, SyncService } from "../services";
 import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 import { BootstrapService } from "../services/bootstrap.service";
 
@@ -9,6 +9,7 @@ const schedule = process.env.SYNC_SCHEDULE ?? "0 2 * * *";
 const outreachSchool = process.env.OUTREACH_SCHOOL ?? "OKA";
 const outreachSlug = process.env.OUTREACH_SLUG ?? "OKA";
 const outreachSchedule = process.env.OUTREACH_ARTICLE_SYNC_SCHEDULE ?? "0 3 * * *";
+const historicalSchedule = process.env.HISTORICAL_BACKFILL_SCHEDULE ?? "0 4 * * 0";
 
 export const startScheduler = () => {
   const wikimediaClient = new WikimediaClient({
@@ -17,6 +18,7 @@ export const startScheduler = () => {
   const syncService = new SyncService(prisma, wikimediaClient);
   const statsService = new StatsService(prisma);
   const bootstrapService = new BootstrapService(prisma);
+  const historicalPlanner = new HistoricalBackfillPlanner(prisma);
 
   const getScheduleSetting = async (id: string) => {
     return prisma.schedulerSetting.findUnique({ where: { id } });
@@ -27,7 +29,17 @@ export const startScheduler = () => {
       await prisma.syncJob.findFirst({
         where: {
           status: { in: ["pending", "running"] },
-          jobType: { in: ["full", "contributions", "pageviews", "commons", "outreach_articles"] },
+          jobType: {
+            in: [
+              "full",
+              "contributions",
+              "pageviews",
+              "commons",
+              "outreach_articles",
+              "historical_pageviews",
+              "history_backfill",
+            ],
+          },
         },
         select: { id: true, jobType: true },
       }),
@@ -177,5 +189,33 @@ export const startScheduler = () => {
     }
   });
 
+  cron.schedule(historicalSchedule, async () => {
+    const setting = await getScheduleSetting("historical-backfill");
+    if (setting && !setting.enabled) {
+      console.log(
+        `[Scheduler] Skipping historical backfill: disabled${setting.disabledReason ? ` (${setting.disabledReason})` : ""}`,
+      );
+      return;
+    }
+    const bootstrapState = await bootstrapService.getState();
+    if (!bootstrapState || bootstrapState.state !== "completed") {
+      console.log("[Scheduler] Skipping historical backfill: bootstrap incomplete");
+      return;
+    }
+    if (!(await ensureDatabase("historical backfill"))) return;
+
+    try {
+      const result = await historicalPlanner.queueNextYear();
+      console.log(
+        result.queued
+          ? `[Scheduler] Queued historical pageviews for ${result.year} (${result.job.id})`
+          : `[Scheduler] Historical backfill not queued (${result.reason})`,
+      );
+    } catch (error) {
+      console.error("[Scheduler] Historical backfill scheduling failed", error);
+    }
+  });
+
   console.log(`[Scheduler] Outreach article sync scheduled: ${outreachSchedule}`);
+  console.log(`[Scheduler] Historical backfill scheduled: ${historicalSchedule}`);
 };
