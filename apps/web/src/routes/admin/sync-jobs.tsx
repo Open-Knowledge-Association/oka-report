@@ -36,7 +36,6 @@ import {
   Info,
   Trash2,
 } from "lucide-react";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/admin/sync-jobs")({
   component: SyncJobsPage,
@@ -434,7 +433,7 @@ function SyncJobsPage() {
   const displayJobs = orderedJobs.length > 0 ? orderedJobs : filteredJobs;
 
   return (
-    <ProtectedRoute requiredRole="admin">
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Sync Job Manager</h1>
@@ -909,6 +908,6 @@ function SyncJobsPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

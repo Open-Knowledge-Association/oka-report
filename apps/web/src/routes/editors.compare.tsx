@@ -14,7 +14,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Users } from "lucide-react";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface EditorProfile {
   editor: {
@@ -99,7 +98,7 @@ function CompareEditorsPage() {
 
   if (ids.length !== 2) {
     return (
-      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+      <>
         <div className="mx-auto w-full max-w-6xl py-16 text-center">
           <Users className="w-16 h-16 mx-auto text-slate-300 mb-4" />
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Compare Editors</h1>
@@ -110,33 +109,33 @@ function CompareEditorsPage() {
             <Link to="/editors">Browse Editors</Link>
           </Button>
         </div>
-      </ProtectedRoute>
+      </>
     );
   }
 
   if (loading1 || loading2) {
     return (
-      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+      <>
         <div className="mx-auto w-full max-w-6xl py-16 text-center">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-slate-200 rounded w-1/3 mx-auto" />
             <div className="h-64 bg-slate-200 rounded" />
           </div>
         </div>
-      </ProtectedRoute>
+      </>
     );
   }
 
   if (!editor1 || !editor2) {
     return (
-      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+      <>
         <div className="mx-auto w-full max-w-6xl py-16 text-center">
           <p className="text-red-600">Failed to load editor data.</p>
           <Button variant="outline" className="mt-4" asChild>
             <Link to="/editors">Back to Editors</Link>
           </Button>
         </div>
-      </ProtectedRoute>
+      </>
     );
   }
 
@@ -164,7 +163,7 @@ function CompareEditorsPage() {
   ];
 
   return (
-    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="sm" asChild>
@@ -263,6 +262,6 @@ function CompareEditorsPage() {
           </CardContent>
         </Card>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

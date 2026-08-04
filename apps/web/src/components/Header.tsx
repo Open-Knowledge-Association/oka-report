@@ -11,10 +11,7 @@ import {
   Calendar,
   RefreshCw,
   HelpCircle,
-  LogOut,
-  User,
 } from "lucide-react";
-import { useAuth } from "../lib/auth";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -26,55 +23,6 @@ const navItems = [
   { to: "/admin/sync-jobs", label: "Sync Jobs", icon: RefreshCw },
   { to: "/help", label: "Help", icon: HelpCircle },
 ];
-
-function AuthSection() {
-  const { user, isLoading, isAuthenticated, signOut } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="px-6 py-4 border-t border-slate-200">
-        <div className="text-sm text-slate-500">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="px-3 pb-4 border-t border-slate-200">
-        <a
-          href="/api/auth/google"
-          className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-        >
-          <User className="h-4 w-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
-          Sign in with Google
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-6 py-4 border-t border-slate-200">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-            <User className="h-4 w-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-900">{user?.name || user?.email}</span>
-            <span className="text-xs text-slate-500 capitalize">{user?.role}</span>
-          </div>
-        </div>
-        <button
-          onClick={() => signOut()}
-          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          title="Sign out"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -113,7 +61,6 @@ export default function Header() {
             Help
           </Link>
         </div>
-        <AuthSection />
       </aside>
 
       <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur lg:hidden">

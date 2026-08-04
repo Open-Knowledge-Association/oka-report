@@ -41,7 +41,6 @@ import {
   fetchDashboardStats,
   ArticleSource,
 } from "@/lib/api";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/articles")({
   component: ArticlesPage,
@@ -158,7 +157,7 @@ function ArticlesPage() {
   };
 
   return (
-    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Article Statistics</h1>
@@ -461,6 +460,6 @@ function ArticlesPage() {
           />
         )}
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

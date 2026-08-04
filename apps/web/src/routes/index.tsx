@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { OutreachStats } from "@/components/outreach";
 import { fetchDashboardStats, fetchSyncStatus } from "@/lib/api";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
@@ -78,7 +77,7 @@ function DashboardPage() {
   };
 
   return (
-    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
@@ -526,6 +525,6 @@ function DashboardPage() {
           </>
         )}
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

@@ -4,7 +4,6 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { AuthProvider } from "../lib/auth";
 
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
@@ -68,17 +67,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="bg-slate-50 text-slate-900">
-        <AuthProvider>
-          <div className="flex h-screen overflow-hidden">
-            <Header />
-            <div className="flex h-screen flex-1 flex-col">
-              <main className="flex-1 overflow-y-auto px-6 pb-10 pt-20 lg:px-10 lg:py-10">
-                {children}
-              </main>
-              <Footer />
-            </div>
+        <div className="flex h-screen overflow-hidden">
+          <Header />
+          <div className="flex h-screen flex-1 flex-col">
+            <main className="flex-1 overflow-y-auto px-6 pb-10 pt-20 lg:px-10 lg:py-10">
+              {children}
+            </main>
+            <Footer />
           </div>
-        </AuthProvider>
+        </div>
         <TanStackDevtools
           config={{
             position: "bottom-right",

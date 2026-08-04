@@ -29,7 +29,6 @@ import {
   fetchSchedulerLogs,
   type SchedulerJob,
 } from "@/lib/api";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/admin/schedule-manager")({
   component: ScheduleManagerPage,
@@ -105,7 +104,7 @@ function ScheduleManagerPage() {
   };
 
   return (
-    <ProtectedRoute requiredRole="admin">
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Schedule Manager</h1>
@@ -348,6 +347,6 @@ function ScheduleManagerPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/annual-reports")({
   component: AnnualReportsPage,
@@ -42,7 +41,7 @@ function AnnualReportsPage() {
   const totals = data?.totals ?? {};
 
   return (
-    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -126,7 +125,7 @@ function AnnualReportsPage() {
           </>
         ) : null}
       </div>
-    </ProtectedRoute>
+    </>
   );
 }
 

@@ -14,7 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchEditorsListStats } from "@/lib/api";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 type EditorStats = {
   id: string; // CUID from database
@@ -99,7 +98,7 @@ function EditorsStatsPage() {
   );
 
   return (
-    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -213,6 +212,6 @@ function EditorsStatsPage() {
           </Table>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }

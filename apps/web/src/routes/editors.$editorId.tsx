@@ -24,7 +24,6 @@ import { ArticlesTable } from "@/components/editor/ArticlesTable";
 import { CommonsGallery } from "@/components/editor/CommonsGallery";
 import { ExportButton } from "@/components/editor/ExportButton";
 import { ShareButton } from "@/components/editor/ShareButton";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 interface EditorProfile {
   editor: {
@@ -112,7 +111,7 @@ function EditorProfilePage() {
 
   if (isLoading) {
     return (
-      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+      <>
         <div className="mx-auto w-full max-w-6xl space-y-8">
           <div className="h-10 w-64 bg-slate-200 animate-pulse rounded" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -122,13 +121,13 @@ function EditorProfilePage() {
           </div>
           <div className="h-96 bg-slate-200 animate-pulse rounded" />
         </div>
-      </ProtectedRoute>
+      </>
     );
   }
 
   if (error || !data) {
     return (
-      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+      <>
         <div className="mx-auto w-full max-w-6xl">
           <div className="text-center py-16">
             <h1 className="text-2xl font-bold text-slate-900 mb-2">
@@ -141,14 +140,14 @@ function EditorProfilePage() {
             </p>
           </div>
         </div>
-      </ProtectedRoute>
+      </>
     );
   }
 
   const { editor, outreachStats, wikimediaProfile, articles } = data;
 
   return (
-    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
+    <>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6">
@@ -232,6 +231,6 @@ function EditorProfilePage() {
           </div>
         </div>
       </div>
-    </ProtectedRoute>
+    </>
   );
 }
