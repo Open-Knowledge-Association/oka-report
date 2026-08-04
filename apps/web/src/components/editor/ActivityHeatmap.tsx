@@ -31,6 +31,17 @@ export function ActivityHeatmap({ dailyStats }: ActivityHeatmapProps) {
 
   const filteredStats = dailyStats.filter((stat) => new Date(stat.date) >= oneYearAgo);
 
+  if (filteredStats.length === 0) {
+    return (
+      <div
+        data-testid="activity-heatmap-empty"
+        className="h-32 w-full flex items-center justify-center bg-slate-50 rounded border border-slate-200"
+      >
+        <p className="text-slate-500">No activity data in the last year</p>
+      </div>
+    );
+  }
+
   const activityData = filteredStats.map((stat) => ({
     date: stat.date.split("T")[0],
     count: stat.edits,

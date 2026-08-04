@@ -96,10 +96,11 @@ describe("OutreachDashboardClient", () => {
 
       const client = createClient();
       const result = await client.getUsers("university", "course-1");
+      const users = result.users ?? [];
 
-      expect(result.users).toHaveLength(2);
-      expect(result.users[0].username).toBe("alice_edit");
-      expect(result.users[1].real_name).toBe("Bob Jones");
+      expect(users).toHaveLength(2);
+      expect(users[0].username).toBe("alice_edit");
+      expect(users[1].real_name).toBe("Bob Jones");
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(fetchSpy).toHaveBeenCalledWith(
         expect.stringContaining("/courses/university/course-1/users.json"),
@@ -132,10 +133,11 @@ describe("OutreachDashboardClient", () => {
 
       const client = createClient();
       const result = await client.getUsers("uni", "slug");
+      const users = result.users ?? [];
 
-      expect(result.users[0].id).toBe(1);
-      expect(result.users[0].real_name).toBeUndefined();
-      expect(result.users[0].email).toBeUndefined();
+      expect(users[0].id).toBe(1);
+      expect(users[0].real_name).toBeUndefined();
+      expect(users[0].email).toBeUndefined();
     });
   });
 
@@ -215,7 +217,7 @@ describe("OutreachDashboardClient", () => {
     });
 
     it("throws on 500 Server Error", async () => {
-      fetchSpy.mockResolvedValueOnce(new Response("Internal Server Error", { status: 500 }));
+      fetchSpy.mockResolvedValue(new Response("Internal Server Error", { status: 500 }));
 
       const client = createClient();
 

@@ -1,4 +1,4 @@
-import { prisma, checkDatabase } from "@repo/db";
+import { prisma } from "@repo/db";
 import { WikimediaClient, OutreachDashboardClient } from "@repo/utils";
 import { SyncService } from "../services";
 import { OutreachSyncService } from "../services/outreach-sync.service";
@@ -45,26 +45,42 @@ export const runBootstrapJob = async (rootJobId: string) => {
     const editorsJob = await findOrCreateChild(rootJobId, "editors");
     let editorsSynced = resultCount(editorsJob, "imported") + resultCount(editorsJob, "updated");
     if (editorsJob.status !== "completed") {
-      await syncService.updateParentJobProgress(rootJobId, "Syncing editors", FULL_SYNC_CHILD_JOB_TYPES);
+      await syncService.updateParentJobProgress(
+        rootJobId,
+        "Syncing editors",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
       const result = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
         parentJobId: rootJobId,
         jobId: editorsJob.id,
       });
       editorsSynced = result.imported + result.updated;
     }
-    await syncService.updateParentJobProgress(rootJobId, "Editors completed", FULL_SYNC_CHILD_JOB_TYPES);
+    await syncService.updateParentJobProgress(
+      rootJobId,
+      "Editors completed",
+      FULL_SYNC_CHILD_JOB_TYPES,
+    );
 
     const articlesJob = await findOrCreateChild(rootJobId, "outreach_articles");
     let articlesSynced = resultCount(articlesJob, "imported") + resultCount(articlesJob, "updated");
     if (articlesJob.status !== "completed") {
-      await syncService.updateParentJobProgress(rootJobId, "Syncing outreach articles", FULL_SYNC_CHILD_JOB_TYPES);
+      await syncService.updateParentJobProgress(
+        rootJobId,
+        "Syncing outreach articles",
+        FULL_SYNC_CHILD_JOB_TYPES,
+      );
       const result = await outreachArticleSyncService.syncArticlesFromDashboard("OKA", "OKA", {
         parentJobId: rootJobId,
         jobId: articlesJob.id,
       });
       articlesSynced = result.imported + result.updated;
     }
-    await syncService.updateParentJobProgress(rootJobId, "Outreach articles completed", FULL_SYNC_CHILD_JOB_TYPES);
+    await syncService.updateParentJobProgress(
+      rootJobId,
+      "Outreach articles completed",
+      FULL_SYNC_CHILD_JOB_TYPES,
+    );
 
     const refreshedRoot = await prisma.syncJob.findUnique({ where: { id: rootJobId } });
     if (refreshedRoot?.status === "cancelled") return;
@@ -86,7 +102,9 @@ export const runBootstrapJob = async (rootJobId: string) => {
 export const triggerBootstrapSync = async (bootstrapService: BootstrapService) => {
   const result = await bootstrapService.startBootstrap();
   if (!result.success) {
-    console.log(`[Bootstrap] Cannot start: state=${result.state.state}, already running or completed`);
+    console.log(
+      `[Bootstrap] Cannot start: state=${result.state.state}, already running or completed`,
+    );
     return null;
   }
 

@@ -2,8 +2,6 @@ import { Hono } from "hono";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { WikimediaClient } from "@repo/utils";
-import { OutreachSyncService } from "../services/outreach-sync.service";
-import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 import {
   OutreachSyncSchema,
   OutreachArticleStatsResponseSchema,
@@ -15,15 +13,10 @@ const dashboardClient = new OutreachDashboardClient({
   baseUrl: "https://outreachdashboard.wmflabs.org",
 });
 
-const outreachSyncService = new OutreachSyncService(prisma, {
-  baseUrl: "https://outreachdashboard.wmflabs.org",
-});
-
-const outreachArticleSyncService = new OutreachArticleSyncService(prisma, dashboardClient);
-
 export const outreachRoutes = new Hono();
 
-const normalizeAuthorUsername = (value: string) => value.normalize("NFC").replace(/\s+/g, "_").toLowerCase();
+const normalizeAuthorUsername = (value: string) =>
+  value.normalize("NFC").replace(/\s+/g, "_").toLowerCase();
 
 const parseWikiProject = (wikiProject: string) => {
   const match = wikiProject.match(/^(.+?)\.(.+?)\.org$/);
@@ -89,7 +82,11 @@ outreachRoutes.post("/backfill-authors", async (c) => {
     const limitParam = c.req.query("limit");
     let limit = 100;
     if (limitParam) {
-      limit = Math.min(Math.max(parseInt(limitParam, 10), 1), 500);
+      const parsedLimit = Number(limitParam);
+      if (!Number.isInteger(parsedLimit)) {
+        return c.json({ success: false, error: "limit must be an integer" }, 400);
+      }
+      limit = Math.min(Math.max(parsedLimit, 1), 500);
     }
 
     const recordsToProcess = await prisma.articleEditor.findMany({
@@ -123,7 +120,10 @@ outreachRoutes.post("/backfill-authors", async (c) => {
           rateLimiterOptions: { delayMs: 200 }, // 200ms delay = 5 req/sec
         });
 
-        const articleInfo = await wikimediaClient.getArticleInfo(record.article.title, record.article.pageId ?? undefined);
+        const articleInfo = await wikimediaClient.getArticleInfo(
+          record.article.title,
+          record.article.pageId ?? undefined,
+        );
 
         if (articleInfo?.creator) {
           const normalizedCreator = normalizeAuthorUsername(articleInfo.creator);
@@ -326,6 +326,7 @@ outreachRoutes.post("/articles/sync", async (c) => {
       data: {
         jobType: "outreach_articles",
         status: "pending",
+        metadata: { school: body.school, slug: body.slug },
       },
     });
 

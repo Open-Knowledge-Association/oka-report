@@ -69,7 +69,8 @@ export class ReportExportService {
 
   private generateHTML(data: AnnualReportData): string {
     const { year, totals, byWikiProject, topArticles } = data;
-    const fmt = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
+    const fmt = (value: number | null | undefined) =>
+      value == null ? "Unavailable" : value.toLocaleString();
 
     return `
 <!DOCTYPE html>

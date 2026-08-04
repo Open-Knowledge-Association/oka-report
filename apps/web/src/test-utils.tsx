@@ -1,5 +1,5 @@
 import React, { ReactElement } from "react";
-import { render, RenderOptions } from "@testing-library/react";
+import { render as baseRender, type RenderOptions } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
@@ -51,8 +51,10 @@ export function renderWithProviders(
     return <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>;
   }
 
-  return render(ui, { wrapper: Wrapper, ...renderOptions });
+  return baseRender(ui, { wrapper: Wrapper, ...renderOptions });
 }
+
+export const render = renderWithProviders;
 
 /**
  * data-testid Convention Documentation

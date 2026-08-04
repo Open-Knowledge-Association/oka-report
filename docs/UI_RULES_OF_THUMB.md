@@ -44,12 +44,14 @@ This document outlines UI rules of thumb for the OKA Stats Platform. The goal is
 ## Components
 
 ### Cards (Summary KPIs)
+
 - Show 4-6 key metrics per page.
 - Include a concise label, large value, and a small trend indicator.
 - Icons are optional; if used, keep consistent style.
 - Keep card height uniform across the row.
 
 ### Tables
+
 - Prioritize readability: zebra striping or subtle row dividers.
 - Column alignment: text left, numbers right.
 - Provide total row when relevant.
@@ -57,18 +59,21 @@ This document outlines UI rules of thumb for the OKA Stats Platform. The goal is
 - Sorting is opt-in; default sort should match business priority (e.g., words added).
 
 ### Charts
+
 - Use line charts for trends, bar charts for comparisons.
 - Limit series count to 3-4 for clarity.
 - Provide tooltips and labels for axes.
 - Use muted gridlines and avoid heavy chart borders.
 
 ### Filters
+
 - Use a consistent filter bar on all data pages.
 - Inputs: Date range, project select, search.
 - Filters should update URL search params.
 - Provide a clear reset option.
 
 ### Buttons & Actions
+
 - Primary action: single accent color per view.
 - Secondary actions: outline or muted style.
 - Destructive actions must be clearly labeled and separated.

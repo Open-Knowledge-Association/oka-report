@@ -68,7 +68,7 @@ const MetricRow = ({
   );
 };
 
-function CompareEditorsPage() {
+export function CompareEditorsPage() {
   const search = useSearch({ from: "/editors/compare" });
   const ids = (search as { ids?: string }).ids?.split(",").filter(Boolean) || [];
 
@@ -241,7 +241,7 @@ function CompareEditorsPage() {
                   <Tooltip
                     cursor={{ fill: "transparent" }}
                     contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0" }}
-                    formatter={(value: number) => value.toLocaleString()}
+                    formatter={(value: number | undefined) => (value ?? 0).toLocaleString()}
                   />
                   <Legend />
                   <Bar

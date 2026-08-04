@@ -16,6 +16,17 @@ services:
       retries: 12
     networks: [oka-report]
 
+  migrate:
+    image: oka-report-migrate:local
+    container_name: oka-report-migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@oka-report-db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [oka-report]
+
   api:
     image: oka-report-api:local
     container_name: oka-report-api
@@ -27,8 +38,8 @@ services:
       OUTREACH_SCHOOL: ${OUTREACH_SCHOOL}
       OUTREACH_SLUG: ${OUTREACH_SLUG}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks: [oka-report, integrate]
 
   worker:
@@ -50,8 +61,8 @@ services:
       start_period: 20s
       retries: 3
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks: [oka-report]
 
   web:
@@ -59,7 +70,13 @@ services:
     container_name: oka-report-web
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       start_period: 20s

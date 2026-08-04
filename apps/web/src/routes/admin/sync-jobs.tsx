@@ -82,7 +82,7 @@ function SyncJobsPage() {
       } else {
         throw new Error("Failed to cancel job");
       }
-    } catch (err) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to cancel job.",
@@ -105,7 +105,7 @@ function SyncJobsPage() {
       } else {
         throw new Error("Failed to retry job");
       }
-    } catch (err) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to retry job.",
@@ -172,7 +172,7 @@ function SyncJobsPage() {
       } else {
         throw new Error("Failed to trigger sync");
       }
-    } catch (err) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to trigger sync.",

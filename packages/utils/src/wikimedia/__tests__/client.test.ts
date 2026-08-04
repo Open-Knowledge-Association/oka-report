@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import { WikimediaClient, WikimediaClientError } from "../../..";
 
 const createClient = () =>
@@ -12,13 +12,12 @@ const jsonResponse = (body: unknown, status = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(body), { status, headers });
 
 const setupFetch = () => {
-  const fetchMock = mock();
+  const fetchMock = vi.fn();
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   return fetchMock;
 };
 
 describe("WikimediaClient", () => {
-
   it("fetches user contributions with pagination", async () => {
     const fetchMock = setupFetch();
     fetchMock
@@ -82,9 +81,7 @@ describe("WikimediaClient", () => {
             "123": {
               pageid: 123,
               title: "Sample",
-              revisions: [
-                { user: "Creator", timestamp: "2024-01-01T00:00:00Z" },
-              ],
+              revisions: [{ user: "Creator", timestamp: "2024-01-01T00:00:00Z" }],
             },
           },
         },
@@ -125,12 +122,7 @@ describe("WikimediaClient", () => {
     );
 
     const client = createClient();
-    const result = await client.getPageviews(
-      "Example",
-      "en.wikipedia",
-      "20240101",
-      "20240102",
-    );
+    const result = await client.getPageviews("Example", "en.wikipedia", "20240101", "20240102");
 
     expect(result[0].date).toBe("2024-01-01");
   });

@@ -8,7 +8,8 @@ const BATCH_SIZE = 100;
 const CONCURRENCY = 10;
 const CHECKPOINT_INTERVAL = 1000;
 
-const normalizeAuthorUsername = (value: string) => value.normalize("NFC").replace(/\s+/g, "_").toLowerCase();
+const normalizeAuthorUsername = (value: string) =>
+  value.normalize("NFC").replace(/\s+/g, "_").toLowerCase();
 
 interface SyncResult {
   imported: number;
@@ -20,12 +21,16 @@ interface SyncResult {
 export class OutreachArticleSyncService {
   private readonly prisma: PrismaClient;
   private readonly dashboardClient: OutreachDashboardClient;
-  private readonly wikimediaClientFactory: (baseUrl: string) => Pick<WikimediaClient, "getArticleInfo">;
+  private readonly wikimediaClientFactory: (
+    baseUrl: string,
+  ) => Pick<WikimediaClient, "getArticleInfo">;
 
   constructor(
     prisma: PrismaClient,
     dashboardClient: OutreachDashboardClient,
-    wikimediaClientFactory: (baseUrl: string) => Pick<WikimediaClient, "getArticleInfo"> = (baseUrl) => new WikimediaClient({ baseUrl }),
+    wikimediaClientFactory: (baseUrl: string) => Pick<WikimediaClient, "getArticleInfo"> = (
+      baseUrl,
+    ) => new WikimediaClient({ baseUrl }),
   ) {
     this.prisma = prisma;
     this.dashboardClient = dashboardClient;
@@ -118,11 +123,19 @@ export class OutreachArticleSyncService {
         : null;
       const checkpointMetadata = checkpointJob?.metadata;
       const checkpointProcessed =
-        checkpointMetadata && typeof checkpointMetadata === "object" && !Array.isArray(checkpointMetadata)
+        checkpointMetadata &&
+        typeof checkpointMetadata === "object" &&
+        !Array.isArray(checkpointMetadata)
           ? Number((checkpointMetadata as { processed?: unknown }).processed ?? 0)
           : 0;
       const resumeFrom = Number.isFinite(checkpointProcessed)
-        ? Math.min(articles.length, Math.max(0, Math.floor(checkpointProcessed / CHECKPOINT_INTERVAL) * CHECKPOINT_INTERVAL))
+        ? Math.min(
+            articles.length,
+            Math.max(
+              0,
+              Math.floor(checkpointProcessed / CHECKPOINT_INTERVAL) * CHECKPOINT_INTERVAL,
+            ),
+          )
         : 0;
 
       const batches = this.chunkArray(articles.slice(resumeFrom), BATCH_SIZE);
@@ -247,14 +260,16 @@ export class OutreachArticleSyncService {
               // Resolve the creator once per article. The previous implementation
               // queried Wikimedia once per editor, multiplying external requests.
               let creatorUsername: string | null = null;
-              let authorStatus: "unknown" | "verified_tracked" | "verified_external" | "unavailable" = "unknown";
+              let authorStatus:
+                | "unknown"
+                | "verified_tracked"
+                | "verified_external"
+                | "unavailable" = "unknown";
               if (dashboardArticle.user_ids.length > 0) {
                 try {
                   const wikiBaseUrl = `https://${dashboardArticle.language}.${dashboardArticle.project}.org`;
                   const wikimediaClient = this.wikimediaClientFactory(wikiBaseUrl);
-                  const articleInfo = await wikimediaClient.getArticleInfo(
-                    dashboardArticle.title,
-                  );
+                  const articleInfo = await wikimediaClient.getArticleInfo(dashboardArticle.title);
                   creatorUsername = articleInfo?.creator ?? null;
                   authorStatus = creatorUsername ? "verified_external" : "unavailable";
                 } catch (error) {
@@ -267,7 +282,11 @@ export class OutreachArticleSyncService {
               }
 
               const authorEditor = creatorUsername
-                ? editors.find((editor) => normalizeAuthorUsername(editor.username) === normalizeAuthorUsername(creatorUsername!)) ?? null
+                ? (editors.find(
+                    (editor) =>
+                      normalizeAuthorUsername(editor.username) ===
+                      normalizeAuthorUsername(creatorUsername!),
+                  ) ?? null)
                 : null;
               if (authorEditor) authorStatus = "verified_tracked";
               await this.prisma.article.update({
@@ -284,7 +303,7 @@ export class OutreachArticleSyncService {
                 const editor = editorMap.get(String(userId));
                 if (!editor) continue;
 
-                const articleEditor = await this.prisma.articleEditor.upsert({
+                await this.prisma.articleEditor.upsert({
                   where: {
                     articleId_editorId: {
                       articleId: article.id,
@@ -300,7 +319,6 @@ export class OutreachArticleSyncService {
                     isAuthor: Boolean(authorEditor && authorEditor.id === editor.id),
                   },
                 });
-
               }
 
               return { articleId: dashboardArticle.id, isNewlyCreated };
@@ -335,20 +353,21 @@ export class OutreachArticleSyncService {
           (processedCount % CHECKPOINT_INTERVAL === 0 || processedCount === articles.length)
         ) {
           await this.withDbRetry(
-            () => this.prisma.syncJob.update({
-              where: { id: jobId },
-              data: {
-                metadata: {
-                  total: articles.length,
-                  processed: processedCount,
-                  stage: `Processing articles (${processedCount}/${articles.length})`,
-                  imported,
-                  updated,
-                  errors: errorDetails.length,
-                  errorsSample: errorSamples,
-                } as any,
-              },
-            }),
+            () =>
+              this.prisma.syncJob.update({
+                where: { id: jobId },
+                data: {
+                  metadata: {
+                    total: articles.length,
+                    processed: processedCount,
+                    stage: `Processing articles (${processedCount}/${articles.length})`,
+                    imported,
+                    updated,
+                    errors: errorDetails.length,
+                    errorsSample: errorSamples,
+                  } as any,
+                },
+              }),
             "article sync checkpoint",
           );
         }

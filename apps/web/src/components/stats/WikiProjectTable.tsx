@@ -9,8 +9,7 @@ import {
 import { useState } from "react";
 import type { WikiProjectStats } from "../../lib/queries";
 
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat("en-US").format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat("en-US").format(value);
 
 const columns: ColumnDef<WikiProjectStats>[] = [
   {
@@ -45,14 +44,8 @@ const columns: ColumnDef<WikiProjectStats>[] = [
   },
 ];
 
-export default function WikiProjectTable({
-  rows,
-}: {
-  rows: WikiProjectStats[];
-}) {
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "wordsAdded", desc: true },
-  ]);
+export default function WikiProjectTable({ rows }: { rows: WikiProjectStats[] }) {
+  const [sorting, setSorting] = useState<SortingState>([{ id: "wordsAdded", desc: true }]);
 
   const table = useReactTable({
     data: rows,
@@ -75,10 +68,7 @@ export default function WikiProjectTable({
                   className="px-4 py-3 font-semibold"
                   onClick={header.column.getToggleSortingHandler()}
                 >
-                  {flexRender(
-                    header.column.columnDef.header,
-                    header.getContext(),
-                  )}
+                  {flexRender(header.column.columnDef.header, header.getContext())}
                 </th>
               ))}
             </tr>

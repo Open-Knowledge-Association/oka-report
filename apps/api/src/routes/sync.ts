@@ -2,25 +2,14 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { prisma } from "@repo/db";
 import { Prisma } from "@repo/db/generated/prisma/client";
-import { OutreachDashboardClient, WikimediaClient } from "@repo/utils";
-import { TriggerSyncSchema, OutreachSyncSchema } from "../schemas";
+import { WikimediaClient } from "@repo/utils";
+import { OutreachSyncSchema, TriggerSyncSchema } from "../schemas";
 import { SyncService } from "../services";
-import { FULL_SYNC_CHILD_JOB_TYPES } from "../services/sync.service";
-import { OutreachSyncService } from "../services/outreach-sync.service";
-import { OutreachArticleSyncService } from "../services/outreach-article-sync.service";
 
 const wikimediaClient = new WikimediaClient({
   baseUrl: "https://en.wikipedia.org",
 });
 const syncService = new SyncService(prisma, wikimediaClient);
-
-const dashboardClient = new OutreachDashboardClient({
-  baseUrl: "https://outreachdashboard.wmflabs.org",
-});
-const outreachSyncService = new OutreachSyncService(prisma, {
-  baseUrl: "https://outreachdashboard.wmflabs.org",
-});
-const outreachArticleSyncService = new OutreachArticleSyncService(prisma, dashboardClient);
 
 export const syncRoutes = new Hono();
 
@@ -32,13 +21,16 @@ syncRoutes.post("/trigger", async (c) => {
   // Full bootstrap is owned by the durable bootstrap worker. Do not run a
   // second full sync via an API timer, which would be lost on restart.
   if (jobType === "full") {
-    return c.json({
-      success: false,
-      error: {
-        code: "FULL_SYNC_WORKER_ONLY",
-        message: "Use the bootstrap worker for full sync; API timers are disabled",
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FULL_SYNC_WORKER_ONLY",
+          message: "Use the bootstrap worker for full sync; API timers are disabled",
+        },
       },
-    }, 409);
+      409,
+    );
   }
 
   const activeJob = await syncService.findActiveJob(jobType);
@@ -55,7 +47,7 @@ syncRoutes.post("/trigger", async (c) => {
     );
   }
 
-  const job = await syncService.createSyncJob(jobType);
+  const job = await syncService.createSyncJob(jobType, undefined, { mode: syncMode });
   await syncService.startSyncJob(job.id);
 
   // Child/manual jobs are durable queue entries. The worker owns execution;
@@ -72,7 +64,8 @@ syncRoutes.get("/status", async (c) => {
 });
 
 syncRoutes.get("/history", async (c) => {
-  const limit = Number(c.req.query("limit") ?? 10);
+  const rawLimit = Number(c.req.query("limit") ?? 10);
+  const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 10;
   const jobType = c.req.query("jobType");
 
   const history = await prisma.syncJob.findMany({
@@ -211,9 +204,10 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
 
   await syncService.startSyncJob(job.id);
 
-  const originalMetadata = job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
-    ? job.metadata as Record<string, unknown>
-    : {};
+  const originalMetadata =
+    job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
+      ? (job.metadata as Record<string, unknown>)
+      : {};
   await prisma.syncJob.update({
     where: { id: job.id },
     data: {

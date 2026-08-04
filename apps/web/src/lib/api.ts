@@ -460,7 +460,9 @@ export const fetchAnnualStats = async (params: {
   if (params.wikiProject) query.set("wikiProject", params.wikiProject);
   if (params.includeYoY) query.set("includeYoY", "true");
 
-  return apiFetch<AnnualStats>(`/stats/annual-impact?${query.toString()}&limit=10&includeMonthly=true`);
+  return apiFetch<AnnualStats>(
+    `/stats/annual-impact?${query.toString()}&limit=10&includeMonthly=true`,
+  );
 };
 
 export const fetchTopArticles = async (params: {
@@ -476,9 +478,19 @@ export const fetchTopArticles = async (params: {
   if (params.limit) query.set("limit", String(params.limit));
 
   if (!params.month) {
-    const annual = await apiFetch<{ topArticles: TopArticle[] }>(`/stats/annual-impact?year=${params.year}&limit=${params.limit ?? 10}`);
-    const articles = (annual.topArticles ?? []).filter((article) => !params.wikiProject || article.wikiProject === params.wikiProject);
-    return { year: params.year, month: null, wikiProject: params.wikiProject ?? null, articles, totalCount: articles.length };
+    const annual = await apiFetch<{ topArticles: TopArticle[] }>(
+      `/stats/annual-impact?year=${params.year}&limit=${params.limit ?? 10}`,
+    );
+    const articles = (annual.topArticles ?? []).filter(
+      (article) => !params.wikiProject || article.wikiProject === params.wikiProject,
+    );
+    return {
+      year: params.year,
+      month: null,
+      wikiProject: params.wikiProject ?? null,
+      articles,
+      totalCount: articles.length,
+    };
   }
   return apiFetch<TopArticlesResponse>(`/stats/top-articles?${query.toString()}`);
 };

@@ -7,7 +7,15 @@
     "packages/*"
   ],
   "scripts": {
+    "db:generate": "cd packages/db && bunx prisma generate",
+    "db:migrate:deploy": "cd packages/db && bunx prisma migrate deploy",
     "dev:api": "moon run api:dev",
+    "build:api": "bun build --compile --outfile=apps/api/dist/oka-api apps/api/src/index.ts",
+    "build:web": "bun run --cwd apps/web build",
+    "typecheck:api": "bunx tsc --noEmit -p apps/api/tsconfig.json",
+    "typecheck:web": "bunx tsc --noEmit -p apps/web/tsconfig.json",
+    "typecheck:utils": "bunx tsc --noEmit -p packages/utils/tsconfig.json",
+    "typecheck:db": "bunx tsc --noEmit -p packages/db/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

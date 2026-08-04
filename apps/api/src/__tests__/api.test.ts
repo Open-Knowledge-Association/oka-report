@@ -1,43 +1,7 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 import { app } from "../index";
-import { prisma } from "@repo/db";
 
 describe("API Integration Tests", () => {
-  let testUser: any;
-  let testSession: any;
-  let sessionCookie: string;
-
-  beforeAll(async () => {
-    // Create a test user and session for protected routes
-    testUser = await prisma.user.create({
-      data: {
-        email: "api-test@example.com",
-        name: "API Test User",
-        googleId: "google-api-test",
-        role: "admin",
-      },
-    });
-
-    testSession = await prisma.session.create({
-      data: {
-        userId: testUser.id,
-        token: "test-api-session-token",
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
-
-    sessionCookie = `session=${testSession.token}`;
-  });
-
-  afterAll(async () => {
-    await prisma.session.deleteMany({
-      where: { userId: testUser.id },
-    });
-    await prisma.user.delete({
-      where: { id: testUser.id },
-    });
-  });
-
   describe("GET /api", () => {
     it("should return API info", async () => {
       const res = await app.request("/");
@@ -49,9 +13,7 @@ describe("API Integration Tests", () => {
 
   describe("Editors API", () => {
     it("GET /api/editors should return list", async () => {
-      const res = await app.request("/api/editors", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/editors");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -61,9 +23,7 @@ describe("API Integration Tests", () => {
 
   describe("Stats API", () => {
     it("GET /api/stats/overall should return stats", async () => {
-      const res = await app.request("/api/stats/overall", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/stats/overall");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -71,9 +31,7 @@ describe("API Integration Tests", () => {
     });
 
     it("GET /api/stats/editors should return editor stats", async () => {
-      const res = await app.request("/api/stats/editors", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/stats/editors");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -83,9 +41,7 @@ describe("API Integration Tests", () => {
 
   describe("Sync API", () => {
     it("GET /api/sync/status should return status", async () => {
-      const res = await app.request("/api/sync/status", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/sync/status");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -109,7 +65,6 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: sessionCookie,
         },
         body: JSON.stringify({
           school: "OKA",
@@ -128,7 +83,6 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: sessionCookie,
         },
         body: JSON.stringify({
           slug: "OKA",
@@ -155,7 +109,6 @@ describe("API Integration Tests", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: sessionCookie,
           },
           body: JSON.stringify({ school: "OKA", slug: "OKA" }),
         });
@@ -239,7 +192,6 @@ describe("API Integration Tests", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: sessionCookie,
           },
           body: JSON.stringify({
             school: "OKA",
@@ -259,9 +211,7 @@ describe("API Integration Tests", () => {
         while (attempts < maxAttempts && !jobCompleted) {
           await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempts)));
 
-          const articlesRes = await app.request("/api/outreach/articles/db", {
-            headers: { Cookie: sessionCookie },
-          });
+          const articlesRes = await app.request("/api/outreach/articles/db");
           const articlesJson = await articlesRes.json();
 
           if (articlesJson.success && articlesJson.data.articles.length >= 2) {
@@ -274,9 +224,7 @@ describe("API Integration Tests", () => {
 
         expect(jobCompleted).toBe(true);
 
-        const dbRes = await app.request("/api/outreach/articles/db", {
-          headers: { Cookie: sessionCookie },
-        });
+        const dbRes = await app.request("/api/outreach/articles/db");
         expect(dbRes.status).toBe(200);
         const dbJson = await dbRes.json();
         expect(dbJson.success).toBe(true);
@@ -304,9 +252,7 @@ describe("API Integration Tests", () => {
     }, 30000);
 
     it("GET /api/outreach/articles/db should return paginated articles", async () => {
-      const res = await app.request("/api/outreach/articles/db", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/outreach/articles/db");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -319,9 +265,7 @@ describe("API Integration Tests", () => {
     });
 
     it("GET /api/outreach/articles/db should support pagination", async () => {
-      const res = await app.request("/api/outreach/articles/db?page=2&limit=10", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/outreach/articles/db?page=2&limit=10");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -330,9 +274,7 @@ describe("API Integration Tests", () => {
     });
 
     it("GET /api/outreach/articles/db should use default pagination", async () => {
-      const res = await app.request("/api/outreach/articles/db", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/outreach/articles/db");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -341,9 +283,7 @@ describe("API Integration Tests", () => {
     });
 
     it("GET /api/outreach/articles/db should support search", async () => {
-      const res = await app.request("/api/outreach/articles/db?search=Test", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/outreach/articles/db?search=Test");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -351,9 +291,7 @@ describe("API Integration Tests", () => {
     });
 
     it("GET /api/outreach/articles/db should support wiki filter", async () => {
-      const res = await app.request("/api/outreach/articles/db?wiki=en.wikipedia", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/outreach/articles/db?wiki=en.wikipedia");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
@@ -361,9 +299,7 @@ describe("API Integration Tests", () => {
     });
 
     it("GET /api/outreach/articles/stats should return global stats", async () => {
-      const res = await app.request("/api/outreach/articles/stats", {
-        headers: { Cookie: sessionCookie },
-      });
+      const res = await app.request("/api/outreach/articles/stats");
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);

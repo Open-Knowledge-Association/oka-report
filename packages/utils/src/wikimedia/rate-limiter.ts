@@ -52,10 +52,7 @@ export class RateLimiter {
   }
 }
 
-export const calculateRetryDelayMs = (
-  attempt: number,
-  retryAfterHeader?: string | null,
-) => {
+export const calculateRetryDelayMs = (attempt: number, retryAfterHeader?: string | null) => {
   if (retryAfterHeader) {
     const retryAfterSeconds = Number(retryAfterHeader);
     if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {

@@ -1,10 +1,6 @@
 import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 
@@ -14,11 +10,7 @@ interface DateRangeFilterProps {
   onChange: (range: { startDate?: Date; endDate?: Date }) => void;
 }
 
-export default function DateRangeFilter({
-  startDate,
-  endDate,
-  onChange,
-}: DateRangeFilterProps) {
+export default function DateRangeFilter({ startDate, endDate, onChange }: DateRangeFilterProps) {
   return (
     <div className="flex items-center gap-2">
       <Popover>

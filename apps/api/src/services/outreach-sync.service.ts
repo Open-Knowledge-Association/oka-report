@@ -151,75 +151,71 @@ export class OutreachSyncService {
    * @returns Sync result with import/update/error counts
    */
   async syncArticlesFromDashboard(school: string, slug: string): Promise<SyncResult> {
-    try {
-      const articleData = await this.dashboardClient.getArticles(school, slug);
-      const articles = articleData.course?.articles ?? [];
+    const articleData = await this.dashboardClient.getArticles(school, slug);
+    const articles = articleData.course?.articles ?? [];
 
-      let imported = 0;
-      let updated = 0;
-      const errorDetails: Array<{ username: string; error: string }> = [];
+    let imported = 0;
+    let updated = 0;
+    const errorDetails: Array<{ username: string; error: string }> = [];
 
-      for (const article of articles) {
-        try {
-          const result = await this.prisma.article.upsert({
-            where: { outreachId: article.id || 0 },
-            create: {
-              pageId: null,
-              title: article.title || "",
-              wikiProject: normalizeWikiProject(
-                article.language || "en",
-                article.project || "wikipedia",
-              ),
-              source: "OUTREACH_DASHBOARD",
-              outreachId: article.id || 0,
-              url: article.url || "",
-              characterSum: article.character_sum || 0,
-              referencesCount: article.references_count || 0,
-              isNewArticle: article.new_article || false,
-              rating: article.rating || null,
-            },
-            update: {
-              title: article.title || "",
-              wikiProject: normalizeWikiProject(
-                article.language || "en",
-                article.project || "wikipedia",
-              ),
-              source: "OUTREACH_DASHBOARD",
-              url: article.url || "",
-              characterSum: article.character_sum || 0,
-              referencesCount: article.references_count || 0,
-              isNewArticle: article.new_article || false,
-              rating: article.rating || null,
-              updatedAt: new Date(),
-            },
-          });
+    for (const article of articles) {
+      try {
+        const result = await this.prisma.article.upsert({
+          where: { outreachId: article.id || 0 },
+          create: {
+            pageId: null,
+            title: article.title || "",
+            wikiProject: normalizeWikiProject(
+              article.language || "en",
+              article.project || "wikipedia",
+            ),
+            source: "OUTREACH_DASHBOARD",
+            outreachId: article.id || 0,
+            url: article.url || "",
+            characterSum: article.character_sum || 0,
+            referencesCount: article.references_count || 0,
+            isNewArticle: article.new_article || false,
+            rating: article.rating || null,
+          },
+          update: {
+            title: article.title || "",
+            wikiProject: normalizeWikiProject(
+              article.language || "en",
+              article.project || "wikipedia",
+            ),
+            source: "OUTREACH_DASHBOARD",
+            url: article.url || "",
+            characterSum: article.character_sum || 0,
+            referencesCount: article.references_count || 0,
+            isNewArticle: article.new_article || false,
+            rating: article.rating || null,
+            updatedAt: new Date(),
+          },
+        });
 
-          const createdJustNow = result.createdAt.getTime() > Date.now() - 5000;
-          if (createdJustNow) {
-            imported++;
-          } else {
-            updated++;
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          errorDetails.push({
-            username: article.title || "Unknown",
-            error: errorMessage,
-          });
+        const createdJustNow = result.createdAt.getTime() > Date.now() - 5000;
+        if (createdJustNow) {
+          imported++;
+        } else {
+          updated++;
         }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errorDetails.push({
+          username: article.title || "Unknown",
+          error: errorMessage,
+        });
       }
-
-      const syncResult: SyncResult = {
-        imported,
-        updated,
-        errors: errorDetails.length,
-        errorDetails,
-      };
-
-      return syncResult;
-    } catch (error) {
-      throw error;
     }
+
+    const syncResult: SyncResult = {
+      imported,
+      updated,
+      errors: errorDetails.length,
+      errorDetails,
+    };
+
+    return syncResult;
   }
 
   /**

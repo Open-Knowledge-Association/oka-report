@@ -12,7 +12,8 @@ export const Route = createFileRoute("/annual-reports")({
 });
 
 const numberFormat = new Intl.NumberFormat("en-US");
-const formatNumber = (value: unknown) => value == null ? "—" : numberFormat.format(typeof value === "number" ? value : 0);
+const formatNumber = (value: unknown) =>
+  value == null ? "—" : numberFormat.format(typeof value === "number" ? value : 0);
 
 type AnnualResponse = {
   year: number;
@@ -60,13 +61,22 @@ function AnnualReportsPage() {
                 window.location.href = `/annual-reports?year=${event.target.value}`;
               }}
             >
-              {Array.from({ length: 5 }, (_, index) => currentYear - index).map((value) => <option key={value} value={value}>{value}</option>)}
+              {Array.from({ length: 5 }, (_, index) => currentYear - index).map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
             </select>
           </label>
         </div>
 
         {annual.isLoading ? <ReportState text="Loading annual metrics..." /> : null}
-        {annual.error ? <ReportState text={annual.error instanceof Error ? annual.error.message : "Failed to load report"} error /> : null}
+        {annual.error ? (
+          <ReportState
+            text={annual.error instanceof Error ? annual.error.message : "Failed to load report"}
+            error
+          />
+        ) : null}
 
         {data ? (
           <>
@@ -82,12 +92,16 @@ function AnnualReportsPage() {
             </section>
 
             <Card>
-              <CardHeader><CardTitle>Year-over-year comparison</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Year-over-year comparison</CardTitle>
+              </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {Object.entries(data.totals).map(([key, value]) => (
                   <div className="rounded-lg border border-slate-200 p-3" key={key}>
                     <p className="text-xs uppercase tracking-wide text-slate-500">{key}</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatNumber(value)}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                      {formatNumber(value)}
+                    </p>
                     <p className="text-xs text-slate-500">Reported from reconciled source data</p>
                   </div>
                 ))}
@@ -96,30 +110,92 @@ function AnnualReportsPage() {
 
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
-                <CardHeader><CardTitle>Output by Wikipedia project</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Output by Wikipedia project</CardTitle>
+                </CardHeader>
                 <CardContent className="overflow-x-auto">
-                  <table className="w-full text-sm"><thead><tr className="border-b text-left text-slate-500"><th className="py-2">Project</th><th>Created</th><th>Edited</th><th>Views</th></tr></thead><tbody>
-                    {data.byWikiProject.map((row) => <tr className="border-b last:border-0" key={String(row.wikiProject)}><td className="py-2 font-medium">{String(row.wikiProject)}</td><td>{formatNumber(row.articlesCreated)}</td><td>{formatNumber(row.articlesEdited)}</td><td>{formatNumber(row.pageviews)}</td></tr>)}
-                  </tbody></table>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-slate-500">
+                        <th className="py-2">Project</th>
+                        <th>Created</th>
+                        <th>Edited</th>
+                        <th>Views</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.byWikiProject.map((row) => (
+                        <tr className="border-b last:border-0" key={String(row.wikiProject)}>
+                          <td className="py-2 font-medium">{String(row.wikiProject)}</td>
+                          <td>{formatNumber(row.articlesCreated)}</td>
+                          <td>{formatNumber(row.articlesEdited)}</td>
+                          <td>{formatNumber(row.pageviews)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Top viewed articles</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Top viewed articles</CardTitle>
+                </CardHeader>
                 <CardContent>
-                  {data.topArticles?.length ? <ol className="space-y-3">{data.topArticles.map((article) => <li className="flex gap-3 border-b pb-2 last:border-0" key={`${article.rank}-${article.title}-${article.wikiProject}`}><span className="w-6 text-slate-400">{article.rank}.</span><div className="min-w-0"><p className="truncate font-medium text-slate-900">{article.title}</p><p className="text-xs text-slate-500">{article.wikiProject} · {formatNumber(article.totalPageviews)} pageviews</p></div></li>)}</ol> : <p className="text-sm text-slate-500">No historical pageview data is available for this year.</p>}
+                  {data.topArticles?.length ? (
+                    <ol className="space-y-3">
+                      {data.topArticles.map((article) => (
+                        <li
+                          className="flex gap-3 border-b pb-2 last:border-0"
+                          key={`${article.rank}-${article.title}-${article.wikiProject}`}
+                        >
+                          <span className="w-6 text-slate-400">{article.rank}.</span>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-900">{article.title}</p>
+                            <p className="text-xs text-slate-500">
+                              {article.wikiProject} · {formatNumber(article.totalPageviews)}{" "}
+                              pageviews
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No historical pageview data is available for this year.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
             <Card>
-              <CardHeader><CardTitle>Methodology and scope</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Methodology and scope</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-2 text-sm leading-6 text-slate-600">
-                <p>This report measures operational Wikipedia activity recorded in OKA's local statistics database for the selected calendar year.</p>
-                <p>Articles created means records marked as new by the Outreach source. Articles edited includes tracked contribution activity. Pageviews are daily Wikimedia pageview records aggregated for the period.</p>
-                <p>Estimated words added are derived from net byte changes and are an estimate, not a linguistic word count. Financials, donations, grants, partnerships, editathons, and AI research are outside this report.</p>
-                <p>Annual report figures may change after late upstream data, reconciliation, or pageview backfills. Generated at request time from the current database snapshot.</p>
-                <p>Pageviews: {data.methodology.pageviews}. Articles created: {data.methodology.articlesCreated}.</p>
+                <p>
+                  This report measures operational Wikipedia activity recorded in OKA's local
+                  statistics database for the selected calendar year.
+                </p>
+                <p>
+                  Articles created means records marked as new by the Outreach source. Articles
+                  edited includes tracked contribution activity. Pageviews are daily Wikimedia
+                  pageview records aggregated for the period.
+                </p>
+                <p>
+                  Estimated words added are derived from net byte changes and are an estimate, not a
+                  linguistic word count. Financials, donations, grants, partnerships, editathons,
+                  and AI research are outside this report.
+                </p>
+                <p>
+                  Annual report figures may change after late upstream data, reconciliation, or
+                  pageview backfills. Generated at request time from the current database snapshot.
+                </p>
+                <p>
+                  Pageviews: {data.methodology.pageviews}. Articles created:{" "}
+                  {data.methodology.articlesCreated}.
+                </p>
               </CardContent>
             </Card>
           </>
@@ -130,9 +206,22 @@ function AnnualReportsPage() {
 }
 
 function Metric({ title, value }: { title: string; value?: number | null }) {
-  return <Card><CardContent className="pt-6"><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-2xl font-bold text-slate-900">{formatNumber(value)}</p></CardContent></Card>;
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <p className="text-sm text-slate-500">{title}</p>
+        <p className="mt-2 text-2xl font-bold text-slate-900">{formatNumber(value)}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ReportState({ text, error = false }: { text: string; error?: boolean }) {
-  return <div className={`rounded-lg border px-4 py-3 text-sm ${error ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`}>{text}</div>;
+  return (
+    <div
+      className={`rounded-lg border px-4 py-3 text-sm ${error ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`}
+    >
+      {text}
+    </div>
+  );
 }

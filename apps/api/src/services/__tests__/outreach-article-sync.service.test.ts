@@ -67,7 +67,9 @@ describe("OutreachArticleSyncService", () => {
       ),
     } as unknown as OutreachDashboardClient;
 
-    service = new OutreachArticleSyncService(mockPrisma, mockDashboardClient, () => ({ getArticleInfo: mock(() => Promise.resolve(null)) }));
+    service = new OutreachArticleSyncService(mockPrisma, mockDashboardClient, () => ({
+      getArticleInfo: mock(() => Promise.resolve(null)),
+    }));
   });
 
   describe("syncArticlesFromDashboard", () => {
@@ -163,7 +165,6 @@ describe("OutreachArticleSyncService", () => {
     });
 
     it("should merge existing article by title and wikiProject", async () => {
-      const wikiProject = normalizeWikiProject("en", "wikipedia");
       const mockArticles: OutreachArticle[] = [
         {
           id: 100,

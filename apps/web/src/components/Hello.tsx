@@ -3,8 +3,6 @@
  * This component demonstrates best practices for data-testid usage
  */
 
-
-
 interface HelloProps {
   name: string;
 }

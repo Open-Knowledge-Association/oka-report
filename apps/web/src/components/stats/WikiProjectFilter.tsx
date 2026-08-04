@@ -13,11 +13,7 @@ interface WikiProjectFilterProps {
   options: string[];
 }
 
-export default function WikiProjectFilter({
-  value,
-  onChange,
-  options,
-}: WikiProjectFilterProps) {
+export default function WikiProjectFilter({ value, onChange, options }: WikiProjectFilterProps) {
   return (
     <div className="flex items-center gap-2">
       <Globe className="h-4 w-4 text-slate-500" />

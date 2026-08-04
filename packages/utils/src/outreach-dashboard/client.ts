@@ -68,10 +68,13 @@ export class OutreachDashboardClient {
     }
 
     if (!response.ok) {
-      throw new OutreachDashboardClientError(`Outreach Dashboard API request failed (HTTP ${response.status})`, {
-        status: response.status,
-        url: url.toString(),
-      });
+      throw new OutreachDashboardClientError(
+        `Outreach Dashboard API request failed (HTTP ${response.status})`,
+        {
+          status: response.status,
+          url: url.toString(),
+        },
+      );
     }
 
     const errorResponse = payload as OutreachDashboardApiError;

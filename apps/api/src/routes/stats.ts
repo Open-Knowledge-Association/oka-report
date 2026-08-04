@@ -150,7 +150,9 @@ const getExternalSnapshot = async (): Promise<ExternalSnapshot | null> => {
   return snapshot;
 };
 
-const getExternalSnapshotWithTimeout = async (timeoutMs = 5000): Promise<ExternalSnapshot | null> => {
+const getExternalSnapshotWithTimeout = async (
+  timeoutMs = 5000,
+): Promise<ExternalSnapshot | null> => {
   const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
   return Promise.race([getExternalSnapshot().catch(() => null), timeout]);
 };
@@ -251,7 +253,6 @@ statsRoutes.get("/editors/history", async (c) => {
   return c.json({ success: true, data: { editorId: parsed.editorId, series: data } });
 });
 
-
 statsRoutes.get("/editors/:id", async (c) => {
   const filters = parseFilters({ ...c.req.query(), editorId: c.req.param("id") });
   const stats = await statsService.getStatsByEditor(filters);
@@ -272,8 +273,9 @@ statsRoutes.get("/annual/export", async (c) => {
     const { year, format, wikiProject } = parsed;
 
     const impact = !wikiProject ? await statsService.getImpactReport(year, 10, true) : null;
-    const stats = impact ?? await statsService.getAnnualStats(year, { wikiProject });
-    const topArticles = impact?.topArticles ?? await statsService.getTopArticlesByYear(year, 10, wikiProject);
+    const stats = impact ?? (await statsService.getAnnualStats(year, { wikiProject }));
+    const topArticles =
+      impact?.topArticles ?? (await statsService.getTopArticlesByYear(year, 10, wikiProject));
 
     const reportData = {
       year,
@@ -323,7 +325,8 @@ statsRoutes.get("/annual/export", async (c) => {
       400,
     );
   } catch (error) {
-    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError"))
+      return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error exporting report:", message);
 
@@ -402,7 +405,8 @@ statsRoutes.get("/monthly/export", async (c) => {
       400,
     );
   } catch (error) {
-    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError"))
+      return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error exporting monthly report:", message);
 
@@ -456,8 +460,12 @@ statsRoutes.get("/annual-impact", async (c) => {
     const year = Number(c.req.query("year") ?? new Date().getUTCFullYear() - 1);
     const limit = Math.min(50, Math.max(1, Number(c.req.query("limit") ?? 10)));
     const includeMonthly = c.req.query("includeMonthly") === "true";
-    if (!Number.isInteger(year) || year < 2020 || year > 2100) return c.json({ success: false, error: "Invalid year" }, 400);
-    return c.json({ success: true, data: await statsService.getImpactReport(year, limit, includeMonthly) });
+    if (!Number.isInteger(year) || year < 2020 || year > 2100)
+      return c.json({ success: false, error: "Invalid year" }, 400);
+    return c.json({
+      success: true,
+      data: await statsService.getImpactReport(year, limit, includeMonthly),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching annual impact report:", message);
@@ -472,13 +480,16 @@ statsRoutes.get("/annual", async (c) => {
   // Keep the unfiltered annual contract aligned with the canonical impact
   // report used by the public and admin report screens. Filtered legacy queries
   // remain available for explicit wiki/source drill-downs.
-  const canonical = !parsed.wikiProject && !parsed.source
-    ? await statsService.getImpactReport(year, 10, true)
-    : null;
-  const stats = canonical ? null : await statsService.getAnnualStats(year, {
-    wikiProject: parsed.wikiProject,
-    source: parsed.source,
-  });
+  const canonical =
+    !parsed.wikiProject && !parsed.source
+      ? await statsService.getImpactReport(year, 10, true)
+      : null;
+  const stats = canonical
+    ? null
+    : await statsService.getAnnualStats(year, {
+        wikiProject: parsed.wikiProject,
+        source: parsed.source,
+      });
 
   let yoy = undefined;
   if (parsed.includeYoY) {
@@ -570,7 +581,8 @@ statsRoutes.get("/monthly", async (c) => {
       },
     });
   } catch (error) {
-    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError"))
+      return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching monthly stats:", message);
     return c.json(
@@ -611,7 +623,8 @@ statsRoutes.get("/top-articles", async (c) => {
       },
     });
   } catch (error) {
-    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError"))
+      return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching top articles:", message);
 
@@ -638,12 +651,18 @@ statsRoutes.post("/history/backfill", async (c) => {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         processed: 0,
-        total: Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1),
+        total: Math.max(
+          0,
+          Math.floor((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+        ),
       } as any,
     },
   });
 
-  return c.json({ success: true, data: { jobId: job.id, startDate, endDate, status: "pending" } }, 202);
+  return c.json(
+    { success: true, data: { jobId: job.id, startDate, endDate, status: "pending" } },
+    202,
+  );
 });
 
 statsRoutes.post("/snapshot", async (c) => {

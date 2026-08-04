@@ -60,13 +60,6 @@ const parsePageviewDate = (date: string) => new Date(`${date}T00:00:00Z`);
 
 const formatDateTimeForMetadata = (date: Date) => date.toISOString();
 
-const formatDateForMetadata = (date: Date) => {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
 export class SyncService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -253,35 +246,46 @@ export class SyncService {
 
     if (jobId) {
       const checkpointJob = await this.prisma.syncJob.findUnique({
-        where: { id: jobId }, select: { metadata: true },
+        where: { id: jobId },
+        select: { metadata: true },
       });
       const metadata = checkpointJob?.metadata;
       if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
         const value = Number((metadata as { processed?: unknown }).processed ?? 0);
         const priorSynced = Number((metadata as { syncedCount?: unknown }).syncedCount ?? 0);
         const priorCoverage = (metadata as { coverage?: typeof coverage }).coverage;
-        if (Number.isFinite(value)) processedEditors = Math.min(totalEditors, Math.max(0, Math.floor(value)));
+        if (Number.isFinite(value))
+          processedEditors = Math.min(totalEditors, Math.max(0, Math.floor(value)));
         if (Number.isFinite(priorSynced)) syncedCount = priorSynced;
         if (priorCoverage && typeof priorCoverage === "object") {
           coverage.fetched = Number(priorCoverage.fetched) || 0;
           coverage.matched = Number(priorCoverage.matched) || 0;
           coverage.skippedNotOutreach = Number(priorCoverage.skippedNotOutreach) || 0;
           coverage.failedEditorProjects = Number(priorCoverage.failedEditorProjects) || 0;
-          coverage.errorSamples = Array.isArray(priorCoverage.errorSamples) ? priorCoverage.errorSamples.slice(0, 50) : [];
+          coverage.errorSamples = Array.isArray(priorCoverage.errorSamples)
+            ? priorCoverage.errorSamples.slice(0, 50)
+            : [];
         }
       }
     }
 
-    const persistProgress = async (stage: string, log?: { message: string; level?: SyncJobLogLevel }) => {
+    const persistProgress = async (
+      stage: string,
+      log?: { message: string; level?: SyncJobLogLevel },
+    ) => {
       if (!jobId) return;
-      await this.updateJobMetadata(jobId, {
-        total: totalEditors,
-        processed: processedEditors,
-        syncedCount,
-        errors: coverage.failedEditorProjects,
-        coverage: coverage as unknown as Prisma.InputJsonObject,
-        stage,
-      }, log);
+      await this.updateJobMetadata(
+        jobId,
+        {
+          total: totalEditors,
+          processed: processedEditors,
+          syncedCount,
+          errors: coverage.failedEditorProjects,
+          coverage: coverage as unknown as Prisma.InputJsonObject,
+          stage,
+        },
+        log,
+      );
     };
 
     await persistProgress(`Syncing contributions (${processedEditors}/${totalEditors} editors)`, {
@@ -290,7 +294,10 @@ export class SyncService {
 
     for (const editor of editors.slice(processedEditors)) {
       if (jobId && (await this.checkCancelled(jobId))) {
-        await persistProgress("Cancelled by user", { message: "Cancelled by user", level: "error" });
+        await persistProgress("Cancelled by user", {
+          message: "Cancelled by user",
+          level: "error",
+        });
         return syncedCount;
       }
 
@@ -312,7 +319,12 @@ export class SyncService {
             coverage.matched += 1;
             const isCreation = contribution.parentId == null;
             await this.prisma.contribution.upsert({
-              where: { revisionId_articleId: { revisionId: contribution.revisionId, articleId: article.id } },
+              where: {
+                revisionId_articleId: {
+                  revisionId: contribution.revisionId,
+                  articleId: article.id,
+                },
+              },
               create: {
                 editorId: editor.id,
                 articleId: article.id,
@@ -352,7 +364,10 @@ export class SyncService {
               error: error instanceof Error ? error.message : String(error),
             });
           }
-          console.warn(`[Contributions] Failed ${editor.username} @ ${wikiProject}; continuing`, error instanceof Error ? error.message : String(error));
+          console.warn(
+            `[Contributions] Failed ${editor.username} @ ${wikiProject}; continuing`,
+            error instanceof Error ? error.message : String(error),
+          );
         }
       }
 
@@ -360,13 +375,18 @@ export class SyncService {
       await persistProgress(`Syncing contributions (${processedEditors}/${totalEditors} editors)`, {
         message: `Contributions progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions`,
       });
-      console.log(`Contributions sync progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions synced`);
+      console.log(
+        `Contributions sync progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions synced`,
+      );
     }
 
-    await persistProgress(`Completed contributions sync (${processedEditors}/${totalEditors} editors)`, {
-      message: `Completed contributions sync (${processedEditors}/${totalEditors} editors), ${syncedCount} contributions`,
-      level: "success",
-    });
+    await persistProgress(
+      `Completed contributions sync (${processedEditors}/${totalEditors} editors)`,
+      {
+        message: `Completed contributions sync (${processedEditors}/${totalEditors} editors), ${syncedCount} contributions`,
+        level: "success",
+      },
+    );
     return syncedCount;
   }
 
@@ -413,13 +433,22 @@ export class SyncService {
     let processedAgentRequests = 0;
 
     if (jobId) {
-      const checkpointJob = await this.prisma.syncJob.findUnique({ where: { id: jobId }, select: { metadata: true } });
+      const checkpointJob = await this.prisma.syncJob.findUnique({
+        where: { id: jobId },
+        select: { metadata: true },
+      });
       const metadata = checkpointJob?.metadata;
       if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
         const value = Number((metadata as { processedArticles?: unknown }).processedArticles ?? 0);
-        const requests = Number((metadata as { processedAgentRequests?: unknown }).processedAgentRequests ?? 0);
+        const requests = Number(
+          (metadata as { processedAgentRequests?: unknown }).processedAgentRequests ?? 0,
+        );
         const priorSynced = Number((metadata as { syncedCount?: unknown }).syncedCount ?? 0);
-        if (Number.isFinite(value)) processedArticles = Math.max(0, Math.min(totalArticles, Math.floor(value / checkpointInterval) * checkpointInterval));
+        if (Number.isFinite(value))
+          processedArticles = Math.max(
+            0,
+            Math.min(totalArticles, Math.floor(value / checkpointInterval) * checkpointInterval),
+          );
         if (Number.isFinite(requests)) processedAgentRequests = Math.max(0, requests);
         if (Number.isFinite(priorSynced)) syncedCount = priorSynced;
       }
@@ -627,12 +656,19 @@ export class SyncService {
     const checkpointInterval = 10;
 
     if (jobId) {
-      const checkpointJob = await this.prisma.syncJob.findUnique({ where: { id: jobId }, select: { metadata: true } });
+      const checkpointJob = await this.prisma.syncJob.findUnique({
+        where: { id: jobId },
+        select: { metadata: true },
+      });
       const metadata = checkpointJob?.metadata;
       if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
         const value = Number((metadata as { processed?: unknown }).processed ?? 0);
         const priorSynced = Number((metadata as { syncedCount?: unknown }).syncedCount ?? 0);
-        if (Number.isFinite(value)) processedEditors = Math.min(totalEditors, Math.max(0, Math.floor(value / checkpointInterval) * checkpointInterval));
+        if (Number.isFinite(value))
+          processedEditors = Math.min(
+            totalEditors,
+            Math.max(0, Math.floor(value / checkpointInterval) * checkpointInterval),
+          );
         if (Number.isFinite(priorSynced)) syncedCount = priorSynced;
       }
     }
@@ -712,12 +748,13 @@ export class SyncService {
     return syncedCount;
   }
 
-  async createSyncJob(jobType: string, parentJobId?: string) {
+  async createSyncJob(jobType: string, parentJobId?: string, metadata?: Prisma.InputJsonValue) {
     return this.prisma.syncJob.create({
       data: {
         jobType,
         status: "pending",
         parentJobId,
+        metadata,
       },
     });
   }
@@ -840,7 +877,9 @@ export class SyncService {
     }
 
     // Record sync mode and window in metadata
-    const windowStart = contributionsSince ? formatDateTimeForMetadata(contributionsSince) : undefined;
+    const windowStart = contributionsSince
+      ? formatDateTimeForMetadata(contributionsSince)
+      : undefined;
     const windowEnd =
       mode === "scheduled_incremental" ? formatDateTimeForMetadata(new Date()) : undefined;
 
@@ -859,9 +898,10 @@ export class SyncService {
       const contributionsJob = await this.getOrCreateChildJob(jobId, "contributions");
       if (contributionsJob.status === "completed") {
         const metadata = contributionsJob.metadata;
-        contributionsSynced = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-          ? Number((metadata as { contributionsSynced?: unknown }).contributionsSynced ?? 0)
-          : 0;
+        contributionsSynced =
+          metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? Number((metadata as { contributionsSynced?: unknown }).contributionsSynced ?? 0)
+            : 0;
         await this.updateParentJobProgress(jobId, "Contributions already completed", childJobTypes);
       } else {
         await this.startSyncJob(contributionsJob.id);
@@ -909,9 +949,10 @@ export class SyncService {
       const pageviewsJob = await this.getOrCreateChildJob(jobId, "pageviews");
       if (pageviewsJob.status === "completed") {
         const metadata = pageviewsJob.metadata;
-        pageviewsSynced = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-          ? Number((metadata as { pageviewsSynced?: unknown }).pageviewsSynced ?? 0)
-          : 0;
+        pageviewsSynced =
+          metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? Number((metadata as { pageviewsSynced?: unknown }).pageviewsSynced ?? 0)
+            : 0;
         await this.updateParentJobProgress(jobId, "Pageviews already completed", childJobTypes);
       } else {
         await this.startSyncJob(pageviewsJob.id);
@@ -956,9 +997,10 @@ export class SyncService {
       const commonsJob = await this.getOrCreateChildJob(jobId, "commons");
       if (commonsJob.status === "completed") {
         const metadata = commonsJob.metadata;
-        commonsUploadsSynced = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-          ? Number((metadata as { commonsUploadsSynced?: unknown }).commonsUploadsSynced ?? 0)
-          : 0;
+        commonsUploadsSynced =
+          metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? Number((metadata as { commonsUploadsSynced?: unknown }).commonsUploadsSynced ?? 0)
+            : 0;
         await this.updateParentJobProgress(jobId, "Commons already completed", childJobTypes);
       } else {
         await this.startSyncJob(commonsJob.id);
@@ -1033,7 +1075,9 @@ export class SyncService {
     wikiProject: string,
   ): Promise<{ id: string; createdByEditorId: string | null } | null> {
     const existingArticle =
-      (await this.prisma.article.findFirst({ where: { pageId: contribution.pageId, wikiProject } })) ??
+      (await this.prisma.article.findFirst({
+        where: { pageId: contribution.pageId, wikiProject },
+      })) ??
       (await this.prisma.article.findFirst({ where: { title: contribution.title, wikiProject } }));
 
     if (!existingArticle) {

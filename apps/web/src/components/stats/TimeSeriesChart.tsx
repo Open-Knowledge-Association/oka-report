@@ -44,11 +44,7 @@ export default function TimeSeriesChart({ data, granularity }: TimeSeriesChartPr
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis
-            dataKey="formattedDate"
-            tick={{ fontSize: 12 }}
-            stroke="#64748b"
-          />
+          <XAxis dataKey="formattedDate" tick={{ fontSize: 12 }} stroke="#64748b" />
           <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
           <Tooltip
             contentStyle={{

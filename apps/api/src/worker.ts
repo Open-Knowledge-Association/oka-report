@@ -17,8 +17,12 @@ const WORKER_ID = process.env.WORKER_ID ?? `worker-${process.pid}`;
 const bootstrapService = new BootstrapService(prisma);
 const wikimediaClient = new WikimediaClient({ baseUrl: "https://en.wikipedia.org" });
 const queuedSyncService = new SyncService(prisma, wikimediaClient);
-const queuedOutreachService = new OutreachSyncService(prisma, { baseUrl: "https://outreachdashboard.wmflabs.org" });
-const queuedDashboardClient = new OutreachDashboardClient({ baseUrl: "https://outreachdashboard.wmflabs.org" });
+const queuedOutreachService = new OutreachSyncService(prisma, {
+  baseUrl: "https://outreachdashboard.wmflabs.org",
+});
+const queuedDashboardClient = new OutreachDashboardClient({
+  baseUrl: "https://outreachdashboard.wmflabs.org",
+});
 const queuedArticleService = new OutreachArticleSyncService(prisma, queuedDashboardClient);
 const historicalPageviewService = new HistoricalPageviewService(prisma, wikimediaClient);
 const queuedStatsService = new StatsService(prisma);
@@ -26,7 +30,8 @@ let executing = false;
 let backfillForRoot: string | null = null;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const touchHeartbeat = () => writeFile("/tmp/oka-worker-heartbeat", new Date().toISOString()).catch(() => undefined);
+const touchHeartbeat = () =>
+  writeFile("/tmp/oka-worker-heartbeat", new Date().toISOString()).catch(() => undefined);
 
 const claimRoot = async (rootJobId: string) => {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -61,15 +66,31 @@ const processQueuedJob = async () => {
       parentJobId: null,
       status: { in: ["pending", "running"] },
       ...(state?.rootJobId ? { NOT: { id: state.rootJobId } } : {}),
-      jobType: { in: ["contributions", "pageviews", "commons", "editors", "outreach_articles", "history_backfill", "historical_pageviews"] },
+      jobType: {
+        in: [
+          "contributions",
+          "pageviews",
+          "commons",
+          "editors",
+          "outreach_articles",
+          "history_backfill",
+          "historical_pageviews",
+        ],
+      },
     },
     orderBy: { createdAt: "asc" },
   });
-  if (!job || (job.jobType === "historical_pageviews" && state?.state === "running") || !(await claimRoot(job.id))) return;
+  if (
+    !job ||
+    (job.jobType === "historical_pageviews" && state?.state === "running") ||
+    !(await claimRoot(job.id))
+  )
+    return;
   try {
-    const jobMetadata = job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
-      ? job.metadata as Record<string, unknown>
-      : {};
+    const jobMetadata =
+      job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
+        ? (job.metadata as Record<string, unknown>)
+        : {};
     const school = typeof jobMetadata.school === "string" ? jobMetadata.school : "OKA";
     const slug = typeof jobMetadata.slug === "string" ? jobMetadata.slug : "OKA";
     const syncMode = typeof jobMetadata.mode === "string" ? jobMetadata.mode : "manual_full";
@@ -77,33 +98,56 @@ const processQueuedJob = async () => {
       const count = await queuedSyncService.syncEditorContributions(undefined, undefined, job.id);
       await queuedSyncService.completeSyncJob(job.id, { contributionsSynced: count });
     } else if (job.jobType === "pageviews") {
-      const count = await queuedSyncService.syncArticlePageviews(undefined, undefined, job.id, syncMode as any);
+      const count = await queuedSyncService.syncArticlePageviews(
+        undefined,
+        undefined,
+        job.id,
+        syncMode as any,
+      );
       await queuedSyncService.completeSyncJob(job.id, { pageviewsSynced: count });
     } else if (job.jobType === "commons") {
       const count = await queuedSyncService.syncCommonsUploads(undefined, job.id);
       await queuedSyncService.completeSyncJob(job.id, { commonsUploadsSynced: count });
     } else if (job.jobType === "editors") {
-      await queuedOutreachService.syncEditorsFromDashboard(school, slug, { parentJobId: job.parentJobId ?? undefined, jobId: job.id });
+      await queuedOutreachService.syncEditorsFromDashboard(school, slug, {
+        parentJobId: job.parentJobId ?? undefined,
+        jobId: job.id,
+      });
     } else if (job.jobType === "outreach_articles") {
-      await queuedArticleService.syncArticlesFromDashboard(school, slug, { parentJobId: job.parentJobId ?? undefined, jobId: job.id });
+      await queuedArticleService.syncArticlesFromDashboard(school, slug, {
+        parentJobId: job.parentJobId ?? undefined,
+        jobId: job.id,
+      });
     } else if (job.jobType === "history_backfill") {
-      const metadata = job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata) ? job.metadata as { startDate?: unknown; endDate?: unknown } : {};
+      const metadata =
+        job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
+          ? (job.metadata as { startDate?: unknown; endDate?: unknown })
+          : {};
       const startDate = new Date(String(metadata.startDate ?? ""));
       const endDate = new Date(String(metadata.endDate ?? ""));
-      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime()) ||
+        endDate < startDate
+      ) {
         throw new Error("Invalid history backfill date range");
       }
       const result = await queuedStatsService.runHistoryBackfill(startDate, endDate, job.id);
       await queuedSyncService.completeSyncJob(job.id, result as any);
     } else if (job.jobType === "historical_pageviews") {
-      const metadata = job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata) ? job.metadata as { year?: unknown } : {};
+      const metadata =
+        job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
+          ? (job.metadata as { year?: unknown })
+          : {};
       const year = Number(metadata.year ?? new Date().getUTCFullYear());
       const result = await historicalPageviewService.syncYear(year, job.id);
       await queuedSyncService.completeSyncJob(job.id, result as any);
     }
   } catch (error) {
     await queuedSyncService.failSyncJob(job.id, error);
-    console.error(`[Worker] Queued job ${job.id} failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[Worker] Queued job ${job.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 };
 
@@ -120,11 +164,18 @@ const cycle = async () => {
   if (state?.state === "completed" && state.rootJobId && backfillForRoot !== state.rootJobId) {
     const rootJobId = state.rootJobId;
     backfillForRoot = rootJobId;
-    console.log(`[Worker] Starting non-blocking post-bootstrap daily stats backfill for ${rootJobId}`);
-    void new StatsService(prisma).backfillMissingDailySnapshots()
-      .then(() => console.log(`[Worker] Post-bootstrap daily stats backfill completed for ${rootJobId}`))
+    console.log(
+      `[Worker] Starting non-blocking post-bootstrap daily stats backfill for ${rootJobId}`,
+    );
+    void new StatsService(prisma)
+      .backfillMissingDailySnapshots()
+      .then(() =>
+        console.log(`[Worker] Post-bootstrap daily stats backfill completed for ${rootJobId}`),
+      )
       .catch((error) => {
-        console.error(`[Worker] Backfill failed: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(
+          `[Worker] Backfill failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
         backfillForRoot = null;
       });
   }
@@ -141,9 +192,8 @@ const cycle = async () => {
       orderBy: { createdAt: "asc" },
       select: { id: true },
     });
-    const rootJobId = state?.state === "running" && state.rootJobId
-      ? state.rootJobId
-      : scheduledRoot?.id;
+    const rootJobId =
+      state?.state === "running" && state.rootJobId ? state.rootJobId : scheduledRoot?.id;
     if (rootJobId) {
       executing = true;
       if (!(await claimRoot(rootJobId))) {
@@ -155,7 +205,9 @@ const cycle = async () => {
         console.log(`[Worker] Claimed/resuming root job ${rootJobId} as ${WORKER_ID}`);
         await runBootstrapJob(rootJobId);
       } catch (error) {
-        console.error(`[Worker] Root job failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+        console.error(
+          `[Worker] Root job failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+        );
       } finally {
         clearInterval(timer);
         executing = false;
@@ -175,7 +227,9 @@ const main = async () => {
     try {
       await cycle();
     } catch (error) {
-      console.error(`[Worker] Cycle error: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `[Worker] Cycle error: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     await sleep(POLL_MS);
   }

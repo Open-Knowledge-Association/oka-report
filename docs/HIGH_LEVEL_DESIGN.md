@@ -112,8 +112,7 @@ We **MUST** include a custom User-Agent header on all requests. This is required
 
 ```typescript
 // REQUIRED: Custom User-Agent for all Wikimedia API requests
-const USER_AGENT =
-  "OKAStatsBot/1.0 (https://oka.wiki/stats; tech@oka.wiki) bun/1.3.5";
+const USER_AGENT = "OKAStatsBot/1.0 (https://oka.wiki/stats; tech@oka.wiki) bun/1.3.5";
 
 const headers = {
   "User-Agent": USER_AGENT,
@@ -185,12 +184,7 @@ GET /w/api.php?action=query&titles={article}&prop=revisions&rvprop=user&rvlimit=
 
 ```typescript
 // Fetch daily pageviews for time-series charts
-const getDailyPageviews = async (
-  article: string,
-  project: string,
-  start: string,
-  end: string,
-) => {
+const getDailyPageviews = async (article: string, project: string, start: string, end: string) => {
   const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/${project}/all-access/user/${encodeURIComponent(article)}/daily/${start}/${end}`;
   const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
   return response.json();

@@ -45,7 +45,6 @@ const initializeServer = async () => {
 
     startBootstrapWatcher(prisma, bootstrapService);
     console.log("[Server] Bootstrap watcher started");
-
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Server] Initialization error: ${message}`);

@@ -1,12 +1,4 @@
-import {
-  LineChart,
-  Users,
-  Eye,
-  Type,
-  Filter,
-  RefreshCw,
-  Download,
-} from "lucide-react";
+import { LineChart, Users, Eye, Type, Filter, RefreshCw, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +16,8 @@ import {
 import { downloadMonthlyReport, fetchMonthlyStats, fetchTopArticles } from "@/lib/api";
 
 type PerformanceMetric = "pageviews" | "edits" | "wordsAdded";
-const formatMetric = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
+const formatMetric = (value: number | null | undefined) =>
+  value == null ? "Unavailable" : value.toLocaleString();
 
 const months = [
   { value: 1, label: "January" },
@@ -148,7 +141,6 @@ export function MonthlyReportSection() {
     queryFn: () =>
       fetchTopArticles({ year, month, wikiProject: wikiProject || undefined, limit: 10 }),
   });
-
 
   const maxDailyValue = Math.max(
     1,

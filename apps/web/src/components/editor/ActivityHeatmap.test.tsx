@@ -10,9 +10,10 @@ describe("ActivityHeatmap", () => {
   });
 
   it("renders heatmap with data", () => {
+    const today = new Date().toISOString().slice(0, 10);
     const stats = [
       {
-        date: "2024-01-01",
+        date: today,
         edits: 5,
         wordsAdded: 100,
         articlesCreated: 0,
@@ -20,19 +21,30 @@ describe("ActivityHeatmap", () => {
         referencesAdded: 2,
         commonsUploads: 0,
       },
-      {
-        date: "2024-01-02",
-        edits: 10,
-        wordsAdded: 200,
-        articlesCreated: 1,
-        articlesEdited: 2,
-        referencesAdded: 3,
-        commonsUploads: 0,
-      },
     ];
 
     render(<ActivityHeatmap dailyStats={stats} />);
 
     expect(screen.getByTestId("activity-heatmap")).toBeInTheDocument();
+  });
+
+  it("renders an empty state when all data is older than one year", () => {
+    render(
+      <ActivityHeatmap
+        dailyStats={[
+          {
+            date: "2020-01-01",
+            edits: 5,
+            wordsAdded: 100,
+            articlesCreated: 0,
+            articlesEdited: 1,
+            referencesAdded: 2,
+            commonsUploads: 0,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("activity-heatmap-empty")).toBeInTheDocument();
   });
 });

@@ -22,18 +22,16 @@ export const startScheduler = () => {
     return prisma.schedulerSetting.findUnique({ where: { id } });
   };
 
-  const isScheduleEnabled = async (id: string) => {
-    const setting = await getScheduleSetting(id);
-    return setting?.enabled ?? true;
-  };
-
-  const hasActiveHeavyJob = async () => Boolean(await prisma.syncJob.findFirst({
-    where: {
-      status: { in: ["pending", "running"] },
-      jobType: { in: ["full", "contributions", "pageviews", "commons", "outreach_articles"] },
-    },
-    select: { id: true, jobType: true },
-  }));
+  const hasActiveHeavyJob = async () =>
+    Boolean(
+      await prisma.syncJob.findFirst({
+        where: {
+          status: { in: ["pending", "running"] },
+          jobType: { in: ["full", "contributions", "pageviews", "commons", "outreach_articles"] },
+        },
+        select: { id: true, jobType: true },
+      }),
+    );
 
   const ensureDatabase = async (jobLabel: string) => {
     try {

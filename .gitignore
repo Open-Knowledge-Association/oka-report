@@ -10,6 +10,7 @@
 # .gitignore Root
 node_modules/
 dist/
+dist-*/
 
 # Ignore semua file .env dimanapun mereka berada
 .env

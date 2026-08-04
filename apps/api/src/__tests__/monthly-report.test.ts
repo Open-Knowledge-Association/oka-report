@@ -1,6 +1,10 @@
-import { describe, test, expect } from "vitest";
+import { afterAll, describe, test, expect } from "vitest";
+import { app } from "../index";
 
-const API_URL = process.env.API_URL || "http://localhost:3001";
+const server = Bun.serve({ port: 0, fetch: app.fetch });
+const API_URL = server.url.origin;
+
+afterAll(() => server.stop());
 
 describe("Monthly Report API", () => {
   describe("GET /api/stats/monthly", () => {

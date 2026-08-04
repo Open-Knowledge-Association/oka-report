@@ -20,19 +20,29 @@ export const HistoryRangeSchema = z.object({
   source: z.enum(["MEDIAWIKI", "OUTREACH_DASHBOARD"]).optional(),
 });
 
-export const HistoryBackfillSchema = z.object({
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
-}).superRefine((value, ctx) => {
-  const start = Date.parse(value.startDate);
-  const end = Date.parse(value.endDate);
-  const maxDays = 366;
-  if (end < start) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "endDate must be after startDate" });
-  } else if (Math.floor((end - start) / 86400000) + 1 > maxDays) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: `backfill range cannot exceed ${maxDays} days` });
-  }
-});
+export const HistoryBackfillSchema = z
+  .object({
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime(),
+  })
+  .superRefine((value, ctx) => {
+    const start = Date.parse(value.startDate);
+    const end = Date.parse(value.endDate);
+    const maxDays = 366;
+    if (end < start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endDate"],
+        message: "endDate must be after startDate",
+      });
+    } else if (Math.floor((end - start) / 86400000) + 1 > maxDays) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endDate"],
+        message: `backfill range cannot exceed ${maxDays} days`,
+      });
+    }
+  });
 
 export const EditorHistoryQuerySchema = HistoryRangeSchema.extend({
   editorId: z.string().min(1),

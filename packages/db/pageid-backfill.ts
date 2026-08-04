@@ -23,7 +23,9 @@ async function lookup(article: Article): Promise<number | null> {
       headers: { "User-Agent": "OKA-Report/1.0 (data verification)" },
     });
     if (response.ok) {
-      const body = await response.json() as { query?: { pages?: Array<{ pageid?: number; missing?: boolean }> } };
+      const body = (await response.json()) as {
+        query?: { pages?: Array<{ pageid?: number; missing?: boolean }> };
+      };
       const page = body.query?.pages?.[0];
       return page && !page.missing && typeof page.pageid === "number" ? page.pageid : null;
     }
@@ -42,7 +44,11 @@ async function main() {
     select: { id: true, title: true, wikiProject: true },
     orderBy: { id: "asc" },
   });
-  let processed = 0, updated = 0, missing = 0, conflicts = 0, errors = 0;
+  let processed = 0,
+    updated = 0,
+    missing = 0,
+    conflicts = 0,
+    errors = 0;
   let cursor = 0;
   const concurrency = 2;
   async function worker() {
@@ -50,6 +56,7 @@ async function main() {
       const index = cursor++;
       if (index >= articles.length) return;
       const article = articles[index];
+      if (!article) return;
       try {
         const pageId = await lookup(article);
         if (pageId == null) missing++;
@@ -59,22 +66,34 @@ async function main() {
             updated++;
           } catch (error) {
             conflicts++;
-            console.error(`[pageid] conflict ${article.id} ${article.title}: ${error instanceof Error ? error.message : String(error)}`);
+            console.error(
+              `[pageid] conflict ${article.id} ${article.title}: ${error instanceof Error ? error.message : String(error)}`,
+            );
           }
         }
       } catch (error) {
         errors++;
-        console.error(`[pageid] error ${article.id} ${article.title}: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(
+          `[pageid] error ${article.id} ${article.title}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
       processed++;
       if (processed % 25 === 0 || processed === articles.length) {
-        console.log(`[pageid] ${processed}/${articles.length} updated=${updated} missing=${missing} conflicts=${conflicts} errors=${errors}`);
+        console.log(
+          `[pageid] ${processed}/${articles.length} updated=${updated} missing=${missing} conflicts=${conflicts} errors=${errors}`,
+        );
       }
       await sleep(1000);
     }
   }
   await Promise.all(Array.from({ length: concurrency }, worker));
-  console.log(JSON.stringify({ total: articles.length, processed, updated, missing, conflicts, errors }));
+  console.log(
+    JSON.stringify({ total: articles.length, processed, updated, missing, conflicts, errors }),
+  );
   await prisma.$disconnect();
 }
-main().catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exit(1); });
+main().catch(async (error) => {
+  console.error(error);
+  await prisma.$disconnect();
+  process.exit(1);
+});

@@ -42,3 +42,17 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["./o
 EXPOSE 3000
 
 CMD ["./oka-api"]
+
+FROM base AS migration
+WORKDIR /app/packages/db
+CMD ["bunx", "prisma", "migrate", "deploy"]
+
+FROM base AS test
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium ca-certificates fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app/apps/api
+CMD ["bun", "test"]
+
+# Keep the API runtime as the default image when no explicit target is supplied.
+FROM production AS final
