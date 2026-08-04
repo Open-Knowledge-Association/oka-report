@@ -23,6 +23,8 @@ const outreachArticleSyncService = new OutreachArticleSyncService(prisma, dashbo
 
 export const outreachRoutes = new Hono();
 
+const normalizeAuthorUsername = (value: string) => value.normalize("NFC").replace(/\s+/g, "_").toLowerCase();
+
 const parseWikiProject = (wikiProject: string) => {
   const match = wikiProject.match(/^(.+?)\.(.+?)\.org$/);
   if (match) {
@@ -121,14 +123,29 @@ outreachRoutes.post("/backfill-authors", async (c) => {
           rateLimiterOptions: { delayMs: 200 }, // 200ms delay = 5 req/sec
         });
 
-        const articleInfo = await wikimediaClient.getArticleInfo(record.article.title);
+        const articleInfo = await wikimediaClient.getArticleInfo(record.article.title, record.article.pageId ?? undefined);
 
         if (articleInfo?.creator) {
-          // Normalize usernames: replace spaces with underscores for comparison
-          const normalizedCreator = articleInfo.creator.replace(/\s+/g, "_");
-          const normalizedEditor = record.editor.username.replace(/\s+/g, "_");
+          const normalizedCreator = normalizeAuthorUsername(articleInfo.creator);
+          const normalizedEditor = normalizeAuthorUsername(record.editor.username);
+          const isAuthor = normalizedCreator === normalizedEditor;
 
-          if (normalizedCreator === normalizedEditor) {
+          await prisma.article.update({
+            where: { id: record.article.id },
+            data: {
+              authorStatus: isAuthor ? "verified_tracked" : "verified_external",
+              authorUsername: articleInfo.creator,
+              authorVerifiedAt: new Date(),
+              createdByEditorId: isAuthor ? record.editor.id : null,
+            },
+          });
+
+          await prisma.articleEditor.update({
+            where: { id: record.id },
+            data: { isAuthor },
+          });
+
+          if (isAuthor) {
             await prisma.articleEditor.update({
               where: { id: record.id },
               data: { isAuthor: true },
@@ -141,6 +158,11 @@ outreachRoutes.post("/backfill-authors", async (c) => {
 
             authorsFound++;
           }
+        } else {
+          await prisma.article.update({
+            where: { id: record.article.id },
+            data: { authorStatus: "unavailable", authorVerifiedAt: new Date() },
+          });
         }
 
         processed++;
@@ -307,18 +329,8 @@ outreachRoutes.post("/articles/sync", async (c) => {
       },
     });
 
-    // Trigger async sync
-    setTimeout(async () => {
-      try {
-        await outreachArticleSyncService.syncArticlesFromDashboard(body.school, body.slug, {
-          jobId: job.id,
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("Outreach articles sync failed:", errorMessage);
-      }
-    }, 0);
-
+    // The durable worker claims and executes this pending job.
+    // Do not run the sync in the API process: a restart would lose the task.
     return c.json(
       {
         success: true,
@@ -581,50 +593,14 @@ outreachRoutes.post("/sync", async (c) => {
       );
     }
 
-    // Create sync job
+    // Queue only; the durable worker owns execution after the response returns.
     const job = await prisma.syncJob.create({
       data: {
         jobType: "editors",
         status: "pending",
+        metadata: { school: body.school, slug: body.slug, mode: "manual_incremental" },
       },
     });
-
-    // Trigger async sync
-    setTimeout(async () => {
-      try {
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "running",
-            startedAt: new Date(),
-          },
-        });
-
-        const result = await outreachSyncService.syncEditorsFromDashboard(body.school, body.slug);
-
-        // Update job with results
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "completed",
-            completedAt: new Date(),
-            metadata: result as any,
-          },
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("Outreach sync failed:", errorMessage);
-
-        await prisma.syncJob.update({
-          where: { id: job.id },
-          data: {
-            status: "failed",
-            completedAt: new Date(),
-            error: errorMessage,
-          },
-        });
-      }
-    }, 0);
 
     return c.json(
       {

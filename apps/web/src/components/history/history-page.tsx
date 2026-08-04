@@ -63,6 +63,7 @@ export function HistoryPage() {
   const [articleEnd, setArticleEnd] = useState(defaultRange.endDate);
   const [articleDelta, setArticleDelta] = useState(true);
   const [snapshotStatus, setSnapshotStatus] = useState<string>("");
+  const [opsToken, setOpsToken] = useState("");
 
   const { data: wikiStats } = useQuery({
     queryKey: ["stats", "articles", "wiki"],
@@ -118,7 +119,7 @@ export function HistoryPage() {
 
       const response = await fetch("/api/stats/history/backfill", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(opsToken ? { "x-oka-ops-token": opsToken } : {}) },
         body: JSON.stringify(payload),
       });
 
@@ -789,6 +790,16 @@ export function HistoryPage() {
                 <p className="mt-2 text-xs text-blue-700">
                   Re-running the same date updates snapshots for that day (no duplicate day rows).
                 </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Operations Token
+                  </Label>
+                  <Input type="password" value={opsToken} onChange={(e) => setOpsToken(e.target.value)} placeholder="Required for backfill" autoComplete="off" className="bg-white" />
+                  <p className="text-xs text-slate-500">Not stored or included in the URL.</p>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">

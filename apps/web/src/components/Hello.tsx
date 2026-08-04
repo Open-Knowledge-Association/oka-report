@@ -3,7 +3,7 @@
  * This component demonstrates best practices for data-testid usage
  */
 
-import React from "react";
+
 
 interface HelloProps {
   name: string;

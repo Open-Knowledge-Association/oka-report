@@ -23,6 +23,15 @@ export const HistoryRangeSchema = z.object({
 export const HistoryBackfillSchema = z.object({
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
+}).superRefine((value, ctx) => {
+  const start = Date.parse(value.startDate);
+  const end = Date.parse(value.endDate);
+  const maxDays = 366;
+  if (end < start) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "endDate must be after startDate" });
+  } else if (Math.floor((end - start) / 86400000) + 1 > maxDays) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: `backfill range cannot exceed ${maxDays} days` });
+  }
 });
 
 export const EditorHistoryQuerySchema = HistoryRangeSchema.extend({
@@ -67,7 +76,8 @@ export const TopArticlesQuerySchema = z.object({
       .number()
       .int()
       .min(2000)
-      .max(new Date().getFullYear() + 1),
+      .max(new Date().getFullYear() + 1)
+      .default(new Date().getUTCFullYear()),
   ),
   month: z.preprocess(
     (val) => (val === "" || val === undefined ? undefined : Number(val)),

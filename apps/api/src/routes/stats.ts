@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { ZodError } from "zod";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { StatsService } from "../services";
@@ -149,6 +150,11 @@ const getExternalSnapshot = async (): Promise<ExternalSnapshot | null> => {
   return snapshot;
 };
 
+const getExternalSnapshotWithTimeout = async (timeoutMs = 5000): Promise<ExternalSnapshot | null> => {
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+  return Promise.race([getExternalSnapshot().catch(() => null), timeout]);
+};
+
 const withDelta = <T extends Record<string, number | string | Date | null | undefined>>(
   series: T[],
   fields: Array<keyof T>,
@@ -225,6 +231,27 @@ statsRoutes.get("/editors", async (c) => {
   });
 });
 
+statsRoutes.get("/editors/history", async (c) => {
+  const parsed = EditorHistoryQuerySchema.parse(c.req.query());
+  const series = await statsService.getEditorDailyHistory(parsed.editorId, {
+    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
+  });
+  const data = parsed.withDelta
+    ? withDelta(series, [
+        "edits",
+        "wordsAdded",
+        "articlesCreated",
+        "articlesEdited",
+        "referencesAdded",
+        "commonsUploads",
+      ])
+    : series;
+
+  return c.json({ success: true, data: { editorId: parsed.editorId, series: data } });
+});
+
+
 statsRoutes.get("/editors/:id", async (c) => {
   const filters = parseFilters({ ...c.req.query(), editorId: c.req.param("id") });
   const stats = await statsService.getStatsByEditor(filters);
@@ -235,6 +262,8 @@ statsRoutes.get("/editors/:id", async (c) => {
       404,
     );
   }
+
+  return c.json({ success: true, data: stats });
 });
 
 statsRoutes.get("/annual/export", async (c) => {
@@ -242,15 +271,16 @@ statsRoutes.get("/annual/export", async (c) => {
     const parsed = ReportExportQuerySchema.parse(c.req.query());
     const { year, format, wikiProject } = parsed;
 
-    const stats = await statsService.getAnnualStats(year, { wikiProject });
-    const topArticles = await statsService.getTopArticlesByYear(year, 10, wikiProject);
+    const impact = !wikiProject ? await statsService.getImpactReport(year, 10, true) : null;
+    const stats = impact ?? await statsService.getAnnualStats(year, { wikiProject });
+    const topArticles = impact?.topArticles ?? await statsService.getTopArticlesByYear(year, 10, wikiProject);
 
     const reportData = {
       year,
       byWikiProject: stats.byWikiProject,
       totals: stats.totals,
       topArticles,
-    };
+    } as import("../services/report-export.service").AnnualReportData;
 
     if (format === "pdf") {
       const pdfBuffer = await reportExportService.exportPDF(reportData);
@@ -293,6 +323,7 @@ statsRoutes.get("/annual/export", async (c) => {
       400,
     );
   } catch (error) {
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error exporting report:", message);
 
@@ -314,7 +345,7 @@ statsRoutes.get("/monthly/export", async (c) => {
 
     const stats = await statsService.getMonthlyStats(year, month, { wikiProject });
     const startOfMonth = new Date(Date.UTC(year, month - 1, 1));
-    const endOfMonth = new Date(Date.UTC(year, month, 0));
+    const endOfMonth = new Date(Date.UTC(year, month, 1) - 1);
     const topArticles = await statsService.getTopArticlesByPeriod(
       startOfMonth,
       endOfMonth,
@@ -371,6 +402,7 @@ statsRoutes.get("/monthly/export", async (c) => {
       400,
     );
   } catch (error) {
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error exporting monthly report:", message);
 
@@ -419,11 +451,31 @@ statsRoutes.get("/history", async (c) => {
   return c.json({ success: true, data: { series: data } });
 });
 
+statsRoutes.get("/annual-impact", async (c) => {
+  try {
+    const year = Number(c.req.query("year") ?? new Date().getUTCFullYear() - 1);
+    const limit = Math.min(50, Math.max(1, Number(c.req.query("limit") ?? 10)));
+    const includeMonthly = c.req.query("includeMonthly") === "true";
+    if (!Number.isInteger(year) || year < 2020 || year > 2100) return c.json({ success: false, error: "Invalid year" }, 400);
+    return c.json({ success: true, data: await statsService.getImpactReport(year, limit, includeMonthly) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching annual impact report:", message);
+    return c.json({ success: false, error: "Failed to fetch annual impact report" }, 500);
+  }
+});
+
 statsRoutes.get("/annual", async (c) => {
   const parsed = AnnualStatsQuerySchema.parse(c.req.query());
   const year = parsed.year;
 
-  const stats = await statsService.getAnnualStats(year, {
+  // Keep the unfiltered annual contract aligned with the canonical impact
+  // report used by the public and admin report screens. Filtered legacy queries
+  // remain available for explicit wiki/source drill-downs.
+  const canonical = !parsed.wikiProject && !parsed.source
+    ? await statsService.getImpactReport(year, 10, true)
+    : null;
+  const stats = canonical ? null : await statsService.getAnnualStats(year, {
     wikiProject: parsed.wikiProject,
     source: parsed.source,
   });
@@ -437,9 +489,9 @@ statsRoutes.get("/annual", async (c) => {
     success: true,
     data: {
       year,
-      byWikiProject: stats.byWikiProject,
-      totals: stats.totals,
-      monthlyPerformance: stats.monthlyPerformance,
+      byWikiProject: canonical?.byWikiProject ?? stats!.byWikiProject,
+      totals: canonical?.totals ?? stats!.totals,
+      monthlyPerformance: canonical?.monthlyPerformance ?? stats!.monthlyPerformance,
       ...(yoy && { yoy }),
     },
   });
@@ -518,6 +570,7 @@ statsRoutes.get("/monthly", async (c) => {
       },
     });
   } catch (error) {
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching monthly stats:", message);
     return c.json(
@@ -535,7 +588,7 @@ statsRoutes.get("/top-articles", async (c) => {
     const articles = month
       ? await statsService.getTopArticlesByPeriod(
           new Date(Date.UTC(year, month - 1, 1)),
-          new Date(Date.UTC(year, month, 0)),
+          new Date(Date.UTC(year, month, 1) - 1),
           limit,
           wikiProject,
         )
@@ -558,14 +611,14 @@ statsRoutes.get("/top-articles", async (c) => {
       },
     });
   } catch (error) {
+    if (error instanceof ZodError || (error instanceof Error && error.name === "ZodError")) return c.json({ success: false, error: "Invalid query parameters" }, 400);
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching top articles:", message);
 
     return c.json(
       {
         success: false,
-        error: "Failed to fetch top articles",
-        details: message,
+        error: { code: "top_articles_failed", message: "Failed to fetch top articles" },
       },
       500,
     );
@@ -584,92 +637,13 @@ statsRoutes.post("/history/backfill", async (c) => {
       metadata: {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
+        processed: 0,
+        total: Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1),
       } as any,
     },
   });
 
-  setTimeout(async () => {
-    try {
-      const toUtcDay = (date: Date) =>
-        new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-      const addUtcDays = (date: Date, days: number) => {
-        const next = new Date(date);
-        next.setUTCDate(next.getUTCDate() + days);
-        return next;
-      };
-
-      const start = toUtcDay(startDate);
-      const end = toUtcDay(endDate);
-      const totalDays = Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-
-      await prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "running",
-          startedAt: new Date(),
-          metadata: {
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
-            total: totalDays,
-            processed: 0,
-            stage: `Backfilling snapshots (0/${totalDays} days)`,
-          } as any,
-        },
-      });
-
-      let processed = 0;
-      let current = start;
-
-      while (current <= end) {
-        await statsService.recordDailySnapshot(current);
-        processed += 1;
-
-        if (processed % 7 === 0 || processed === totalDays) {
-          await prisma.syncJob.update({
-            where: { id: job.id },
-            data: {
-              metadata: {
-                startDate: start.toISOString(),
-                endDate: end.toISOString(),
-                total: totalDays,
-                processed,
-                stage: `Backfilling snapshots (${processed}/${totalDays} days)`,
-              } as any,
-            },
-          });
-        }
-
-        current = addUtcDays(current, 1);
-      }
-
-      await prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "completed",
-          completedAt: new Date(),
-          metadata: {
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
-            total: totalDays,
-            processed: totalDays,
-            stage: `Completed snapshot backfill (${totalDays}/${totalDays} days)`,
-          } as any,
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await prisma.syncJob.update({
-        where: { id: job.id },
-        data: {
-          status: "failed",
-          completedAt: new Date(),
-          error: message,
-        },
-      });
-    }
-  }, 0);
-
-  return c.json({ success: true, data: { jobId: job.id, startDate, endDate } }, 202);
+  return c.json({ success: true, data: { jobId: job.id, startDate, endDate, status: "pending" } }, 202);
 });
 
 statsRoutes.post("/snapshot", async (c) => {
@@ -685,26 +659,6 @@ statsRoutes.post("/snapshot", async (c) => {
       date: target.toISOString(),
     },
   });
-});
-
-statsRoutes.get("/editors/history", async (c) => {
-  const parsed = EditorHistoryQuerySchema.parse(c.req.query());
-  const series = await statsService.getEditorDailyHistory(parsed.editorId, {
-    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
-    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
-  });
-  const data = parsed.withDelta
-    ? withDelta(series, [
-        "edits",
-        "wordsAdded",
-        "articlesCreated",
-        "articlesEdited",
-        "referencesAdded",
-        "commonsUploads",
-      ])
-    : series;
-
-  return c.json({ success: true, data: { editorId: parsed.editorId, series: data } });
 });
 
 statsRoutes.get("/articles/history", async (c) => {
@@ -963,7 +917,7 @@ statsRoutes.get("/sync-status", async (c) => {
           metadata: true,
         },
       }),
-      getExternalSnapshot().catch(() => null),
+      getExternalSnapshotWithTimeout(),
       prisma.syncJob.findMany({
         where: { jobType: { in: [...trackedJobTypes] } },
         orderBy: { createdAt: "desc" },

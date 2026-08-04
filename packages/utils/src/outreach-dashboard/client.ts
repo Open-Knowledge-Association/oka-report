@@ -2,12 +2,14 @@ import type { CourseData, UserData, UploadData, ArticleData } from "./types";
 
 const DEFAULT_USER_AGENT = "OKAStatsBot/1.0 (https://oka.wiki/stats; tech@oka.wiki)";
 const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_TIMEOUT_MS = 180_000; // articles.json can be a large (~20 MB) upstream response
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface OutreachDashboardClientConfig {
   baseUrl: string;
   userAgent?: string;
   maxRetries?: number;
+  timeoutMs?: number;
 }
 
 export interface OutreachDashboardApiError {
@@ -40,11 +42,13 @@ export class OutreachDashboardClient {
   private readonly baseUrl: string;
   private readonly userAgent: string;
   private readonly maxRetries: number;
+  private readonly timeoutMs: number;
 
   constructor(config: OutreachDashboardClientConfig) {
     this.baseUrl = config.baseUrl;
     this.userAgent = config.userAgent ?? DEFAULT_USER_AGENT;
     this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   async request<T>(endpoint: string): Promise<T> {
@@ -64,7 +68,7 @@ export class OutreachDashboardClient {
     }
 
     if (!response.ok) {
-      throw new OutreachDashboardClientError("Outreach Dashboard API request failed", {
+      throw new OutreachDashboardClientError(`Outreach Dashboard API request failed (HTTP ${response.status})`, {
         status: response.status,
         url: url.toString(),
       });
@@ -106,9 +110,23 @@ export class OutreachDashboardClient {
     let attempt = 0;
 
     while (true) {
-      const response = await fetch(url, init);
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          ...init,
+          signal: AbortSignal.timeout(this.timeoutMs),
+        });
+      } catch (error) {
+        if (attempt >= this.maxRetries) {
+          throw error;
+        }
+        await sleep(this.calculateRetryDelayMs(attempt, null));
+        attempt += 1;
+        continue;
+      }
 
-      if (response.status !== 429) {
+      const retryableStatus = response.status === 429 || response.status >= 500;
+      if (!retryableStatus) {
         return response;
       }
 

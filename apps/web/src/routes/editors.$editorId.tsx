@@ -112,7 +112,7 @@ function EditorProfilePage() {
 
   if (isLoading) {
     return (
-      <ProtectedRoute requiredRole="viewer">
+      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
         <div className="mx-auto w-full max-w-6xl space-y-8">
           <div className="h-10 w-64 bg-slate-200 animate-pulse rounded" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -128,7 +128,7 @@ function EditorProfilePage() {
 
   if (error || !data) {
     return (
-      <ProtectedRoute requiredRole="viewer">
+      <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
         <div className="mx-auto w-full max-w-6xl">
           <div className="text-center py-16">
             <h1 className="text-2xl font-bold text-slate-900 mb-2">
@@ -148,7 +148,7 @@ function EditorProfilePage() {
   const { editor, outreachStats, wikimediaProfile, articles } = data;
 
   return (
-    <ProtectedRoute requiredRole="viewer">
+    <ProtectedRoute requiredRole="viewer" allowUnauthenticated>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6">

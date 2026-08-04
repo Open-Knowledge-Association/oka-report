@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import "dotenv/config";
 import { apiRoutes } from "./routes";
 import { errorHandler } from "./middleware/error-handler";
-import { startScheduler } from "./jobs/scheduler";
 import { prisma, checkDatabase } from "@repo/db";
 import { BootstrapService } from "./services/bootstrap.service";
 import { startBootstrapWatcher } from "./jobs/bootstrap-watcher";
@@ -47,8 +46,6 @@ const initializeServer = async () => {
     startBootstrapWatcher(prisma, bootstrapService);
     console.log("[Server] Bootstrap watcher started");
 
-    startScheduler();
-    console.log("[Server] Scheduler started");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Server] Initialization error: ${message}`);

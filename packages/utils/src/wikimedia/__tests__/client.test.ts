@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import { WikimediaClient, WikimediaClientError } from "../../..";
 
 const createClient = () =>
@@ -11,18 +11,16 @@ const createClient = () =>
 const jsonResponse = (body: unknown, status = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(body), { status, headers });
 
-describe("WikimediaClient", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-  });
+const setupFetch = () => {
+  const fetchMock = mock();
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  return fetchMock;
+};
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.resetAllMocks();
-  });
+describe("WikimediaClient", () => {
 
   it("fetches user contributions with pagination", async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = setupFetch();
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse({
@@ -76,7 +74,7 @@ describe("WikimediaClient", () => {
   });
 
   it("returns article info when found", async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = setupFetch();
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         query: {
@@ -101,7 +99,7 @@ describe("WikimediaClient", () => {
   });
 
   it("returns null when article missing", async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = setupFetch();
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         query: {
@@ -119,7 +117,7 @@ describe("WikimediaClient", () => {
   });
 
   it("formats pageview dates", async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = setupFetch();
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         items: [{ timestamp: "2024010100", views: 42 }],
@@ -138,7 +136,7 @@ describe("WikimediaClient", () => {
   });
 
   it("throws on API error", async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = setupFetch();
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         error: { code: "badrequest", info: "Bad" },
@@ -153,7 +151,7 @@ describe("WikimediaClient", () => {
   });
 
   it("retries on 429", async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = setupFetch();
     fetchMock
       .mockResolvedValueOnce(new Response("", { status: 429 }))
       .mockResolvedValueOnce(jsonResponse({ query: { usercontribs: [] } }));

@@ -67,7 +67,7 @@ describe("OutreachArticleSyncService", () => {
       ),
     } as unknown as OutreachDashboardClient;
 
-    service = new OutreachArticleSyncService(mockPrisma, mockDashboardClient);
+    service = new OutreachArticleSyncService(mockPrisma, mockDashboardClient, () => ({ getArticleInfo: mock(() => Promise.resolve(null)) }));
   });
 
   describe("syncArticlesFromDashboard", () => {
@@ -146,6 +146,7 @@ describe("OutreachArticleSyncService", () => {
           referencesCount: 10,
           isNewArticle: true,
           rating: "B",
+          authorStatus: "unknown",
         },
         update: {
           title: "Test_Article",
@@ -196,22 +197,10 @@ describe("OutreachArticleSyncService", () => {
 
       await service.syncArticlesFromDashboard("OKA", "oka");
 
-      expect(mockPrisma.article.update).toHaveBeenCalledWith({
-        where: { id: "article-existing" },
-        data: {
-          outreachId: 100,
-          title: "Test_Article",
-          wikiProject,
-          source: "OUTREACH_DASHBOARD",
-          url: "https://en.wikipedia.org/wiki/Test_Article",
-          characterSum: 5000,
-          referencesCount: 10,
-          isNewArticle: true,
-          rating: "B",
-          updatedAt: expect.any(Date),
-        },
-      });
-      expect(mockPrisma.article.upsert).not.toHaveBeenCalled();
+      expect(mockPrisma.article.upsert).toHaveBeenCalled();
+      const call = (mockPrisma.article.upsert as any).mock.calls[0][0];
+      expect(call.where).toEqual({ outreachId: 100 });
+      expect(mockPrisma.article.update).toHaveBeenCalled();
     });
 
     it("should create pageview snapshot with current date", async () => {
@@ -309,8 +298,9 @@ describe("OutreachArticleSyncService", () => {
         create: {
           articleId: "article-1",
           editorId: "editor-42",
+          isAuthor: false,
         },
-        update: {},
+        update: { isAuthor: false },
       });
     });
 

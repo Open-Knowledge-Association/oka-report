@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+.git
+.sisyphus
+.beads
+*.log
+.env
+.env.*
+dist
+**/dist
+coverage

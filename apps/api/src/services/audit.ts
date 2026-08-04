@@ -17,7 +17,7 @@ export async function auditLog(options: AuditLogOptions) {
       action: options.action,
       targetType: options.targetType,
       targetId: options.targetId,
-      metadata: options.metadata || {},
+      metadata: options.metadata ? JSON.parse(JSON.stringify(options.metadata)) : {},
       ipAddress: options.ipAddress,
       userAgent: options.userAgent,
     },

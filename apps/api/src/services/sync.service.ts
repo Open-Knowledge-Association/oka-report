@@ -58,6 +58,8 @@ const formatDateForPageviews = (date: Date) => {
 
 const parsePageviewDate = (date: string) => new Date(`${date}T00:00:00Z`);
 
+const formatDateTimeForMetadata = (date: Date) => date.toISOString();
+
 const formatDateForMetadata = (date: Date) => {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -228,12 +230,8 @@ export class SyncService {
 
   async syncEditorContributions(editorId?: string, since?: Date, jobId?: string) {
     const editors = await this.prisma.editor.findMany({
-      where: {
-        isActive: true,
-        ...(editorId ? { id: editorId } : {}),
-      },
+      where: { isActive: true, ...(editorId ? { id: editorId } : {}) },
     });
-
     const wikiProjects = await this.getContributionWikiProjects();
     const wikiClients = new Map(
       wikiProjects.map((wikiProject) => [
@@ -245,149 +243,130 @@ export class SyncService {
     let syncedCount = 0;
     const totalEditors = editors.length;
     let processedEditors = 0;
-    const checkpointInterval = 10;
+    const coverage = {
+      fetched: 0,
+      matched: 0,
+      skippedNotOutreach: 0,
+      failedEditorProjects: 0,
+      errorSamples: [] as Array<{ editor: string; wikiProject: string; error: string }>,
+    };
 
     if (jobId) {
-      await this.updateJobMetadata(
-        jobId,
-        {
-          total: totalEditors,
-          processed: processedEditors,
-          syncedCount,
-          stage: `Syncing contributions (0/${totalEditors} editors)`,
-        },
-        { message: `Syncing contributions (0/${totalEditors} editors)` },
-      );
+      const checkpointJob = await this.prisma.syncJob.findUnique({
+        where: { id: jobId }, select: { metadata: true },
+      });
+      const metadata = checkpointJob?.metadata;
+      if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+        const value = Number((metadata as { processed?: unknown }).processed ?? 0);
+        const priorSynced = Number((metadata as { syncedCount?: unknown }).syncedCount ?? 0);
+        const priorCoverage = (metadata as { coverage?: typeof coverage }).coverage;
+        if (Number.isFinite(value)) processedEditors = Math.min(totalEditors, Math.max(0, Math.floor(value)));
+        if (Number.isFinite(priorSynced)) syncedCount = priorSynced;
+        if (priorCoverage && typeof priorCoverage === "object") {
+          coverage.fetched = Number(priorCoverage.fetched) || 0;
+          coverage.matched = Number(priorCoverage.matched) || 0;
+          coverage.skippedNotOutreach = Number(priorCoverage.skippedNotOutreach) || 0;
+          coverage.failedEditorProjects = Number(priorCoverage.failedEditorProjects) || 0;
+          coverage.errorSamples = Array.isArray(priorCoverage.errorSamples) ? priorCoverage.errorSamples.slice(0, 50) : [];
+        }
+      }
     }
 
-    for (const editor of editors) {
-      if (jobId && (await this.checkCancelled(jobId))) {
-        await this.updateJobMetadata(
-          jobId,
-          {
-            total: totalEditors,
-            processed: processedEditors,
-            syncedCount,
-            stage: "Cancelled by user",
-          },
-          { message: "Cancelled by user", level: "error" },
-        );
-        return syncedCount;
-      }
+    const persistProgress = async (stage: string, log?: { message: string; level?: SyncJobLogLevel }) => {
+      if (!jobId) return;
+      await this.updateJobMetadata(jobId, {
+        total: totalEditors,
+        processed: processedEditors,
+        syncedCount,
+        errors: coverage.failedEditorProjects,
+        coverage: coverage as unknown as Prisma.InputJsonObject,
+        stage,
+      }, log);
+    };
 
-      if (jobId) {
-        await this.updateJobMetadata(
-          jobId,
-          {
-            total: totalEditors,
-            processed: processedEditors,
-            syncedCount,
-            stage: `Syncing contributions (${processedEditors}/${totalEditors} editors) - ${editor.username}`,
-            currentEditor: editor.username,
-          },
-          { message: `Processing editor: ${editor.username}` },
-        );
+    await persistProgress(`Syncing contributions (${processedEditors}/${totalEditors} editors)`, {
+      message: `Syncing contributions (${processedEditors}/${totalEditors} editors)`,
+    });
+
+    for (const editor of editors.slice(processedEditors)) {
+      if (jobId && (await this.checkCancelled(jobId))) {
+        await persistProgress("Cancelled by user", { message: "Cancelled by user", level: "error" });
+        return syncedCount;
       }
 
       for (const wikiProject of wikiProjects) {
         const wikiClient = wikiClients.get(wikiProject);
-        if (!wikiClient) {
-          continue;
-        }
-
-        if (jobId) {
-          await this.updateJobMetadata(jobId, {
-            currentEditor: editor.username,
-            currentWikiProject: wikiProject,
-            stage: `Syncing contributions (${processedEditors}/${totalEditors} editors) - ${editor.username} @ ${wikiProject}`,
-          });
-        }
-
-        const contributions = await wikiClient.getUserContributions(
-          editor.username,
-          since ? { start: since.toISOString() } : {},
-        );
-
-        for (const contribution of contributions) {
-          const article = await this.findArticleForContribution(contribution, wikiProject);
-          if (!article) {
-            continue;
-          }
-
-          const isCreation = contribution.parentId == null || contribution.parentId === 0;
-
-          await this.prisma.contribution.upsert({
-            where: {
-              revisionId_articleId: {
-                revisionId: contribution.revisionId,
+        if (!wikiClient) continue;
+        try {
+          const contributions = await wikiClient.getUserContributions(
+            editor.username,
+            since ? { start: since.toISOString() } : {},
+          );
+          coverage.fetched += contributions.length;
+          for (const contribution of contributions) {
+            const article = await this.findArticleForContribution(contribution, wikiProject);
+            if (!article) {
+              coverage.skippedNotOutreach += 1;
+              continue;
+            }
+            coverage.matched += 1;
+            const isCreation = contribution.parentId == null;
+            await this.prisma.contribution.upsert({
+              where: { revisionId_articleId: { revisionId: contribution.revisionId, articleId: article.id } },
+              create: {
+                editorId: editor.id,
                 articleId: article.id,
+                revisionId: contribution.revisionId,
+                parentId: contribution.parentId,
+                bytesChanged: contribution.sizeDiff,
+                wordsAdded: bytesToWords(contribution.sizeDiff),
+                isCreation,
+                editTimestamp: new Date(contribution.timestamp),
               },
-            },
-            create: {
-              editorId: editor.id,
-              articleId: article.id,
-              revisionId: contribution.revisionId,
-              parentId: contribution.parentId,
-              bytesChanged: contribution.sizeDiff,
-              wordsAdded: bytesToWords(contribution.sizeDiff),
-              isCreation,
-              editTimestamp: new Date(contribution.timestamp),
-            },
-            update: {},
-          });
-
-          if (isCreation && !article.createdByEditorId) {
-            await this.prisma.article.update({
-              where: { id: article.id },
-              data: { createdByEditorId: editor.id },
+              update: {},
+            });
+            if (isCreation) {
+              await this.prisma.article.update({
+                where: { id: article.id },
+                data: {
+                  createdByEditorId: article.createdByEditorId ?? editor.id,
+                  authorStatus: "verified_tracked",
+                  authorUsername: editor.username,
+                  authorVerifiedAt: new Date(),
+                },
+              });
+              await this.prisma.articleEditor.upsert({
+                where: { articleId_editorId: { articleId: article.id, editorId: editor.id } },
+                create: { articleId: article.id, editorId: editor.id, isAuthor: true },
+                update: { isAuthor: true },
+              });
+            }
+            syncedCount += 1;
+          }
+        } catch (error) {
+          coverage.failedEditorProjects += 1;
+          if (coverage.errorSamples.length < 50) {
+            coverage.errorSamples.push({
+              editor: editor.username,
+              wikiProject,
+              error: error instanceof Error ? error.message : String(error),
             });
           }
-
-          syncedCount += 1;
+          console.warn(`[Contributions] Failed ${editor.username} @ ${wikiProject}; continuing`, error instanceof Error ? error.message : String(error));
         }
       }
 
       processedEditors += 1;
-
-      if (
-        jobId &&
-        (processedEditors % checkpointInterval === 0 || processedEditors === totalEditors)
-      ) {
-        await this.updateJobMetadata(
-          jobId,
-          {
-            total: totalEditors,
-            processed: processedEditors,
-            syncedCount,
-            stage: `Syncing contributions (${processedEditors}/${totalEditors} editors)`,
-          },
-          {
-            message: `Contributions progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions`,
-          },
-        );
-
-        console.log(
-          `Contributions sync progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions synced`,
-        );
-      }
+      await persistProgress(`Syncing contributions (${processedEditors}/${totalEditors} editors)`, {
+        message: `Contributions progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions`,
+      });
+      console.log(`Contributions sync progress: ${processedEditors}/${totalEditors} editors, ${syncedCount} contributions synced`);
     }
 
-    if (jobId) {
-      await this.updateJobMetadata(
-        jobId,
-        {
-          total: totalEditors,
-          processed: processedEditors,
-          syncedCount,
-          stage: `Completed contributions sync (${processedEditors}/${totalEditors} editors)`,
-        },
-        {
-          message: `Completed contributions sync (${processedEditors}/${totalEditors} editors), ${syncedCount} contributions`,
-          level: "success",
-        },
-      );
-    }
-
+    await persistProgress(`Completed contributions sync (${processedEditors}/${totalEditors} editors)`, {
+      message: `Completed contributions sync (${processedEditors}/${totalEditors} editors), ${syncedCount} contributions`,
+      level: "success",
+    });
     return syncedCount;
   }
 
@@ -405,12 +384,11 @@ export class SyncService {
     }
 
     const articles = await this.prisma.article.findMany({
+      // Pageviews coverage uses the complete Outreach article dataset.
+      // Eligibility must not depend on tracked author/contribution relations;
+      // failures are recorded per article so the denominator remains stable.
       where: {
         ...(articleId ? { id: articleId } : {}),
-        OR: [
-          { createdByEditorId: { not: null } },
-          { contributions: { some: { editor: { isActive: true } } } },
-        ],
       },
       distinct: ["id"],
       include: {
@@ -434,6 +412,19 @@ export class SyncService {
     let processedArticles = 0;
     let processedAgentRequests = 0;
 
+    if (jobId) {
+      const checkpointJob = await this.prisma.syncJob.findUnique({ where: { id: jobId }, select: { metadata: true } });
+      const metadata = checkpointJob?.metadata;
+      if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+        const value = Number((metadata as { processedArticles?: unknown }).processedArticles ?? 0);
+        const requests = Number((metadata as { processedAgentRequests?: unknown }).processedAgentRequests ?? 0);
+        const priorSynced = Number((metadata as { syncedCount?: unknown }).syncedCount ?? 0);
+        if (Number.isFinite(value)) processedArticles = Math.max(0, Math.min(totalArticles, Math.floor(value / checkpointInterval) * checkpointInterval));
+        if (Number.isFinite(requests)) processedAgentRequests = Math.max(0, requests);
+        if (Number.isFinite(priorSynced)) syncedCount = priorSynced;
+      }
+    }
+
     const defaultStartDate =
       mode === "scheduled_incremental"
         ? startOfUtcDay(addUtcDays(new Date(), -30))
@@ -456,7 +447,7 @@ export class SyncService {
       );
     }
 
-    for (const article of articles) {
+    for (const article of articles.slice(processedArticles)) {
       if (jobId && (await this.checkCancelled(jobId))) {
         await this.updateJobMetadata(
           jobId,
@@ -636,6 +627,17 @@ export class SyncService {
     const checkpointInterval = 10;
 
     if (jobId) {
+      const checkpointJob = await this.prisma.syncJob.findUnique({ where: { id: jobId }, select: { metadata: true } });
+      const metadata = checkpointJob?.metadata;
+      if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+        const value = Number((metadata as { processed?: unknown }).processed ?? 0);
+        const priorSynced = Number((metadata as { syncedCount?: unknown }).syncedCount ?? 0);
+        if (Number.isFinite(value)) processedEditors = Math.min(totalEditors, Math.max(0, Math.floor(value / checkpointInterval) * checkpointInterval));
+        if (Number.isFinite(priorSynced)) syncedCount = priorSynced;
+      }
+    }
+
+    if (jobId) {
       await this.updateJobMetadata(
         jobId,
         {
@@ -648,7 +650,7 @@ export class SyncService {
       );
     }
 
-    for (const editor of editors) {
+    for (const editor of editors.slice(processedEditors)) {
       if (jobId && (await this.checkCancelled(jobId))) {
         await this.updateJobMetadata(
           jobId,
@@ -775,6 +777,28 @@ export class SyncService {
     return job;
   }
 
+  private async getOrCreateChildJob(parentJobId: string, jobType: string) {
+    const existing = await this.prisma.syncJob.findFirst({
+      where: { parentJobId, jobType, status: { in: ["pending", "running", "completed"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    return existing ?? this.createSyncJob(jobType, parentJobId);
+  }
+
+  private async getLastSuccessfulContributionSyncAt(): Promise<Date | null> {
+    const previous = await this.prisma.syncJob.findFirst({
+      where: { jobType: "contributions", status: "completed" },
+      orderBy: { completedAt: "desc" },
+      select: { metadata: true },
+    });
+    const metadata = previous?.metadata;
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const raw = (metadata as { windowEnd?: unknown }).windowEnd;
+    if (typeof raw !== "string") return null;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   async runFullSync(
     existingJobId?: string,
     preSyncStats?: PreSyncStats,
@@ -798,10 +822,12 @@ export class SyncService {
     let pageviewsSince: Date | undefined;
 
     if (mode === "scheduled_incremental") {
-      // For scheduled incremental: contributions from last 30 days
+      // Resume from the last successful watermark with a 48-hour overlap.
       const now = new Date();
-      contributionsSince = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      // For pageviews, we'll resolve it per-article in syncArticlePageviews
+      const lastSuccessful = await this.getLastSuccessfulContributionSyncAt();
+      contributionsSince = lastSuccessful
+        ? addUtcDays(lastSuccessful, -2)
+        : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       pageviewsSince = undefined;
     } else if (mode === "manual_backfill") {
       // Manual backfill uses passed-in since date (would be provided separately)
@@ -814,9 +840,9 @@ export class SyncService {
     }
 
     // Record sync mode and window in metadata
-    const windowStart = contributionsSince ? formatDateForMetadata(contributionsSince) : undefined;
+    const windowStart = contributionsSince ? formatDateTimeForMetadata(contributionsSince) : undefined;
     const windowEnd =
-      mode === "scheduled_incremental" ? formatDateForMetadata(new Date()) : undefined;
+      mode === "scheduled_incremental" ? formatDateTimeForMetadata(new Date()) : undefined;
 
     try {
       if (await this.checkCancelled(jobId)) {
@@ -830,32 +856,44 @@ export class SyncService {
       }
 
       await this.updateParentJobProgress(jobId, "Syncing contributions", childJobTypes);
-      const contributionsJob = await this.createSyncJob("contributions", jobId);
-      await this.startSyncJob(contributionsJob.id);
-      try {
-        contributionsSynced = await this.syncEditorContributions(
-          undefined,
-          contributionsSince,
-          contributionsJob.id,
-        );
-      } catch (error) {
-        await this.failSyncJob(contributionsJob.id, error);
-        await this.updateParentJobProgress(jobId, "Contributions failed", childJobTypes);
-        throw error;
-      }
-      if (await this.checkCancelled(contributionsJob.id)) {
-        await this.cancelSyncJob(contributionsJob.id, { contributionsSynced });
-        await this.updateParentJobProgress(jobId, "Contributions cancelled", childJobTypes);
-        return {
-          editorsSynced,
-          articlesSynced,
+      const contributionsJob = await this.getOrCreateChildJob(jobId, "contributions");
+      if (contributionsJob.status === "completed") {
+        const metadata = contributionsJob.metadata;
+        contributionsSynced = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+          ? Number((metadata as { contributionsSynced?: unknown }).contributionsSynced ?? 0)
+          : 0;
+        await this.updateParentJobProgress(jobId, "Contributions already completed", childJobTypes);
+      } else {
+        await this.startSyncJob(contributionsJob.id);
+        try {
+          contributionsSynced = await this.syncEditorContributions(
+            undefined,
+            contributionsSince,
+            contributionsJob.id,
+          );
+        } catch (error) {
+          await this.failSyncJob(contributionsJob.id, error);
+          await this.updateParentJobProgress(jobId, "Contributions failed", childJobTypes);
+          throw error;
+        }
+        if (await this.checkCancelled(contributionsJob.id)) {
+          await this.cancelSyncJob(contributionsJob.id, { contributionsSynced });
+          await this.updateParentJobProgress(jobId, "Contributions cancelled", childJobTypes);
+          return {
+            editorsSynced,
+            articlesSynced,
+            contributionsSynced,
+            pageviewsSynced,
+            commonsUploadsSynced,
+          };
+        }
+        await this.completeSyncJob(contributionsJob.id, {
           contributionsSynced,
-          pageviewsSynced,
-          commonsUploadsSynced,
-        };
+          ...(windowStart ? { windowStart } : {}),
+          ...(windowEnd ? { windowEnd } : {}),
+        } as Prisma.InputJsonObject);
+        await this.updateParentJobProgress(jobId, "Contributions completed", childJobTypes);
       }
-      await this.completeSyncJob(contributionsJob.id, { contributionsSynced });
-      await this.updateParentJobProgress(jobId, "Contributions completed", childJobTypes);
 
       if (await this.checkCancelled(jobId)) {
         return {
@@ -868,33 +906,41 @@ export class SyncService {
       }
 
       await this.updateParentJobProgress(jobId, "Syncing pageviews", childJobTypes);
-      const pageviewsJob = await this.createSyncJob("pageviews", jobId);
-      await this.startSyncJob(pageviewsJob.id);
-      try {
-        pageviewsSynced = await this.syncArticlePageviews(
-          undefined,
-          pageviewsSince,
-          pageviewsJob.id,
-          mode,
-        );
-      } catch (error) {
-        await this.failSyncJob(pageviewsJob.id, error);
-        await this.updateParentJobProgress(jobId, "Pageviews failed", childJobTypes);
-        throw error;
+      const pageviewsJob = await this.getOrCreateChildJob(jobId, "pageviews");
+      if (pageviewsJob.status === "completed") {
+        const metadata = pageviewsJob.metadata;
+        pageviewsSynced = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+          ? Number((metadata as { pageviewsSynced?: unknown }).pageviewsSynced ?? 0)
+          : 0;
+        await this.updateParentJobProgress(jobId, "Pageviews already completed", childJobTypes);
+      } else {
+        await this.startSyncJob(pageviewsJob.id);
+        try {
+          pageviewsSynced = await this.syncArticlePageviews(
+            undefined,
+            pageviewsSince,
+            pageviewsJob.id,
+            mode,
+          );
+        } catch (error) {
+          await this.failSyncJob(pageviewsJob.id, error);
+          await this.updateParentJobProgress(jobId, "Pageviews failed", childJobTypes);
+          throw error;
+        }
+        if (await this.checkCancelled(pageviewsJob.id)) {
+          await this.cancelSyncJob(pageviewsJob.id, { pageviewsSynced });
+          await this.updateParentJobProgress(jobId, "Pageviews cancelled", childJobTypes);
+          return {
+            editorsSynced,
+            articlesSynced,
+            contributionsSynced,
+            pageviewsSynced,
+            commonsUploadsSynced,
+          };
+        }
+        await this.completeSyncJob(pageviewsJob.id, { pageviewsSynced });
+        await this.updateParentJobProgress(jobId, "Pageviews completed", childJobTypes);
       }
-      if (await this.checkCancelled(pageviewsJob.id)) {
-        await this.cancelSyncJob(pageviewsJob.id, { pageviewsSynced });
-        await this.updateParentJobProgress(jobId, "Pageviews cancelled", childJobTypes);
-        return {
-          editorsSynced,
-          articlesSynced,
-          contributionsSynced,
-          pageviewsSynced,
-          commonsUploadsSynced,
-        };
-      }
-      await this.completeSyncJob(pageviewsJob.id, { pageviewsSynced });
-      await this.updateParentJobProgress(jobId, "Pageviews completed", childJobTypes);
 
       if (await this.checkCancelled(jobId)) {
         return {
@@ -907,28 +953,36 @@ export class SyncService {
       }
 
       await this.updateParentJobProgress(jobId, "Syncing commons", childJobTypes);
-      const commonsJob = await this.createSyncJob("commons", jobId);
-      await this.startSyncJob(commonsJob.id);
-      try {
-        commonsUploadsSynced = await this.syncCommonsUploads(undefined, commonsJob.id);
-      } catch (error) {
-        await this.failSyncJob(commonsJob.id, error);
-        await this.updateParentJobProgress(jobId, "Commons failed", childJobTypes);
-        throw error;
+      const commonsJob = await this.getOrCreateChildJob(jobId, "commons");
+      if (commonsJob.status === "completed") {
+        const metadata = commonsJob.metadata;
+        commonsUploadsSynced = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+          ? Number((metadata as { commonsUploadsSynced?: unknown }).commonsUploadsSynced ?? 0)
+          : 0;
+        await this.updateParentJobProgress(jobId, "Commons already completed", childJobTypes);
+      } else {
+        await this.startSyncJob(commonsJob.id);
+        try {
+          commonsUploadsSynced = await this.syncCommonsUploads(undefined, commonsJob.id);
+        } catch (error) {
+          await this.failSyncJob(commonsJob.id, error);
+          await this.updateParentJobProgress(jobId, "Commons failed", childJobTypes);
+          throw error;
+        }
+        if (await this.checkCancelled(commonsJob.id)) {
+          await this.cancelSyncJob(commonsJob.id, { commonsUploadsSynced });
+          await this.updateParentJobProgress(jobId, "Commons cancelled", childJobTypes);
+          return {
+            editorsSynced,
+            articlesSynced,
+            contributionsSynced,
+            pageviewsSynced,
+            commonsUploadsSynced,
+          };
+        }
+        await this.completeSyncJob(commonsJob.id, { commonsUploadsSynced });
+        await this.updateParentJobProgress(jobId, "Commons completed", childJobTypes);
       }
-      if (await this.checkCancelled(commonsJob.id)) {
-        await this.cancelSyncJob(commonsJob.id, { commonsUploadsSynced });
-        await this.updateParentJobProgress(jobId, "Commons cancelled", childJobTypes);
-        return {
-          editorsSynced,
-          articlesSynced,
-          contributionsSynced,
-          pageviewsSynced,
-          commonsUploadsSynced,
-        };
-      }
-      await this.completeSyncJob(commonsJob.id, { commonsUploadsSynced });
-      await this.updateParentJobProgress(jobId, "Commons completed", childJobTypes);
 
       const summaryMetadata: Record<string, unknown> = {
         mode,
@@ -971,19 +1025,16 @@ export class SyncService {
   }
 
   /**
-   * Links contribution to existing Outreach article by title+wikiProject.
+   * Links contribution by pageId first, with title+wikiProject as a legacy fallback.
    * Returns null if article not in Outreach program (contribution will be skipped).
    */
   private async findArticleForContribution(
     contribution: UserContribution,
     wikiProject: string,
   ): Promise<{ id: string; createdByEditorId: string | null } | null> {
-    const existingArticle = await this.prisma.article.findFirst({
-      where: {
-        title: contribution.title,
-        wikiProject,
-      },
-    });
+    const existingArticle =
+      (await this.prisma.article.findFirst({ where: { pageId: contribution.pageId, wikiProject } })) ??
+      (await this.prisma.article.findFirst({ where: { title: contribution.title, wikiProject } }));
 
     if (!existingArticle) {
       return null;

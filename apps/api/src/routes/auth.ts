@@ -36,7 +36,7 @@ authRoutes.get("/session", async (c) => {
 });
 
 authRoutes.post("/logout", authMiddleware, async (c) => {
-  const session = c.get("session");
+  const session = (c.get as (key: "session") => { id: string } | undefined)("session");
 
   if (session) {
     await prisma.session.delete({ where: { id: session.id } });

@@ -29,6 +29,18 @@ syncRoutes.post("/trigger", async (c) => {
   const jobType = body.jobType ?? "full";
   const syncMode = body.syncMode ?? "manual_full";
 
+  // Full bootstrap is owned by the durable bootstrap worker. Do not run a
+  // second full sync via an API timer, which would be lost on restart.
+  if (jobType === "full") {
+    return c.json({
+      success: false,
+      error: {
+        code: "FULL_SYNC_WORKER_ONLY",
+        message: "Use the bootstrap worker for full sync; API timers are disabled",
+      },
+    }, 409);
+  }
+
   const activeJob = await syncService.findActiveJob(jobType);
   if (activeJob) {
     return c.json(
@@ -46,84 +58,8 @@ syncRoutes.post("/trigger", async (c) => {
   const job = await syncService.createSyncJob(jobType);
   await syncService.startSyncJob(job.id);
 
-  setTimeout(async () => {
-    try {
-      if (jobType === "contributions") {
-        const contributionsSynced = await syncService.syncEditorContributions(
-          undefined,
-          undefined,
-          job.id,
-        );
-        await syncService.completeSyncJob(job.id, { contributionsSynced });
-        return;
-      }
-      if (jobType === "pageviews") {
-        const pageviewsSynced = await syncService.syncArticlePageviews(
-          undefined,
-          undefined,
-          job.id,
-          syncMode,
-        );
-        await syncService.completeSyncJob(job.id, { pageviewsSynced });
-        return;
-      }
-      if (jobType === "commons") {
-        const commonsUploadsSynced = await syncService.syncCommonsUploads(undefined, job.id);
-        await syncService.completeSyncJob(job.id, { commonsUploadsSynced });
-        return;
-      }
-
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Starting full sync",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-
-      // Full sync: editors → articles → contributions → pageviews → commons
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Syncing editors",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-      const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
-        parentJobId: job.id,
-      });
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Editors completed",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Syncing outreach articles",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-      const articlesResult = await outreachArticleSyncService.syncArticlesFromDashboard(
-        "OKA",
-        "OKA",
-        { parentJobId: job.id },
-      );
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Outreach articles completed",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-
-      await syncService.runFullSync(
-        job.id,
-        {
-          editorsSynced: editorsResult.imported + editorsResult.updated,
-          articlesSynced: articlesResult.imported + articlesResult.updated,
-        },
-        FULL_SYNC_CHILD_JOB_TYPES,
-        syncMode,
-      );
-    } catch (error) {
-      await syncService.failSyncJob(job.id, error);
-    }
-  }, 0);
-
+  // Child/manual jobs are durable queue entries. The worker owns execution;
+  // never run them in the API process where a restart loses the task.
   return c.json({ success: true, data: job }, 202);
 });
 
@@ -275,105 +211,18 @@ syncRoutes.post("/jobs/:id/retry", async (c) => {
 
   await syncService.startSyncJob(job.id);
 
-  // Determine sync mode from original metadata
-  const metadata = job.metadata;
-  const syncMode =
-    metadata && typeof metadata === "object" && !Array.isArray(metadata)
-      ? ((metadata as Record<string, unknown>).mode ?? "manual_full")
-      : "manual_full";
-
-  // Trigger sync async based on jobType
-  setTimeout(async () => {
-    try {
-      if (job.jobType === "contributions") {
-        const contributionsSynced = await syncService.syncEditorContributions(
-          undefined,
-          undefined,
-          job.id,
-        );
-        await syncService.completeSyncJob(job.id, { contributionsSynced });
-        return;
-      }
-      if (job.jobType === "pageviews") {
-        const pageviewsSynced = await syncService.syncArticlePageviews(
-          undefined,
-          undefined,
-          job.id,
-          syncMode as any,
-        );
-        await syncService.completeSyncJob(job.id, { pageviewsSynced });
-        return;
-      }
-      if (job.jobType === "commons") {
-        const commonsUploadsSynced = await syncService.syncCommonsUploads(undefined, job.id);
-        await syncService.completeSyncJob(job.id, { commonsUploadsSynced });
-        return;
-      }
-      if (job.jobType === "editors") {
-        await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
-          parentJobId: job.parentJobId ?? undefined,
-          jobId: job.id,
-        });
-        return;
-      }
-      if (job.jobType === "outreach_articles") {
-        await outreachArticleSyncService.syncArticlesFromDashboard("OKA", "OKA", {
-          parentJobId: job.parentJobId ?? undefined,
-          jobId: job.id,
-        });
-        return;
-      }
-
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Starting full sync",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-
-      // Full sync: editors → articles → contributions → pageviews → commons
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Syncing editors",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-      const editorsResult = await outreachSyncService.syncEditorsFromDashboard("OKA", "OKA", {
-        parentJobId: job.id,
-      });
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Editors completed",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Syncing outreach articles",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-      const articlesResult = await outreachArticleSyncService.syncArticlesFromDashboard(
-        "OKA",
-        "OKA",
-        { parentJobId: job.id },
-      );
-      await syncService.updateParentJobProgress(
-        job.id,
-        "Outreach articles completed",
-        FULL_SYNC_CHILD_JOB_TYPES,
-      );
-
-      await syncService.runFullSync(
-        job.id,
-        {
-          editorsSynced: editorsResult.imported + editorsResult.updated,
-          articlesSynced: articlesResult.imported + articlesResult.updated,
-        },
-        FULL_SYNC_CHILD_JOB_TYPES,
-        syncMode as any,
-      );
-    } catch (error) {
-      await syncService.failSyncJob(job.id, error);
-    }
-  }, 0);
+  const originalMetadata = job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
+    ? job.metadata as Record<string, unknown>
+    : {};
+  await prisma.syncJob.update({
+    where: { id: job.id },
+    data: {
+      metadata: {
+        ...originalMetadata,
+        mode: typeof originalMetadata.mode === "string" ? originalMetadata.mode : "manual_full",
+      } as any,
+    },
+  });
 
   return c.json(
     {
@@ -433,20 +282,20 @@ syncRoutes.post("/outreach", async (c) => {
   try {
     const body = OutreachSyncSchema.parse(await c.req.json());
 
-    setTimeout(async () => {
-      try {
-        await outreachSyncService.syncEditorsFromDashboard(body.school, body.slug);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("Outreach sync failed:", errorMessage);
-      }
-    }, 0);
+    const job = await prisma.syncJob.create({
+      data: {
+        jobType: "editors",
+        status: "pending",
+        metadata: { school: body.school, slug: body.slug },
+      },
+    });
 
     return c.json(
       {
         success: true,
         data: {
-          status: "accepted",
+          jobId: job.id,
+          status: "pending",
         },
       },
       202,

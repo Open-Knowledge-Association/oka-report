@@ -19,7 +19,6 @@ if (existsSync(localEnvPath)) {
 
 const connectionString = process.env.DATABASE_URL!;
 
-console.log("Database connection string: ", connectionString);
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 

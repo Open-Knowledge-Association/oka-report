@@ -1,12 +1,8 @@
 import {
-  FileText,
   LineChart,
   Users,
   Eye,
   Type,
-  BookOpen,
-  Upload,
-  Calendar,
   Filter,
   RefreshCw,
   Download,
@@ -28,6 +24,7 @@ import {
 import { downloadMonthlyReport, fetchMonthlyStats, fetchTopArticles } from "@/lib/api";
 
 type PerformanceMetric = "pageviews" | "edits" | "wordsAdded";
+const formatMetric = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
 
 const months = [
   { value: 1, label: "January" },
@@ -152,11 +149,6 @@ export function MonthlyReportSection() {
       fetchTopArticles({ year, month, wikiProject: wikiProject || undefined, limit: 10 }),
   });
 
-  const metricLabel: Record<PerformanceMetric, string> = {
-    pageviews: "views",
-    edits: "edits",
-    wordsAdded: "words",
-  };
 
   const maxDailyValue = Math.max(
     1,
@@ -385,12 +377,12 @@ export function MonthlyReportSection() {
                       <div
                         className="h-full bg-blue-500 rounded-full transition-all duration-500"
                         style={{
-                          width: `${Math.max(2, (point[performanceMetric] / maxDailyValue) * 100)}%`,
+                          width: `${Math.max(2, ((point[performanceMetric] ?? 0) / maxDailyValue) * 100)}%`,
                         }}
                       />
                     </div>
                     <span className="text-xs font-mono font-medium text-slate-700 w-20 text-right">
-                      {point[performanceMetric].toLocaleString()}
+                      {formatMetric(point[performanceMetric])}
                     </span>
                   </div>
                 ))}
@@ -431,7 +423,7 @@ export function MonthlyReportSection() {
                           {article.title}
                         </TableCell>
                         <TableCell className="py-2 text-xs font-mono text-right text-slate-700">
-                          {article.totalPageviews.toLocaleString()}
+                          {formatMetric(article.totalPageviews)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -506,7 +498,7 @@ export function MonthlyReportSection() {
                         {row.wordsAdded.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right font-mono text-slate-700">
-                        {row.pageviews.toLocaleString()}
+                        {formatMetric(row.pageviews)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-slate-700">
                         {row.articlesCreated.toLocaleString()}

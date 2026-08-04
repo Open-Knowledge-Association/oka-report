@@ -16,6 +16,7 @@ const config = defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  build: { assetsDir: "assets/v2" },
   server: {
     proxy: {
       "/api": {

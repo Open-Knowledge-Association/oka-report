@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@/test-utils";
-import { CompareEditorsPage } from "./editors.compare";
+import { CompareEditorsPage } from "../../routes/editors.compare";
 
 describe("CompareEditorsPage", () => {
   it("renders empty state when no ids provided", () => {

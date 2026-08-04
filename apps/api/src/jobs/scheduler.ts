@@ -27,6 +27,14 @@ export const startScheduler = () => {
     return setting?.enabled ?? true;
   };
 
+  const hasActiveHeavyJob = async () => Boolean(await prisma.syncJob.findFirst({
+    where: {
+      status: { in: ["pending", "running"] },
+      jobType: { in: ["full", "contributions", "pageviews", "commons", "outreach_articles"] },
+    },
+    select: { id: true, jobType: true },
+  }));
+
   const ensureDatabase = async (jobLabel: string) => {
     try {
       await checkDatabase();
@@ -53,13 +61,20 @@ export const startScheduler = () => {
       );
       return;
     }
+    if (await hasActiveHeavyJob()) {
+      console.log("[Scheduler] Skipping full sync: another heavy sync is active");
+      return;
+    }
     if (!(await ensureDatabase("full sync"))) {
       return;
     }
     try {
-      await syncService.runFullSync(undefined, undefined, undefined, "scheduled_incremental");
+      // Queue only. The durable worker owns the ordered pipeline:
+      // editors -> Outreach articles -> contributions -> pageviews -> Commons.
+      const job = await syncService.createSyncJob("full");
+      console.log(`[Scheduler] Queued durable full sync ${job.id}`);
     } catch (error) {
-      console.error("Scheduled sync failed", error);
+      console.error("Scheduled sync queue failed", error);
     }
   });
 
@@ -86,6 +101,10 @@ export const startScheduler = () => {
     console.log(
       `[Scheduler] Starting outreach article sync (school=${outreachSchool}, slug=${outreachSlug})`,
     );
+    if (await hasActiveHeavyJob()) {
+      console.log("[Scheduler] Skipping outreach article sync: another heavy sync is active");
+      return;
+    }
     if (!(await ensureDatabase("outreach article sync"))) {
       return;
     }
@@ -132,7 +151,7 @@ export const startScheduler = () => {
     }
   });
 
-  setTimeout(async () => {
+  cron.schedule("30 0 * * *", async () => {
     const setting = await getScheduleSetting("daily-backfill");
     if (setting && !setting.enabled) {
       console.log(
@@ -157,7 +176,7 @@ export const startScheduler = () => {
     } catch (error) {
       console.error("[Scheduler] Daily stats backfill failed:", error);
     }
-  }, 0);
+  });
 
   console.log(`[Scheduler] Outreach article sync scheduled: ${outreachSchedule}`);
 };

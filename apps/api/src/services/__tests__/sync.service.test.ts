@@ -18,6 +18,7 @@ describe("SyncService", () => {
         upsert: mock(() => Promise.resolve({ id: "pv-1" })),
       },
       syncJob: {
+        findFirst: mock(() => Promise.resolve(null)),
         findUnique: mock(() => Promise.resolve({ status: "running" })),
         update: mock(() => Promise.resolve({})),
       },

@@ -25,13 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const { data, isLoading, refetch } = useQuery<{ user: User | null }>({
     queryKey: ["auth", "session"],
-    queryFn: async () => {
-      const response = await apiFetch("/auth/session");
-      if (!response.ok) {
-        throw new Error("Failed to fetch session");
-      }
-      return response.json();
-    },
+    queryFn: () => apiFetch<{ user: User | null }>("/auth/session"),
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -44,12 +38,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOutMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiFetch("/auth/logout", {
+      await apiFetch("/auth/logout", {
         method: "POST",
       });
-      if (!response.ok) {
-        throw new Error("Failed to sign out");
-      }
     },
     onSuccess: () => {
       queryClient.setQueryData(["auth", "session"], { user: null });

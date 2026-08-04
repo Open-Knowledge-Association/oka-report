@@ -1,0 +1,5 @@
+CREATE TABLE "historical_pageviews" ("id" TEXT NOT NULL, "articleId" TEXT NOT NULL, "periodStart" DATE NOT NULL, "periodEnd" DATE NOT NULL, "granularity" TEXT NOT NULL DEFAULT 'MONTHLY', "agentType" "PageviewAgentType" NOT NULL DEFAULT 'ALL_AGENTS', "views" INTEGER, "status" TEXT NOT NULL DEFAULT 'SUCCESS', "error" TEXT, "fetchedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "historical_pageviews_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "historical_pageviews_articleId_periodStart_granularity_agentType_key" ON "historical_pageviews"("articleId", "periodStart", "granularity", "agentType");
+CREATE INDEX "historical_pageviews_periodStart_idx" ON "historical_pageviews"("periodStart");
+CREATE INDEX "historical_pageviews_status_idx" ON "historical_pageviews"("status");
+ALTER TABLE "historical_pageviews" ADD CONSTRAINT "historical_pageviews_articleId_fkey" FOREIGN KEY ("articleId") REFERENCES "articles"("id") ON DELETE CASCADE ON UPDATE CASCADE;

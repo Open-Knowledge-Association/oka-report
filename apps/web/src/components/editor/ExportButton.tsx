@@ -47,6 +47,12 @@ interface ExportButtonProps {
   profile: EditorProfile;
 }
 
+const csvCell = (value: unknown) => {
+  const raw = String(value ?? "");
+  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replaceAll('"', '""')}"`;
+};
+
 export function ExportButton({ profile }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
@@ -60,7 +66,7 @@ export function ExportButton({ profile }: ExportButtonProps) {
 
     csv += "SUMMARY\n";
     csv += "Username,Articles,Characters Added,References Added,Pageviews\n";
-    csv += `${editor.username},${outreachStats.articlesCount},${outreachStats.charactersAdded},${outreachStats.referencesAdded},${outreachStats.pageviews}\n\n`;
+    csv += [editor.username, outreachStats.articlesCount, outreachStats.charactersAdded, outreachStats.referencesAdded, outreachStats.pageviews].map(csvCell).join(",") + "\n\n";
 
     csv += "ARTICLES\n";
     csv += "Title,Wiki,Characters,References,Rating,Status\n";
@@ -68,7 +74,7 @@ export function ExportButton({ profile }: ExportButtonProps) {
       const wiki = article.wikiProject
         ? article.wikiProject.replace(".org", "")
         : `${article.language}.${article.project}`;
-      csv += `"${article.title}",${wiki},${article.characterSum},${article.referencesCount},${article.rating || ""},${article.isNewArticle ? "Created" : "Edited"}\n`;
+      csv += [article.title, wiki, article.characterSum, article.referencesCount, article.rating || "", article.isNewArticle ? "Created" : "Edited"].map(csvCell).join(",") + "\n";
     });
 
     if (dailyStats && dailyStats.length > 0) {
@@ -76,7 +82,7 @@ export function ExportButton({ profile }: ExportButtonProps) {
       csv +=
         "Date,Edits,Words Added,Articles Created,Articles Edited,References Added,Commons Uploads\n";
       dailyStats.forEach((stat) => {
-        csv += `${stat.date},${stat.edits},${stat.wordsAdded},${stat.articlesCreated},${stat.articlesEdited},${stat.referencesAdded},${stat.commonsUploads}\n`;
+        csv += [stat.date, stat.edits, stat.wordsAdded, stat.articlesCreated, stat.articlesEdited, stat.referencesAdded, stat.commonsUploads].map(csvCell).join(",") + "\n";
       });
     }
 
@@ -94,7 +100,7 @@ export function ExportButton({ profile }: ExportButtonProps) {
       const date = new Date().toISOString().split("T")[0];
 
       link.setAttribute("href", url);
-      link.setAttribute("download", `editor-${profile.editor.username}-${date}.csv`);
+      link.setAttribute("download", `editor-${profile.editor.username.replace(/[^a-zA-Z0-9._-]/g, "_")}-${date}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -102,7 +108,7 @@ export function ExportButton({ profile }: ExportButtonProps) {
 
       toast({
         title: "Export successful",
-        description: `Downloaded editor-${profile.editor.username}-${date}.csv`,
+        description: `Downloaded editor-${profile.editor.username.replace(/[^a-zA-Z0-9._-]/g, "_")}-${date}.csv`,
       });
     } catch (error) {
       toast({

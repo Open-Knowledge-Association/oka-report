@@ -69,6 +69,7 @@ export class ReportExportService {
 
   private generateHTML(data: AnnualReportData): string {
     const { year, totals, byWikiProject, topArticles } = data;
+    const fmt = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
 
     return `
 <!DOCTYPE html>
@@ -135,35 +136,35 @@ export class ReportExportService {
     <tbody>
       <tr>
         <td>Total Edits</td>
-        <td class="number">${totals.edits.toLocaleString()}</td>
+        <td class="number">${fmt(totals.edits)}</td>
       </tr>
       <tr>
         <td>Words Added</td>
-        <td class="number">${totals.wordsAdded.toLocaleString()}</td>
+        <td class="number">${fmt(totals.wordsAdded)}</td>
       </tr>
       <tr>
         <td>Pageviews</td>
-        <td class="number">${totals.pageviews.toLocaleString()}</td>
+        <td class="number">${fmt(totals.pageviews)}</td>
       </tr>
       <tr>
         <td>Articles Created</td>
-        <td class="number">${totals.articlesCreated.toLocaleString()}</td>
+        <td class="number">${fmt(totals.articlesCreated)}</td>
       </tr>
       <tr>
         <td>Articles Edited</td>
-        <td class="number">${totals.articlesEdited.toLocaleString()}</td>
+        <td class="number">${fmt(totals.articlesEdited)}</td>
       </tr>
       <tr>
         <td>Active Editors</td>
-        <td class="number">${totals.editors.toLocaleString()}</td>
+        <td class="number">${fmt(totals.editors)}</td>
       </tr>
       <tr>
         <td>References Added</td>
-        <td class="number">${totals.referencesAdded.toLocaleString()}</td>
+        <td class="number">${fmt(totals.referencesAdded)}</td>
       </tr>
       <tr>
         <td>Commons Uploads</td>
-        <td class="number">${totals.commonsUploads.toLocaleString()}</td>
+        <td class="number">${fmt(totals.commonsUploads)}</td>
       </tr>
     </tbody>
   </table>
@@ -187,12 +188,12 @@ export class ReportExportService {
           (wiki) => `
         <tr>
           <td>${wiki.wikiProject}</td>
-          <td class="number">${wiki.edits.toLocaleString()}</td>
-          <td class="number">${wiki.wordsAdded.toLocaleString()}</td>
-          <td class="number">${wiki.pageviews.toLocaleString()}</td>
-          <td class="number">${wiki.articlesCreated.toLocaleString()}</td>
-          <td class="number">${wiki.articlesEdited.toLocaleString()}</td>
-          <td class="number">${wiki.editors.toLocaleString()}</td>
+          <td class="number">${fmt(wiki.edits)}</td>
+          <td class="number">${fmt(wiki.wordsAdded)}</td>
+          <td class="number">${fmt(wiki.pageviews)}</td>
+          <td class="number">${fmt(wiki.articlesCreated)}</td>
+          <td class="number">${fmt(wiki.articlesEdited)}</td>
+          <td class="number">${fmt(wiki.editors)}</td>
         </tr>
       `,
         )
@@ -218,7 +219,7 @@ export class ReportExportService {
           <td>${article.rank}</td>
           <td>${article.title}</td>
           <td>${article.wikiProject}</td>
-          <td class="number">${article.totalPageviews.toLocaleString()}</td>
+          <td class="number">${fmt(article.totalPageviews)}</td>
         </tr>
       `,
         )

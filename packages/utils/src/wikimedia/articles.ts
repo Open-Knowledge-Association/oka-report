@@ -20,12 +20,14 @@ type ArticleInfoResponse = {
 
 export const getArticleInfo = async (
   client: WikimediaClient,
-  title: string,
+  title?: string,
+  pageId?: number,
 ): Promise<ArticleInfo | null> => {
   const response = await client.request<ArticleInfoResponse>("/w/api.php", {
     action: "query",
     format: "json",
-    titles: title,
+    titles: pageId === undefined ? title : undefined,
+    pageids: pageId,
     prop: "revisions",
     rvprop: "timestamp|user",
     rvlimit: 1,

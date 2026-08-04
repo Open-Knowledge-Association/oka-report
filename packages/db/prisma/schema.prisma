@@ -113,6 +113,11 @@ model Article {
   createdByEditor   Editor? @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
   createdByEditorId String?
 
+  /// Author verification state: unknown, verified_tracked, verified_external, unavailable
+  authorStatus String @default("unknown")
+  authorUsername String?
+  authorVerifiedAt DateTime?
+
   /// When this article was first created on Wikipedia
   /// Fetched from MediaWiki API (first revision timestamp)
   /// Example: "2024-03-15T10:30:00Z"
@@ -120,6 +125,7 @@ model Article {
 
   contributions Contribution[]
   pageviews     Pageview[]
+  historicalPageviews HistoricalPageview[]
   editors       ArticleEditor[]
   dailyStats    ArticleDailyStat[]
 
@@ -210,6 +216,27 @@ model Pageview {
   @@index([date])
   @@index([agentType])
   @@map("pageviews")
+}
+
+/// Monthly historical pageview aggregates used by annual reports
+model HistoricalPageview {
+  id String @id @default(cuid())
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId String
+  periodStart DateTime @db.Date
+  periodEnd DateTime @db.Date
+  granularity String @default("MONTHLY")
+  agentType PageviewAgentType @default(ALL_AGENTS)
+  views Int?
+  status String @default("SUCCESS")
+  error String?
+  fetchedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([articleId, periodStart, granularity, agentType])
+  @@index([periodStart])
+  @@index([status])
+  @@map("historical_pageviews")
 }
 
 /// Join table linking articles to editors
@@ -306,6 +333,12 @@ model SyncJob {
   /// Job statistics and metadata as JSON
   /// Example: {"editorsProcessed": 50, "contributionsSynced": 1234, "errors": 2}
   metadata Json?
+
+  /// Durable worker lease. Only the current owner may renew/complete the job.
+  leaseOwner String?
+  leaseVersion Int @default(0)
+  heartbeatAt DateTime?
+  leaseExpiresAt DateTime?
 
   createdAt DateTime @default(now())
 

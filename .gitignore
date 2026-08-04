@@ -15,6 +15,9 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.deploy*
 
 # Kecuali file example (agar tim tau butuh variabel apa)
 !.env.example
+# Local deployment backups
+docker-compose.deploy.yml.pre-*

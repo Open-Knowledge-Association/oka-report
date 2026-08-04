@@ -122,8 +122,8 @@ export class WikimediaClient {
     return getUserContributions(this, username, options);
   }
 
-  async getArticleInfo(title: string): Promise<ArticleInfo | null> {
-    return getArticleInfo(this, title);
+  async getArticleInfo(title?: string, pageId?: number): Promise<ArticleInfo | null> {
+    return getArticleInfo(this, title, pageId);
   }
 
   async getPageviews(
@@ -132,8 +132,9 @@ export class WikimediaClient {
     startDate: string,
     endDate: string,
     agentType?: import("./pageviews").PageviewAgentType,
+    granularity?: "daily" | "monthly",
   ): Promise<PageviewData[]> {
-    return getPageviews(this, article, project, startDate, endDate, agentType);
+    return getPageviews(this, article, project, startDate, endDate, agentType, granularity);
   }
 
   async getCommonsUploads(username: string): Promise<CommonsUpload[]> {
