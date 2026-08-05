@@ -1,4 +1,4 @@
-import type { PrismaClient, Granularity } from "@repo/db/generated/prisma/client";
+import type { PrismaClient, Prisma, Granularity } from "@repo/db/generated/prisma/client";
 
 export interface SnapshotTotals {
   edits: number;
@@ -231,36 +231,60 @@ export class SnapshotReportService {
       }));
   }
 
-  /** Detail: per-editor activity in a period. */
+  /** Detail: per-editor activity. Returns ALL program editors (0-activity included),
+   *  aggregated over lifetime activity since enrollment, plus a hasActivity flag.
+   *  If start/end provided, restricts the aggregated window. */
   async editorDetails(
     granularity: Granularity,
-    start: Date,
-    end: Date,
+    start?: Date,
+    end?: Date,
   ): Promise<Array<{
     editorId: string; username: string;
     edits: number; wordsAdded: number; articlesCreated: number;
     articlesEdited: number; commonsUploads: number;
+    hasActivity: boolean;
   }>> {
     const programId = await this.getProgramId();
+
+    // All program members (including inactive ones if isActive=false excluded? keep active)
+    const members = await this.prisma.programMember.findMany({
+      where: { programId, isActive: true },
+      select: {
+        editorId: true,
+        editor: { select: { username: true } },
+      },
+      orderBy: { enrolledAt: "asc" },
+    });
+
+    // Aggregate lifetime activity per editor from DAY detail rows,
+    // optionally windowed by start/end.
+    const activityWhere: Prisma.PeriodEditorActivityWhereInput = {
+      granularity: "DAY",
+      programId,
+      editorId: { in: members.map((m) => m.editorId) },
+    };
+    if (start || end) {
+      activityWhere.periodStart = {
+        ...(start ? { gte: start } : {}),
+        ...(end ? { lt: end } : {}),
+      };
+    }
     const rows = await this.prisma.periodEditorActivity.findMany({
-      where: { granularity: "DAY", programId, periodStart: { gte: start, lt: end } },
+      where: activityWhere,
       select: {
         editorId: true, edits: true, wordsAdded: true,
         articlesCreated: true, articlesEdited: true, commonsUploads: true,
-        editor: { select: { username: true } },
       },
     });
+
     const agg = new Map<string, {
-      username: string; edits: number; wordsAdded: number;
+      edits: number; wordsAdded: number;
       articlesCreated: number; articlesEdited: number; commonsUploads: number;
     }>();
     for (const r of rows) {
       let e = agg.get(r.editorId);
       if (!e) {
-        e = {
-          username: r.editor.username, edits: 0, wordsAdded: 0,
-          articlesCreated: 0, articlesEdited: 0, commonsUploads: 0,
-        };
+        e = { edits: 0, wordsAdded: 0, articlesCreated: 0, articlesEdited: 0, commonsUploads: 0 };
         agg.set(r.editorId, e);
       }
       e.edits += r.edits;
@@ -269,18 +293,20 @@ export class SnapshotReportService {
       e.articlesEdited += r.articlesEdited;
       e.commonsUploads += r.commonsUploads;
     }
-    return [...agg.entries()]
-      .sort(([, x], [, y]) => y.edits - x.edits)
-      .slice(0, 500)
-      .map(([editorId, e]) => ({
-        editorId,
-        username: e.username,
-        edits: e.edits,
-        wordsAdded: e.wordsAdded,
-        articlesCreated: e.articlesCreated,
-        articlesEdited: e.articlesEdited,
-        commonsUploads: e.commonsUploads,
-      }));
+
+    return members.map((m) => {
+      const a = agg.get(m.editorId);
+      return {
+        editorId: m.editorId,
+        username: m.editor.username,
+        edits: a?.edits ?? 0,
+        wordsAdded: a?.wordsAdded ?? 0,
+        articlesCreated: a?.articlesCreated ?? 0,
+        articlesEdited: a?.articlesEdited ?? 0,
+        commonsUploads: a?.commonsUploads ?? 0,
+        hasActivity: a !== undefined,
+      };
+    }).sort((x, y) => y.edits - x.edits);
   }
 
   /** Daily history (for charts) — DAY snapshots in range. */

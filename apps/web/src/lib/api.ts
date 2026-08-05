@@ -651,6 +651,7 @@ export type EditorActivityDetail = {
   articlesCreated: number;
   articlesEdited: number;
   commonsUploads: number;
+  hasActivity: boolean;
 };
 
 export const fetchSnapshotReport = (

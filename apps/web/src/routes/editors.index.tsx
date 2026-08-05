@@ -42,11 +42,10 @@ const SummaryCard = ({
 function EditorsStatsPage() {
   const navigate = useNavigate();
   const [selectedEditors, setSelectedEditors] = useState<string[]>([]);
-  const year = new Date().getFullYear();
 
   const { data: editorsData = [], isLoading, error } = useQuery<EditorActivityDetail[]>({
-    queryKey: ["snapshot-editors", "YEAR", year],
-    queryFn: () => fetchSnapshotEditors("YEAR", `${year}-01-01`, `${year + 1}-01-01`),
+    queryKey: ["snapshot-editors", "lifetime"],
+    queryFn: () => fetchSnapshotEditors("YEAR", "2022-05-01", "2099-01-01"),
   });
 
   const editors: EditorActivityDetail[] = editorsData;
@@ -85,7 +84,7 @@ function EditorsStatsPage() {
                 ? "Loading editors..."
                 : error
                   ? "Failed to load editors"
-                  : `${year} activity for ${editors.length} OKA editors`}
+                  : `${editors.length} OKA program editors — lifetime activity since enrollment`}
             </p>
           </div>
           {selectedEditors.length === 2 && (
@@ -157,12 +156,23 @@ function EditorsStatsPage() {
                           {editor.username.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex flex-col">
-                          <button
-                            onClick={() => navigate({ to: `/editors/${editor.editorId}` })}
-                            className="hover:underline text-slate-900 font-medium text-left text-sm"
-                          >
-                            {editor.username}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate({ to: `/editors/${editor.editorId}` })}
+                              className="hover:underline text-slate-900 font-medium text-left text-sm"
+                            >
+                              {editor.username}
+                            </button>
+                            {editor.hasActivity ? (
+                              <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-medium">
+                                Aktif
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-slate-50 text-slate-400 border border-slate-200 px-2 py-0.5 text-[10px] font-medium">
+                                No activity
+                              </span>
+                            )}
+                          </div>
                           <a
                             href={`https://en.wikipedia.org/wiki/User:${editor.username}`}
                             target="_blank"
