@@ -248,18 +248,35 @@ export class StatsService {
   ): Promise<number | Map<string, number>> {
     if (articles.length === 0) return asMap ? new Map() : 0;
     const ids = articles.map((article) => article.id);
+    // A huge IN (...) list (whole-dataset lifetime totals) exceeds the
+    // PostgreSQL parameter limit (P2029). For full-dataset calls, aggregate
+    // over all rows instead of filtering by article id.
+    const fullDataset = articles.length > 10000;
     const [daily, cumulative] = await Promise.all([
-      this.prisma.pageview.groupBy({
-        by: ["articleId"],
-        where: { articleId: { in: ids }, type: "DAILY", agentType: "ALL_AGENTS" },
-        _sum: { views: true },
-      }),
-      this.prisma.pageview.findMany({
-        where: { articleId: { in: ids }, type: "CUMULATIVE", agentType: "ALL_AGENTS" },
-        select: { articleId: true, views: true, cumulativeViews: true },
-        orderBy: [{ articleId: "asc" }, { date: "desc" }],
-        distinct: ["articleId"],
-      }),
+      fullDataset
+        ? this.prisma.pageview.groupBy({
+            by: ["articleId"],
+            where: { type: "DAILY", agentType: "ALL_AGENTS" },
+            _sum: { views: true },
+          })
+        : this.prisma.pageview.groupBy({
+            by: ["articleId"],
+            where: { articleId: { in: ids }, type: "DAILY", agentType: "ALL_AGENTS" },
+            _sum: { views: true },
+          }),
+      fullDataset
+        ? this.prisma.pageview.findMany({
+            where: { type: "CUMULATIVE", agentType: "ALL_AGENTS" },
+            select: { articleId: true, views: true, cumulativeViews: true },
+            orderBy: [{ articleId: "asc" }, { date: "desc" }],
+            distinct: ["articleId"],
+          })
+        : this.prisma.pageview.findMany({
+            where: { articleId: { in: ids }, type: "CUMULATIVE", agentType: "ALL_AGENTS" },
+            select: { articleId: true, views: true, cumulativeViews: true },
+            orderBy: [{ articleId: "asc" }, { date: "desc" }],
+            distinct: ["articleId"],
+          }),
     ]);
     const dailyByArticle = new Map(daily.map((row) => [row.articleId, row._sum.views ?? 0]));
     const cumulativeByArticle = new Map(
@@ -1698,9 +1715,9 @@ export class StatsService {
       const dailyByArticle = new Map(dailyViews.map((row) => [row.articleId, row._sum.views ?? 0]));
       let pageviewTotal = 0;
       for (const articleId of new Set([...historicalByArticle.keys(), ...dailyByArticle.keys()])) {
-        pageviewTotal += dailyByArticle.has(articleId)
-          ? dailyByArticle.get(articleId)!
-          : historicalByArticle.get(articleId)!;
+        pageviewTotal += historicalByArticle.has(articleId)
+          ? historicalByArticle.get(articleId)!
+          : dailyByArticle.get(articleId)!;
       }
       const pageviews = historicalByArticle.size || dailyByArticle.size ? pageviewTotal : null;
       points.push({
@@ -1795,13 +1812,13 @@ export class StatsService {
     for (const articleId of new Set([...historicalByArticle.keys(), ...dailyByArticle.keys()])) {
       pageviewsByArticle.set(
         articleId,
-        dailyByArticle.has(articleId)
-          ? dailyByArticle.get(articleId)!
-          : historicalByArticle.get(articleId)!,
+        historicalByArticle.has(articleId)
+          ? historicalByArticle.get(articleId)!
+          : dailyByArticle.get(articleId)!,
       );
     }
     const rawPageviewGroups =
-      historicalGroups.length && dailyByArticle.size === 0 ? historicalGroups : pageviewGroups;
+      pageviewGroups.length && historicalByArticle.size === 0 ? pageviewGroups : historicalGroups;
     const pageviewArticleRows = await this.prisma.article.findMany({
       where: { id: { in: Array.from(pageviewsByArticle.keys()) } },
       select: { id: true, title: true, wikiProject: true },
@@ -1892,9 +1909,9 @@ export class StatsService {
       monthlyPerformance: includeMonthly ? await this.getMonthlyPerformance(year) : [],
       topArticles,
       methodology: {
-        pageviews: dailyByArticle.size
-          ? "Wikimedia DAILY/ALL_AGENTS rows; historical MONTHLY fallback only for articles without daily coverage"
-          : "Historical Wikimedia MONTHLY/ALL_AGENTS rows",
+        pageviews: historicalByArticle.size
+          ? "Historical Wikimedia MONTHLY/ALL_AGENTS rows; DAILY fallback only for articles without historical coverage"
+          : "Wikimedia DAILY/ALL_AGENTS rows",
         articlesCreated:
           "Articles with a first tracked creation contribution within the selected calendar year",
         wordsAdded: "Estimated from contribution bytes using the existing wordsAdded metric",
@@ -1973,9 +1990,9 @@ export class StatsService {
     for (const articleId of new Set([...historicalByArticle.keys(), ...dailyByArticle.keys()])) {
       selectedByArticle.set(
         articleId,
-        dailyByArticle.has(articleId)
-          ? dailyByArticle.get(articleId)!
-          : historicalByArticle.get(articleId)!,
+        historicalByArticle.has(articleId)
+          ? historicalByArticle.get(articleId)!
+          : dailyByArticle.get(articleId)!,
       );
     }
     const viewArticles = await this.prisma.article.findMany({
