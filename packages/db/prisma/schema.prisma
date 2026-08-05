@@ -28,6 +28,45 @@ enum PageviewAgentType {
   ALL_AGENTS // All views (human + bot)
 }
 
+/// A tracked program (e.g. "OKA") that groups editors and articles.
+/// Source of truth for the program window and membership.
+model Program {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  school    String
+  startAt   DateTime
+  endAt     DateTime
+  source    String   @default("outreach_dashboard")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  ProgramMember[]
+  articles Article[]
+
+  @@map("programs")
+}
+
+/// Join table: editor membership in a program with its enrollment timestamp.
+/// Edit attribution uses this timestamp: contributions before enrolledAt are
+/// excluded from program metrics.
+model ProgramMember {
+  id         String   @id @default(cuid())
+  program    Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId  String
+  editor     Editor   @relation(fields: [editorId], references: [id], onDelete: Cascade)
+  editorId   String
+  enrolledAt DateTime
+  externalId String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([programId, editorId])
+  @@index([editorId])
+  @@index([programId, isActive])
+  @@map("program_members")
+}
+
 /// Registered Wikipedia editors to track
 /// These are OKA members, grantees, or other editors whose contributions we monitor
 model Editor {
@@ -62,6 +101,7 @@ model Editor {
   createdArticles  Article[]       @relation("CreatedArticles")
   articles         ArticleEditor[]
   dailyStats       EditorDailyStat[]
+  programMembers   ProgramMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -113,6 +153,10 @@ model Article {
   createdByEditor   Editor? @relation("CreatedArticles", fields: [createdByEditorId], references: [id])
   createdByEditorId String?
 
+  /// Program this article belongs to (null = legacy/untagged)
+  program   Program? @relation(fields: [programId], references: [id])
+  programId String?
+
   /// Author verification state: unknown, verified_tracked, verified_external, unavailable
   authorStatus String @default("unknown")
   authorUsername String?
@@ -133,6 +177,7 @@ model Article {
   updatedAt DateTime @updatedAt
 
   @@unique([pageId, wikiProject])
+  @@index([programId])
   @@map("articles")
 }
 
@@ -179,6 +224,8 @@ model Contribution {
   @@index([editorId])
   @@index([articleId])
   @@index([editTimestamp])
+  @@index([editorId, editTimestamp])
+  @@index([articleId, editTimestamp])
   @@map("contributions")
 }
 

@@ -106,6 +106,11 @@ export class OutreachArticleSyncService {
       const articleData = await this.dashboardClient.getArticles(school, slug);
       const articles = articleData.course.articles;
 
+      // Resolve the program this course maps to, so articles are tagged with
+      // programId (attribution scope). Null when the program has not been synced.
+      const program = await this.prisma.program.findUnique({ where: { slug } });
+      const programId = program?.id ?? null;
+
       const editors = await this.prisma.editor.findMany();
       const editorMap = new Map(editors.map((e) => [e.externalId, e]));
 
@@ -214,6 +219,7 @@ export class OutreachArticleSyncService {
                   isNewArticle: dashboardArticle.new_article,
                   rating: dashboardArticle.rating,
                   authorStatus: "unknown",
+                  programId,
                 },
                 update: {
                   title: dashboardArticle.title,
@@ -224,6 +230,7 @@ export class OutreachArticleSyncService {
                   referencesCount: dashboardArticle.references_count,
                   isNewArticle: dashboardArticle.new_article,
                   rating: dashboardArticle.rating,
+                  programId,
                   updatedAt: new Date(),
                 },
               });

@@ -301,6 +301,16 @@ export class SyncService {
         return syncedCount;
       }
 
+      // Program attribution: only sync contributions made after the editor's
+      // enrollment in the program. Edits before enrolledAt are excluded from
+      // program metrics. Uses the first active program as the attribution scope.
+      const member = await this.prisma.programMember.findFirst({
+        where: { editorId: editor.id, isActive: true },
+        orderBy: { enrolledAt: "asc" },
+        select: { enrolledAt: true },
+      });
+      const enrolledAt = member?.enrolledAt ?? null;
+
       for (const wikiProject of wikiProjects) {
         const wikiClient = wikiClients.get(wikiProject);
         if (!wikiClient) continue;
@@ -311,6 +321,10 @@ export class SyncService {
           );
           coverage.fetched += contributions.length;
           for (const contribution of contributions) {
+            // Skip edits made before the editor joined the program.
+            if (enrolledAt && new Date(contribution.timestamp) < enrolledAt) {
+              continue;
+            }
             const article = await this.findArticleForContribution(contribution, wikiProject);
             if (!article) {
               coverage.skippedNotOutreach += 1;

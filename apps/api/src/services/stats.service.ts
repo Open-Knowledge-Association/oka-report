@@ -136,32 +136,67 @@ export class StatsService {
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
+   * Editor IDs that are (or were) enrolled in any active program.
+   * Used to scope contribution aggregation to program attribution.
+   */
+  private async getProgramEligibleEditorIds(): Promise<string[]> {
+    const members = await this.prisma.programMember.findMany({
+      where: { isActive: true },
+      select: { editorId: true },
+    });
+    return Array.from(new Set(members.map((m) => m.editorId)));
+  }
+
+  /**
+   * Map editorId -> earliest enrollment across active programs.
+   * Contributions before this timestamp are excluded from program metrics.
+   */
+  private async getEnrolledAtByEditorMap(): Promise<Map<string, Date>> {
+    const members = await this.prisma.programMember.findMany({
+      where: { isActive: true },
+      select: { editorId: true, enrolledAt: true },
+    });
+    const map = new Map<string, Date>();
+    for (const member of members) {
+      const current = map.get(member.editorId);
+      if (!current || member.enrolledAt < current) map.set(member.editorId, member.enrolledAt);
+    }
+    return map;
+  }
+
+  /**
    * Canonical lifetime totals used by the dashboard and article catalogue.
    * Period reports use the same contribution semantics, constrained by date.
    */
   async getCurrentDatasetStats(): Promise<CurrentDatasetStats> {
-    const [editorsCount, articles, contributions, commonsUploads, articleSums] = await Promise.all([
-      this.prisma.editor.count({ where: { isActive: true } }),
-      this.prisma.article.findMany({ select: { id: true, source: true } }),
-      this.prisma.contribution.findMany({
-        select: { articleId: true, isCreation: true, wordsAdded: true },
-      }),
-      this.prisma.commonsUpload.count(),
-      this.prisma.article.aggregate({ _sum: { referencesCount: true } }),
-    ]);
+    const [editorsCount, articles, contributions, commonsUploads, articleSums, eligibleEditorIds] =
+      await Promise.all([
+        this.prisma.editor.count({ where: { isActive: true } }),
+        this.prisma.article.findMany({ select: { id: true, source: true } }),
+        this.prisma.contribution.findMany({
+          select: { articleId: true, editorId: true, isCreation: true, wordsAdded: true },
+        }),
+        this.prisma.commonsUpload.count(),
+        this.prisma.article.aggregate({ _sum: { referencesCount: true } }),
+        this.getProgramEligibleEditorIds(),
+      ]);
+
+    const eligibleSet = new Set(eligibleEditorIds);
+    // Only contributions from editors enrolled in the program count.
+    const eligibleContributions = contributions.filter((row) => eligibleSet.has(row.editorId));
 
     const createdArticleIds = new Set(
-      contributions.filter((row) => row.isCreation).map((row) => row.articleId),
+      eligibleContributions.filter((row) => row.isCreation).map((row) => row.articleId),
     );
-    const editedArticleIds = new Set(contributions.map((row) => row.articleId));
+    const editedArticleIds = new Set(eligibleContributions.map((row) => row.articleId));
 
     return {
       editorsCount,
       articlesCreated: createdArticleIds.size,
       articlesEdited: editedArticleIds.size,
       totalArticles: articles.length,
-      totalEdits: contributions.length,
-      wordsAdded: contributions.reduce((sum, row) => sum + row.wordsAdded, 0),
+      totalEdits: eligibleContributions.length,
+      wordsAdded: eligibleContributions.reduce((sum, row) => sum + row.wordsAdded, 0),
       referencesAdded: articleSums._sum.referencesCount ?? 0,
       pageviews: await this.getCurrentPageviewsForArticles(articles),
       commonsUploads,
@@ -1666,6 +1701,9 @@ export class StatsService {
       ...(filters?.source ? { source: filters.source } : {}),
     };
     const points: PeriodPerformancePoint[] = [];
+    // Enrolled-at map for program attribution: contributions before a member's
+    // enrollment are excluded from monthly metrics.
+    const enrolledAtByEditor = await this.getEnrolledAtByEditorMap();
     for (let month = 1; month <= 12; month++) {
       const start = new Date(Date.UTC(year, month - 1, 1));
       const end = new Date(Date.UTC(year, month, 1));
@@ -1673,7 +1711,7 @@ export class StatsService {
         await Promise.all([
           this.prisma.contribution.findMany({
             where: { editTimestamp: { gte: start, lt: end }, article: articleWhere },
-            select: { articleId: true, editorId: true, wordsAdded: true },
+            select: { articleId: true, editorId: true, wordsAdded: true, editTimestamp: true },
           }),
           this.prisma.contribution.findMany({
             where: {
@@ -1707,8 +1745,12 @@ export class StatsService {
           }),
           this.prisma.commonsUpload.count({ where: { uploadedAt: { gte: start, lt: end } } }),
         ]);
-      const editors = new Set(contributions.map((row) => row.editorId));
-      const editedArticles = new Set(contributions.map((row) => row.articleId));
+      const eligibleContributions = contributions.filter((row) => {
+        const enrolledAt = enrolledAtByEditor.get(row.editorId);
+        return !enrolledAt || row.editTimestamp >= enrolledAt;
+      });
+      const editors = new Set(eligibleContributions.map((row) => row.editorId));
+      const editedArticles = new Set(eligibleContributions.map((row) => row.articleId));
       const historicalByArticle = new Map(
         historicalViews.map((row) => [row.articleId, row._sum.views ?? 0]),
       );
@@ -1722,8 +1764,8 @@ export class StatsService {
       const pageviews = historicalByArticle.size || dailyByArticle.size ? pageviewTotal : null;
       points.push({
         period: `${year}-${String(month).padStart(2, "0")}`,
-        edits: contributions.length,
-        wordsAdded: contributions.reduce((sum, row) => sum + row.wordsAdded, 0),
+        edits: eligibleContributions.length,
+        wordsAdded: eligibleContributions.reduce((sum, row) => sum + row.wordsAdded, 0),
         pageviews: pageviews as number,
         articlesCreated: created.length,
         articlesEdited: editedArticles.size,
@@ -1763,7 +1805,7 @@ export class StatsService {
   async getImpactReport(year: number, topLimit = 10, includeMonthly = false) {
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year + 1, 0, 1));
-    const [articles, contributions, pageviewGroups, historicalGroups, commonsGroups] =
+    const [articles, contributions, pageviewGroups, historicalGroups, commonsGroups, enrolledAtByEditor] =
       await Promise.all([
         this.prisma.article.findMany({
           where: {
@@ -1779,7 +1821,7 @@ export class StatsService {
         }),
         this.prisma.contribution.findMany({
           where: { editTimestamp: { gte: start, lt: end } },
-          select: { articleId: true, editorId: true, wordsAdded: true },
+          select: { articleId: true, editorId: true, wordsAdded: true, editTimestamp: true },
         }),
         this.prisma.pageview.groupBy({
           by: ["articleId"],
@@ -1797,7 +1839,14 @@ export class StatsService {
           _sum: { views: true },
         }),
         this.prisma.commonsUpload.count({ where: { uploadedAt: { gte: start, lt: end } } }),
+        this.getEnrolledAtByEditorMap(),
       ]);
+
+    // Exclude contributions made before the editor joined the program.
+    const eligibleContributions = contributions.filter((row) => {
+      const enrolledAt = enrolledAtByEditor.get(row.editorId);
+      return !enrolledAt || row.editTimestamp >= enrolledAt;
+    });
 
     const articleMap = new Map(articles.map((article) => [article.id, article]));
     // Choose pageview source per article. A global historical fallback silently
@@ -1826,8 +1875,8 @@ export class StatsService {
     for (const article of pageviewArticleRows)
       articleMap.set(article.id, article as (typeof articles)[number]);
     const createdIds = new Set(articles.map((article) => article.id));
-    const editedIds = new Set(contributions.map((row) => row.articleId));
-    const editorIds = new Set(contributions.map((row) => row.editorId));
+    const editedIds = new Set(eligibleContributions.map((row) => row.articleId));
+    const editorIds = new Set(eligibleContributions.map((row) => row.editorId));
     const byWiki = new Map<
       string,
       {
@@ -1854,7 +1903,7 @@ export class StatsService {
     for (const article of articles) {
       ensure(article.wikiProject).articlesCreated += 1;
     }
-    for (const row of contributions) {
+    for (const row of eligibleContributions) {
       const article = articleMap.get(row.articleId);
       if (!article) continue;
       const target = ensure(article.wikiProject);
@@ -1867,7 +1916,7 @@ export class StatsService {
     }
     for (const [wikiProject, row] of byWiki) {
       row.articlesEdited = new Set(
-        contributions
+        eligibleContributions
           .filter((item) => articleMap.get(item.articleId)?.wikiProject === wikiProject)
           .map((item) => item.articleId),
       ).size;
@@ -1891,8 +1940,8 @@ export class StatsService {
     const totals = {
       articlesCreated: createdIds.size,
       articlesEdited: editedIds.size,
-      edits: contributions.length,
-      wordsAdded: contributions.reduce((sum, row) => sum + row.wordsAdded, 0),
+      edits: eligibleContributions.length,
+      wordsAdded: eligibleContributions.reduce((sum, row) => sum + row.wordsAdded, 0),
       pageviews: rawPageviewGroups.length
         ? Array.from(pageviewsByArticle.values()).reduce((sum, value) => sum + value, 0)
         : null,
