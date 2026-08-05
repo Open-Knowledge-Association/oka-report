@@ -8,6 +8,7 @@ import { SyncService } from "./services/sync.service";
 import { OutreachSyncService } from "./services/outreach-sync.service";
 import { OutreachArticleSyncService } from "./services/outreach-article-sync.service";
 import { ProgramSyncService } from "./services/program-sync.service";
+import { SnapshotService } from "./services/snapshot.service";
 import { HistoricalPageviewService } from "./services/historical-pageview.service";
 import { HistoricalBackfillPlanner } from "./services/historical-backfill-planner.service";
 import { WikimediaClient, OutreachDashboardClient } from "@repo/utils";
@@ -27,6 +28,7 @@ const queuedDashboardClient = new OutreachDashboardClient({
 });
 const queuedArticleService = new OutreachArticleSyncService(prisma, queuedDashboardClient);
 const queuedProgramService = new ProgramSyncService(prisma, queuedDashboardClient);
+const queuedSnapshotService = new SnapshotService(prisma);
 const historicalPageviewService = new HistoricalPageviewService(prisma, wikimediaClient);
 const historicalBackfillPlanner = new HistoricalBackfillPlanner(prisma);
 const queuedStatsService = new StatsService(prisma);
@@ -73,6 +75,7 @@ const processQueuedJob = async () => {
       jobType: {
         in: [
           "program_sync",
+          "snapshot_build",
           "contributions",
           "pageviews",
           "commons",
@@ -101,6 +104,22 @@ const processQueuedJob = async () => {
     const syncMode = typeof jobMetadata.mode === "string" ? jobMetadata.mode : "manual_full";
     if (job.jobType === "program_sync") {
       const result = await queuedProgramService.syncProgram(school, slug);
+      await queuedSyncService.completeSyncJob(job.id, result as any);
+    } else if (job.jobType === "snapshot_build") {
+      const metadata =
+        job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
+          ? (job.metadata as { startDate?: unknown; endDate?: unknown })
+          : {};
+      const startDate = new Date(String(metadata.startDate ?? "2025-10-01"));
+      const endDate = new Date(String(metadata.endDate ?? new Date().toISOString()));
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime()) ||
+        endDate < startDate
+      ) {
+        throw new Error("Invalid snapshot build date range");
+      }
+      const result = await queuedSnapshotService.build(startDate, endDate);
       await queuedSyncService.completeSyncJob(job.id, result as any);
     } else if (job.jobType === "contributions") {
       const count = await queuedSyncService.syncEditorContributions(undefined, undefined, job.id);

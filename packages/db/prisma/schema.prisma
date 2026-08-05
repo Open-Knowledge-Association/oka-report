@@ -28,6 +28,12 @@ enum PageviewAgentType {
   ALL_AGENTS // All views (human + bot)
 }
 
+/// Snapshot aggregation granularity
+enum Granularity {
+  MONTH
+  YEAR
+}
+
 /// A tracked program (e.g. "OKA") that groups editors and articles.
 /// Source of truth for the program window and membership.
 model Program {
@@ -43,6 +49,7 @@ model Program {
 
   members  ProgramMember[]
   articles Article[]
+  snapshots MetricSnapshot[]
 
   @@map("programs")
 }
@@ -284,6 +291,37 @@ model HistoricalPageview {
   @@index([periodStart])
   @@index([status])
   @@map("historical_pageviews")
+}
+
+/// Pre-aggregated metric snapshot (MONTH/YEAR granularity) for fast reporting.
+/// Sits on top of the raw tables (contributions/pageviews/commons); rollups are
+/// idempotent and rebuilt by the snapshot_build job. DAY granularity remains in
+/// the existing DailyStat tables.
+model MetricSnapshot {
+  id         String      @id @default(cuid())
+  granularity Granularity
+  periodStart DateTime   @db.Date
+  periodEnd   DateTime   @db.Date
+  program     Program?   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId   String?
+  wikiProject String     @default("")
+
+  edits           Int
+  wordsAdded      Int
+  pageviews       Int
+  articlesCreated Int
+  articlesEdited  Int
+  editors         Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([granularity, periodStart, programId, wikiProject])
+  @@index([granularity, periodStart])
+  @@index([programId, granularity, periodStart])
+  @@index([wikiProject, granularity, periodStart])
+  @@map("metric_snapshots")
 }
 
 /// Join table linking articles to editors
