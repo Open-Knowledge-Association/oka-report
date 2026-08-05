@@ -43,8 +43,6 @@ export const apiFetch = async <T>(path: string, init?: RequestInit) => {
   return payload.data;
 };
 
-export const fetchEditors = () => apiFetch<Editor[]>("/editors");
-
 export const createEditor = (data: { username: string }) =>
   apiFetch<Editor>("/editors", {
     method: "POST",
@@ -61,53 +59,6 @@ export const bulkImportEditors = (usernames: string[]) =>
     method: "POST",
     body: JSON.stringify({ usernames }),
   });
-
-export const fetchOverallStats = () =>
-  apiFetch<{
-    totals: { editorsCount: number; articlesCreated: number; edits: number; pageviews: number };
-    byWikiProject: Array<{
-      wikiProject: string;
-      edits: number;
-      articlesCreated: number;
-      pageviews: number;
-    }>;
-  }>("/stats/overall");
-
-export const fetchEditorStats = () =>
-  apiFetch<
-    Array<{
-      editorId: string;
-      username: string;
-      edits: number;
-      articlesCreated: number;
-      articlesModified: number;
-      pageviews: number;
-    }>
-  >("/stats/editors");
-
-export type DashboardStats = {
-  editorsCount: number;
-  articlesCreated: number;
-  articlesEdited: number;
-  totalArticles: number;
-  totalEdits: number;
-  wordsAdded: number;
-  referencesAdded: number;
-  pageviews: number;
-  commonsUploads: number;
-};
-
-export const fetchDashboardStats = () => apiFetch<DashboardStats>("/stats/dashboard");
-
-export type EditorsListStats = {
-  id: string;
-  username: string;
-  characterSum: number;
-  referencesCount: number;
-  uploadsCount: number;
-};
-
-export const fetchEditorsListStats = () => apiFetch<EditorsListStats[]>("/stats/editors-list");
 
 export type SyncStatus = {
   local: {
@@ -191,29 +142,6 @@ export type SyncStatus = {
 };
 
 export const fetchSyncStatus = () => apiFetch<SyncStatus>("/stats/sync-status");
-
-export const fetchOutreachCourse = () =>
-  apiFetch<{ course: any }>("/outreach/course?school=OKA&slug=OKA");
-
-export type OutreachUser = {
-  id: number;
-  username: string;
-  character_sum_ms: number;
-  character_sum_us: number;
-  character_sum_draft: number;
-  references_count: number;
-  total_uploads: number;
-  contribution_url: string;
-  role: number;
-  enrolled_at: string;
-};
-
-export const fetchOutreachUsers = async () => {
-  const data = await apiFetch<{ course: { users: OutreachUser[] } }>(
-    "/outreach/users?school=OKA&slug=OKA",
-  );
-  return data.course.users;
-};
 
 // Article source enum (unified across MediaWiki and Outreach articles)
 export enum ArticleSource {
@@ -667,4 +595,96 @@ export type SchedulerRunLog = {
 
 export const fetchSchedulerLogs = async (id: string, limit = 20) => {
   return apiFetch<{ logs: SchedulerRunLog[] }>(`/scheduler/${id}/logs?limit=${limit}`);
+};
+
+// --- Snapshot-based report API (daily-first layered rollups) ---
+
+export type SnapshotTotals = {
+  edits: number;
+  wordsAdded: number;
+  articlesCreated: number;
+  articlesEdited: number;
+  editors: number;
+  refsAdded: number;
+  viewsTotal: number;
+  viewsActive: number;
+  commonsUploads: number;
+};
+
+export type SnapshotPeriodPoint = SnapshotTotals & {
+  periodStart: string;
+  periodEnd: string;
+};
+
+export type SnapshotReport = {
+  granularity: "DAY" | "MONTH" | "YEAR";
+  periodStart: string;
+  periodEnd: string;
+  totals: SnapshotTotals;
+  byPeriod: SnapshotPeriodPoint[];
+  topArticles: Array<{
+    articleId: string;
+    title: string;
+    wikiProject: string;
+    edits: number;
+    viewsTotal: number;
+  }>;
+};
+
+export type ArticleActivityDetail = {
+  articleId: string;
+  title: string;
+  wikiProject: string;
+  edits: number;
+  wordsAdded: number;
+  isCreated: boolean;
+  viewsTotal: number;
+  viewsActive: number;
+  refsAdded: number;
+};
+
+export type EditorActivityDetail = {
+  editorId: string;
+  username: string;
+  edits: number;
+  wordsAdded: number;
+  articlesCreated: number;
+  articlesEdited: number;
+  commonsUploads: number;
+};
+
+export const fetchSnapshotReport = (
+  granularity: "DAY" | "MONTH" | "YEAR",
+  start: string,
+  end: string,
+  wikiProject?: string,
+) => {
+  const params = new URLSearchParams({ granularity, start, end });
+  if (wikiProject) params.set("wikiProject", wikiProject);
+  return apiFetch<SnapshotReport>(`/stats/snapshot/report?${params.toString()}`);
+};
+
+export const fetchSnapshotArticles = (
+  granularity: "DAY" | "MONTH" | "YEAR",
+  start: string,
+  end: string,
+  wikiProject?: string,
+) => {
+  const params = new URLSearchParams({ granularity, start, end });
+  if (wikiProject) params.set("wikiProject", wikiProject);
+  return apiFetch<ArticleActivityDetail[]>(`/stats/snapshot/articles?${params.toString()}`);
+};
+
+export const fetchSnapshotEditors = (
+  granularity: "DAY" | "MONTH" | "YEAR",
+  start: string,
+  end: string,
+) => {
+  const params = new URLSearchParams({ granularity, start, end });
+  return apiFetch<EditorActivityDetail[]>(`/stats/snapshot/editors?${params.toString()}`);
+};
+
+export const fetchSnapshotDaily = (start: string, end: string) => {
+  const params = new URLSearchParams({ start, end });
+  return apiFetch<SnapshotPeriodPoint[]>(`/stats/snapshot/daily?${params.toString()}`);
 };

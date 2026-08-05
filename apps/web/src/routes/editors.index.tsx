@@ -13,15 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchDashboardStats, fetchEditorsListStats } from "@/lib/api";
-
-type EditorStats = {
-  id: string; // CUID from database
-  username: string;
-  characterSum: number;
-  referencesCount: number;
-  uploadsCount: number;
-};
+import { fetchSnapshotEditors, type EditorActivityDetail } from "@/lib/api";
 
 export const Route = createFileRoute("/editors/")({
   component: EditorsStatsPage,
@@ -50,20 +42,16 @@ const SummaryCard = ({
 function EditorsStatsPage() {
   const navigate = useNavigate();
   const [selectedEditors, setSelectedEditors] = useState<string[]>([]);
-  const {
-    data: editorsData = [],
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ["stats", "editors"],
-    queryFn: fetchEditorsListStats,
+  const year = new Date().getFullYear();
+
+  const { data: editorsData = [], isLoading, error } = useQuery<EditorActivityDetail[]>({
+    queryKey: ["snapshot-editors", "YEAR", year],
+    queryFn: () => fetchSnapshotEditors("YEAR", `${year}-01-01`, `${year + 1}-01-01`),
   });
 
-  const editors: EditorStats[] = editorsData;
-  const { data: dashboardStats } = useQuery({
-    queryKey: ["stats", "dashboard"],
-    queryFn: fetchDashboardStats,
-  });
+  const editors: EditorActivityDetail[] = editorsData;
+  const totalWords = editors.reduce((s, e) => s + e.wordsAdded, 0);
+  const totalUploads = editors.reduce((s, e) => s + e.commonsUploads, 0);
 
   const toggleEditorSelection = (id: string) => {
     setSelectedEditors((prev) => {
@@ -97,11 +85,7 @@ function EditorsStatsPage() {
                 ? "Loading editors..."
                 : error
                   ? "Failed to load editors"
-                  : `Real-time stats for ${editors.length} OKA editors`}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Article metadata is attributed to the verified author only; global cards are
-              deduplicated across editors.
+                  : `${year} activity for ${editors.length} OKA editors`}
             </p>
           </div>
           {selectedEditors.length === 2 && (
@@ -113,20 +97,20 @@ function EditorsStatsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <SummaryCard title="Total Editors" value={editors.length} icon={Users} />
+          <SummaryCard title="Active Editors" value={editors.length} icon={Users} />
           <SummaryCard
-            title="Estimated Words Added"
-            value={(dashboardStats?.wordsAdded ?? 0).toLocaleString()}
+            title="Words Added"
+            value={totalWords.toLocaleString()}
             icon={FileText}
           />
           <SummaryCard
-            title="References Added"
-            value={(dashboardStats?.referencesAdded ?? 0).toLocaleString()}
+            title="Articles Created"
+            value={editors.reduce((s, e) => s + e.articlesCreated, 0).toLocaleString()}
             icon={BookOpen}
           />
           <SummaryCard
             title="Total Uploads"
-            value={(dashboardStats?.commonsUploads ?? 0).toLocaleString()}
+            value={totalUploads.toLocaleString()}
             icon={HardDrive}
           />
         </div>
@@ -137,31 +121,33 @@ function EditorsStatsPage() {
               <TableRow>
                 <TableHead className="w-12">Compare</TableHead>
                 <TableHead>Username</TableHead>
-                <TableHead className="text-right w-32">Characters</TableHead>
-                <TableHead className="text-right w-32">References</TableHead>
-                <TableHead className="text-right w-32">Uploads</TableHead>
+                <TableHead className="text-right w-24">Edits</TableHead>
+                <TableHead className="text-right w-28">Words</TableHead>
+                <TableHead className="text-right w-28">Created</TableHead>
+                <TableHead className="text-right w-28">Edited</TableHead>
+                <TableHead className="text-right w-24">Uploads</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-sm text-slate-500">
+                  <TableCell colSpan={7} className="text-center py-12 text-sm text-slate-500">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : editors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-sm text-slate-500">
+                  <TableCell colSpan={7} className="text-center py-12 text-sm text-slate-500">
                     No editors found.
                   </TableCell>
                 </TableRow>
               ) : (
                 editors.map((editor) => (
-                  <TableRow key={editor.id}>
+                  <TableRow key={editor.editorId}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedEditors.includes(editor.id)}
-                        onCheckedChange={() => toggleEditorSelection(editor.id)}
+                        checked={selectedEditors.includes(editor.editorId)}
+                        onCheckedChange={() => toggleEditorSelection(editor.editorId)}
                         aria-label={`Select ${editor.username} for comparison`}
                       />
                     </TableCell>
@@ -172,7 +158,7 @@ function EditorsStatsPage() {
                         </div>
                         <div className="flex flex-col">
                           <button
-                            onClick={() => navigate({ to: `/editors/${editor.id}` })}
+                            onClick={() => navigate({ to: `/editors/${editor.editorId}` })}
                             className="hover:underline text-slate-900 font-medium text-left text-sm"
                           >
                             {editor.username}
@@ -190,13 +176,19 @@ function EditorsStatsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-700">
-                      {editor.characterSum.toLocaleString()}
+                      {editor.edits.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-700">
-                      {editor.referencesCount.toLocaleString()}
+                      {editor.wordsAdded.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-700">
-                      {editor.uploadsCount.toLocaleString()}
+                      {editor.articlesCreated.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-slate-700">
+                      {editor.articlesEdited.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-slate-700">
+                      {editor.commonsUploads.toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))

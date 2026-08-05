@@ -38,7 +38,7 @@ import { Pagination } from "@/components/ui/pagination";
 import {
   fetchOutreachArticles,
   fetchArticleStats,
-  fetchDashboardStats,
+  fetchSnapshotReport,
   ArticleSource,
 } from "@/lib/api";
 
@@ -125,11 +125,22 @@ function ArticlesPage() {
       }),
   });
 
-  // Dashboard stats query (from local DB)
-  const { data: dashboardStats, isLoading: statsLoading } = useQuery({
-    queryKey: ["stats", "dashboard"],
-    queryFn: fetchDashboardStats,
+  // Snapshot stats query (current year totals from pre-aggregated snapshots)
+  const year = new Date().getFullYear();
+  const { data: snapshotStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["snapshot-report", "YEAR", year],
+    queryFn: () => fetchSnapshotReport("YEAR", `${year}-01-01`, `${year + 1}-01-01`),
   });
+  const dashboardStats = {
+    articlesCreated: snapshotStats?.totals.articlesCreated ?? 0,
+    articlesEdited: snapshotStats?.totals.articlesEdited ?? 0,
+    totalEdits: snapshotStats?.totals.edits ?? 0,
+    editorsCount: snapshotStats?.totals.editors ?? 0,
+    wordsAdded: snapshotStats?.totals.wordsAdded ?? 0,
+    referencesAdded: snapshotStats?.totals.refsAdded ?? 0,
+    pageviews: snapshotStats?.totals.viewsTotal ?? 0,
+    commonsUploads: snapshotStats?.totals.commonsUploads ?? 0,
+  };
 
   const articles = articlesData?.articles ?? [];
   const pagination = articlesData?.pagination;
