@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { prisma } from "@repo/db";
 import { OutreachDashboardClient } from "@repo/utils/src/outreach-dashboard";
 import { StatsService } from "../services";
+import { SnapshotReportService } from "../services/snapshot-report.service";
 import { ReportExportService } from "../services/report-export.service";
 import {
   PaginationSchema,
@@ -24,6 +25,7 @@ const dashboardClient = new OutreachDashboardClient({
 });
 
 const statsService = new StatsService(prisma);
+const snapshotReportService = new SnapshotReportService(prisma);
 
 const parseExternalMetric = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -1111,5 +1113,76 @@ statsRoutes.get("/uploads-reconcile", async (c) => {
       },
       500,
     );
+  }
+});
+
+// --- Snapshot-based report endpoints (daily-first layered rollups) ---
+
+// GET /api/stats/snapshot/report?granularity=MONTH&start=2026-01-01&end=2026-12-31&wikiProject=
+statsRoutes.get("/snapshot/report", async (c) => {
+  const granularity = (c.req.query("granularity") ?? "MONTH").toUpperCase();
+  if (!["DAY", "MONTH", "YEAR"].includes(granularity)) {
+    return c.json({ success: false, error: "granularity must be DAY|MONTH|YEAR" }, 400);
+  }
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const end = new Date(c.req.query("end") ?? new Date().toISOString());
+  const wikiProject = c.req.query("wikiProject") || undefined;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    return c.json({ success: false, error: "invalid start/end" }, 400);
+  }
+  try {
+    const report = await snapshotReportService.report(granularity as "DAY" | "MONTH" | "YEAR", start, end, wikiProject);
+    return c.json({ success: true, data: report });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ success: false, error: message }, 500);
+  }
+});
+
+// GET /api/stats/snapshot/articles?granularity=MONTH&start=&end=
+statsRoutes.get("/snapshot/articles", async (c) => {
+  const granularity = (c.req.query("granularity") ?? "DAY").toUpperCase();
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const end = new Date(c.req.query("end") ?? new Date().toISOString());
+  const wikiProject = c.req.query("wikiProject") || undefined;
+  if (!["DAY", "MONTH", "YEAR"].includes(granularity) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return c.json({ success: false, error: "invalid params" }, 400);
+  }
+  try {
+    const rows = await snapshotReportService.articleDetails(granularity as "DAY" | "MONTH" | "YEAR", start, end, wikiProject);
+    return c.json({ success: true, data: rows });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
+// GET /api/stats/snapshot/editors?granularity=MONTH&start=&end=
+statsRoutes.get("/snapshot/editors", async (c) => {
+  const granularity = (c.req.query("granularity") ?? "DAY").toUpperCase();
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const end = new Date(c.req.query("end") ?? new Date().toISOString());
+  if (!["DAY", "MONTH", "YEAR"].includes(granularity) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return c.json({ success: false, error: "invalid params" }, 400);
+  }
+  try {
+    const rows = await snapshotReportService.editorDetails(granularity as "DAY" | "MONTH" | "YEAR", start, end);
+    return c.json({ success: true, data: rows });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
+// GET /api/stats/snapshot/daily?start=&end=
+statsRoutes.get("/snapshot/daily", async (c) => {
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const end = new Date(c.req.query("end") ?? new Date().toISOString());
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return c.json({ success: false, error: "invalid params" }, 400);
+  }
+  try {
+    const rows = await snapshotReportService.dailyHistory(start, end);
+    return c.json({ success: true, data: rows });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
   }
 });

@@ -2,7 +2,15 @@ import { z } from "zod";
 
 export const TriggerSyncSchema = z.object({
   jobType: z
-    .enum(["full", "program_sync", "snapshot_build", "contributions", "pageviews", "commons"])
+    .enum([
+      "full",
+      "program_sync",
+      "snapshot_build",
+      "daily_pageview_backfill",
+      "contributions",
+      "pageviews",
+      "commons",
+    ])
     .optional(),
   syncMode: z
     .enum(["bootstrap_full", "scheduled_incremental", "manual_full", "manual_backfill"])

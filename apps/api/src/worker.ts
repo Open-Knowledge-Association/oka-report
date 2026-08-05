@@ -9,6 +9,7 @@ import { OutreachSyncService } from "./services/outreach-sync.service";
 import { OutreachArticleSyncService } from "./services/outreach-article-sync.service";
 import { ProgramSyncService } from "./services/program-sync.service";
 import { SnapshotService } from "./services/snapshot.service";
+import { DailyPageviewBackfillService } from "./services/daily-pageview-backfill.service";
 import { HistoricalPageviewService } from "./services/historical-pageview.service";
 import { HistoricalBackfillPlanner } from "./services/historical-backfill-planner.service";
 import { WikimediaClient, OutreachDashboardClient } from "@repo/utils";
@@ -29,6 +30,7 @@ const queuedDashboardClient = new OutreachDashboardClient({
 const queuedArticleService = new OutreachArticleSyncService(prisma, queuedDashboardClient);
 const queuedProgramService = new ProgramSyncService(prisma, queuedDashboardClient);
 const queuedSnapshotService = new SnapshotService(prisma);
+const queuedDailyBackfillService = new DailyPageviewBackfillService(prisma, wikimediaClient);
 const historicalPageviewService = new HistoricalPageviewService(prisma, wikimediaClient);
 const historicalBackfillPlanner = new HistoricalBackfillPlanner(prisma);
 const queuedStatsService = new StatsService(prisma);
@@ -76,6 +78,7 @@ const processQueuedJob = async () => {
         in: [
           "program_sync",
           "snapshot_build",
+          "daily_pageview_backfill",
           "contributions",
           "pageviews",
           "commons",
@@ -119,7 +122,10 @@ const processQueuedJob = async () => {
       ) {
         throw new Error("Invalid snapshot build date range");
       }
-      const result = await queuedSnapshotService.build(startDate, endDate);
+      const result = await queuedSnapshotService.buildAll();
+      await queuedSyncService.completeSyncJob(job.id, result as any);
+    } else if (job.jobType === "daily_pageview_backfill") {
+      const result = await queuedDailyBackfillService.backfillAll(job.id);
       await queuedSyncService.completeSyncJob(job.id, result as any);
     } else if (job.jobType === "contributions") {
       const count = await queuedSyncService.syncEditorContributions(undefined, undefined, job.id);

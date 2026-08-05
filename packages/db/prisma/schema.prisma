@@ -30,6 +30,7 @@ enum PageviewAgentType {
 
 /// Snapshot aggregation granularity
 enum Granularity {
+  DAY
   MONTH
   YEAR
 }
@@ -109,6 +110,7 @@ model Editor {
   articles         ArticleEditor[]
   dailyStats       EditorDailyStat[]
   programMembers   ProgramMember[]
+  periodActivities PeriodEditorActivity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -179,6 +181,7 @@ model Article {
   historicalPageviews HistoricalPageview[]
   editors       ArticleEditor[]
   dailyStats    ArticleDailyStat[]
+  periodActivities PeriodArticleActivity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -293,10 +296,10 @@ model HistoricalPageview {
   @@map("historical_pageviews")
 }
 
-/// Pre-aggregated metric snapshot (MONTH/YEAR granularity) for fast reporting.
-/// Sits on top of the raw tables (contributions/pageviews/commons); rollups are
-/// idempotent and rebuilt by the snapshot_build job. DAY granularity remains in
-/// the existing DailyStat tables.
+/// Pre-aggregated metric snapshot (DAY/MONTH/YEAR granularity) for fast reporting.
+/// Rollups are built from the raw tables by the snapshot_build job, layered:
+/// DAY rows are summed into MONTH rows, MONTH into YEAR rows. The API reads
+/// only this table (no on-the-fly aggregation).
 model MetricSnapshot {
   id         String      @id @default(cuid())
   granularity Granularity
@@ -305,23 +308,82 @@ model MetricSnapshot {
   program     Program?   @relation(fields: [programId], references: [id], onDelete: Cascade)
   programId   String?
   wikiProject String     @default("")
+  agentType   String     @default("ALL_AGENTS") // ALL_AGENTS (total) | USER (humans only)
 
   edits           Int
   wordsAdded      Int
-  pageviews       Int
   articlesCreated Int
   articlesEdited  Int
   editors         Int
+  refsAdded       Int
+  viewsTotal      Int     // pageviews of ALL articles in the period
+  viewsActive     Int     // pageviews of articles created/edited in the period
   commonsUploads  Int
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([granularity, periodStart, programId, wikiProject])
+  @@unique([granularity, periodStart, programId, wikiProject, agentType])
   @@index([granularity, periodStart])
   @@index([programId, granularity, periodStart])
   @@index([wikiProject, granularity, periodStart])
   @@map("metric_snapshots")
+}
+
+/// Per-period article activity detail (which articles were created/edited in a
+/// period). Only articles with program activity are recorded (created/edited by
+/// program editors within the program window). Enables detailed reports at
+/// DAY/MONTH/YEAR level.
+model PeriodArticleActivity {
+  id          String      @id @default(cuid())
+  granularity Granularity
+  periodStart DateTime    @db.Date
+  periodEnd   DateTime    @db.Date
+  article     Article     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId   String
+  programId   String?
+  wikiProject String      @default("")
+
+  edits           Int
+  wordsAdded      Int
+  isCreated       Boolean   @default(false) // article created in this period
+  viewsTotal      Int       @default(0)
+  viewsActive     Int       @default(0)
+  refsAdded       Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([granularity, periodStart, articleId])
+  @@index([granularity, periodStart])
+  @@index([articleId])
+  @@index([programId, granularity, periodStart])
+  @@map("period_article_activity")
+}
+
+/// Per-period editor activity detail (what each editor did in a period).
+/// Enables detailed reports at DAY/MONTH/YEAR level.
+model PeriodEditorActivity {
+  id          String      @id @default(cuid())
+  granularity Granularity
+  periodStart DateTime    @db.Date
+  periodEnd   DateTime    @db.Date
+  editor      Editor      @relation(fields: [editorId], references: [id], onDelete: Cascade)
+  editorId    String
+  programId   String?
+
+  edits           Int
+  wordsAdded      Int
+  articlesCreated Int
+  articlesEdited  Int
+  commonsUploads  Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([granularity, periodStart, editorId])
+  @@index([granularity, periodStart])
+  @@index([editorId])
+  @@index([programId, granularity, periodStart])
+  @@map("period_editor_activity")
 }
 
 /// Join table linking articles to editors
