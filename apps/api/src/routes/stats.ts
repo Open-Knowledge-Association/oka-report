@@ -6,9 +6,7 @@ import { StatsService } from "../services";
 import { SnapshotReportService } from "../services/snapshot-report.service";
 import { ReportExportService } from "../services/report-export.service";
 import {
-  PaginationSchema,
   StatsFilterSchema,
-  TimeSeriesSchema,
   HistoryRangeSchema,
   HistoryBackfillSchema,
   EditorHistoryQuerySchema,
@@ -195,46 +193,6 @@ const parseFilters = (input: Record<string, string | undefined>) => {
   };
 };
 
-statsRoutes.get("/overall", async (c) => {
-  const filters = parseFilters(c.req.query());
-  const totals = await statsService.getOverallStats(filters);
-  const byWikiProject = await statsService.getStatsByWikiProject(filters);
-
-  return c.json({
-    success: true,
-    data: {
-      totals,
-      byWikiProject,
-    },
-    meta: {
-      dateRange: {
-        start: filters.startDate?.toISOString(),
-        end: filters.endDate?.toISOString(),
-      },
-      generatedAt: new Date().toISOString(),
-    },
-  });
-});
-
-statsRoutes.get("/editors", async (c) => {
-  const filters = parseFilters(c.req.query());
-  const pagination = PaginationSchema.parse(c.req.query());
-  const stats = await statsService.getStatsByEditor(filters);
-
-  const startIndex = (pagination.page - 1) * pagination.limit;
-  const paged = stats.slice(startIndex, startIndex + pagination.limit);
-
-  return c.json({
-    success: true,
-    data: paged,
-    meta: {
-      total: stats.length,
-      page: pagination.page,
-      limit: pagination.limit,
-    },
-  });
-});
-
 statsRoutes.get("/editors/history", async (c) => {
   const parsed = EditorHistoryQuerySchema.parse(c.req.query());
   const series = await statsService.getEditorDailyHistory(parsed.editorId, {
@@ -253,20 +211,6 @@ statsRoutes.get("/editors/history", async (c) => {
     : series;
 
   return c.json({ success: true, data: { editorId: parsed.editorId, series: data } });
-});
-
-statsRoutes.get("/editors/:id", async (c) => {
-  const filters = parseFilters({ ...c.req.query(), editorId: c.req.param("id") });
-  const stats = await statsService.getStatsByEditor(filters);
-
-  if (stats.length === 0) {
-    return c.json(
-      { success: false, error: { code: "not_found", message: "Editor not found" } },
-      404,
-    );
-  }
-
-  return c.json({ success: true, data: stats });
 });
 
 statsRoutes.get("/annual/export", async (c) => {
@@ -421,15 +365,6 @@ statsRoutes.get("/monthly/export", async (c) => {
       500,
     );
   }
-});
-
-statsRoutes.get("/timeseries", async (c) => {
-  const parsed = TimeSeriesSchema.parse(c.req.query());
-  const filters = parseFilters(parsed);
-  const granularity = parsed.granularity ?? "daily";
-  const series = await statsService.getTimeSeries(filters, granularity);
-
-  return c.json({ success: true, data: { granularity, series } });
 });
 
 statsRoutes.get("/history", async (c) => {
@@ -687,89 +622,6 @@ statsRoutes.get("/articles/history", async (c) => {
     : series;
 
   return c.json({ success: true, data: { articleId: parsed.articleId, series: data } });
-});
-
-statsRoutes.get("/dashboard", async (c) => {
-  try {
-    const totals = await statsService.getCurrentDatasetStats();
-
-    return c.json({
-      success: true,
-      data: totals,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("Error fetching dashboard stats:", message);
-
-    return c.json(
-      {
-        success: false,
-        error: "Failed to fetch dashboard stats",
-        details: message,
-      },
-      500,
-    );
-  }
-});
-
-statsRoutes.get("/editors-list", async (c) => {
-  try {
-    const editors = await prisma.editor.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        username: true,
-        articles: {
-          where: { isAuthor: true },
-          select: {
-            article: {
-              select: {
-                characterSum: true,
-                referencesCount: true,
-              },
-            },
-          },
-        },
-        commonsUploads: {
-          select: { id: true },
-        },
-      },
-      orderBy: { username: "asc" },
-    });
-
-    const data = editors.map((editor) => {
-      const characterSum = editor.articles.reduce(
-        (sum, entry) => sum + (entry.article?.characterSum ?? 0),
-        0,
-      );
-      const referencesCount = editor.articles.reduce(
-        (sum, entry) => sum + (entry.article?.referencesCount ?? 0),
-        0,
-      );
-
-      return {
-        id: editor.id,
-        username: editor.username,
-        characterSum,
-        referencesCount,
-        uploadsCount: editor.commonsUploads.length,
-      };
-    });
-
-    return c.json({ success: true, data });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("Error fetching editor list stats:", message);
-
-    return c.json(
-      {
-        success: false,
-        error: "Failed to fetch editor list stats",
-        details: message,
-      },
-      500,
-    );
-  }
 });
 
 /**

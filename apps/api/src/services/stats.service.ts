@@ -43,13 +43,6 @@ export type EditorStats = OverallStats & {
   username: string;
 };
 
-export type TimeSeriesPoint = {
-  date: string;
-  edits: number;
-  wordsAdded: number;
-  pageviews: number;
-  articlesCreated: number;
-};
 
 export type AnnualStats = {
   edits: number;
@@ -120,17 +113,6 @@ const startOfWeekUtc = (date: Date) => {
   return result;
 };
 
-const bucketDate = (date: Date, granularity: Granularity) => {
-  if (granularity === "monthly") {
-    return formatDate(new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)));
-  }
-
-  if (granularity === "weekly") {
-    return formatDate(startOfWeekUtc(date));
-  }
-
-  return formatDate(date);
-};
 
 export class StatsService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -1216,99 +1198,6 @@ export class StatsService {
     return Array.from(editorMap.values()).sort((a, b) => b.wordsAdded - a.wordsAdded);
   }
 
-  async getTimeSeries(
-    filters: StatsFilter = {},
-    granularity: Granularity = "daily",
-  ): Promise<TimeSeriesPoint[]> {
-    const contributionWhere = this.buildContributionWhere(filters);
-    const contributions = await this.prisma.contribution.findMany({
-      where: contributionWhere,
-      select: {
-        editTimestamp: true,
-        wordsAdded: true,
-        isCreation: true,
-      },
-    });
-
-    const seriesMap = new Map<string, TimeSeriesPoint>();
-
-    const ensurePoint = (date: string) => {
-      if (!seriesMap.has(date)) {
-        seriesMap.set(date, {
-          date,
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          articlesCreated: 0,
-        });
-      }
-      return seriesMap.get(date)!;
-    };
-
-    for (const contribution of contributions) {
-      const dateKey = bucketDate(contribution.editTimestamp, granularity);
-      const point = ensurePoint(dateKey);
-      point.edits += 1;
-      point.wordsAdded += contribution.wordsAdded;
-      if (contribution.isCreation) {
-        point.articlesCreated += 1;
-      }
-    }
-
-    const pageviewType = this.resolveTimeSeriesPageviewType(filters);
-
-    if (pageviewType === "DAILY") {
-      const pageviews = await this.prisma.pageview.findMany({
-        where: this.buildPageviewWhere(filters, pageviewType),
-        select: { date: true, views: true },
-      });
-
-      for (const pageview of pageviews) {
-        const dateKey = bucketDate(pageview.date, granularity);
-        const point = ensurePoint(dateKey);
-        point.pageviews += pageview.views;
-      }
-    } else {
-      const pageviews = await this.prisma.pageview.findMany({
-        where: this.buildPageviewWhere(filters, pageviewType),
-        select: { articleId: true, date: true, cumulativeViews: true, views: true },
-      });
-
-      const bucketed = new Map<string, Map<string, { date: Date; value: number }>>();
-
-      for (const pageview of pageviews) {
-        const dateKey = bucketDate(pageview.date, granularity);
-        const value = pageview.cumulativeViews ?? pageview.views;
-
-        if (value == null) {
-          continue;
-        }
-
-        let articleMap = bucketed.get(dateKey);
-        if (!articleMap) {
-          articleMap = new Map();
-          bucketed.set(dateKey, articleMap);
-        }
-
-        const existing = articleMap.get(pageview.articleId);
-        if (!existing || pageview.date > existing.date) {
-          articleMap.set(pageview.articleId, { date: pageview.date, value });
-        }
-      }
-
-      for (const [dateKey, articleMap] of bucketed.entries()) {
-        const point = ensurePoint(dateKey);
-        let total = 0;
-        for (const entry of articleMap.values()) {
-          total += entry.value;
-        }
-        point.pageviews = total;
-      }
-    }
-
-    return Array.from(seriesMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }
-
   private resolvePageviewTypes(filters: StatsFilter): PageviewType[] {
     if (filters.source === "MEDIAWIKI") {
       return ["DAILY"];
@@ -1321,13 +1210,6 @@ export class StatsService {
     return ["DAILY", "CUMULATIVE"];
   }
 
-  private resolveTimeSeriesPageviewType(filters: StatsFilter): PageviewType {
-    if (filters.source === "OUTREACH_DASHBOARD") {
-      return "CUMULATIVE";
-    }
-
-    return "DAILY";
-  }
 
   private buildContributionFilter(filters: StatsFilter): Prisma.ContributionWhereInput {
     const where: Prisma.ContributionWhereInput = {};
