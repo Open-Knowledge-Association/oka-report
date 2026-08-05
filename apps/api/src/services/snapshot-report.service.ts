@@ -92,7 +92,6 @@ export class SnapshotReportService {
     });
 
     const totals: SnapshotTotals = { ...EMPTY };
-    const byPeriod: PeriodPoint[] = [];
     for (const row of rows) {
       const t = this.rowToTotals(row);
       totals.edits += t.edits;
@@ -104,12 +103,29 @@ export class SnapshotReportService {
       totals.viewsTotal += t.viewsTotal;
       totals.viewsActive += t.viewsActive;
       totals.commonsUploads += t.commonsUploads;
-      byPeriod.push({
-        ...t,
-        periodStart: row.periodStart.toISOString().slice(0, 10),
-        periodEnd: row.periodEnd.toISOString().slice(0, 10),
-      });
     }
+
+    // byPeriod = breakdown at the granularity BELOW the requested one:
+    //   DAY report  -> DAY rows (same)
+    //   MONTH report -> DAY rows within the month range
+    //   YEAR report  -> MONTH rows within the year range
+    const byPeriodGranularity: Granularity =
+      granularity === "YEAR" ? "MONTH" : granularity === "MONTH" ? "DAY" : "DAY";
+    const periodRows = await this.prisma.metricSnapshot.findMany({
+      where: {
+        granularity: byPeriodGranularity,
+        programId,
+        wikiProject: wikiProject ?? "",
+        periodStart: { gte: start, lt: end },
+        agentType: "ALL_AGENTS",
+      },
+      orderBy: { periodStart: "asc" },
+    });
+    const byPeriod: PeriodPoint[] = periodRows.map((row) => ({
+      ...this.rowToTotals(row),
+      periodStart: row.periodStart.toISOString().slice(0, 10),
+      periodEnd: row.periodEnd.toISOString().slice(0, 10),
+    }));
 
     const topArticles = await this.getTopArticles(granularity, start, end, wikiProject, 10);
 

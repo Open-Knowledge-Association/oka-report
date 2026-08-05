@@ -165,7 +165,7 @@ function EditorsStatsPage() {
                             </button>
                             {editor.hasActivity ? (
                               <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-medium">
-                                Aktif
+                                Active
                               </span>
                             ) : (
                               <span className="rounded-full bg-slate-50 text-slate-400 border border-slate-200 px-2 py-0.5 text-[10px] font-medium">

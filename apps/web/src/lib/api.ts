@@ -271,28 +271,6 @@ const buildHistoryQuery = (params: Record<string, string | undefined>) => {
   return query.toString();
 };
 
-export const fetchStatsHistory = async (params: {
-  startDate?: string;
-  endDate?: string;
-  wikiProject?: string;
-  source?: ArticleSource | "MEDIAWIKI" | "OUTREACH_DASHBOARD";
-  withDelta?: boolean;
-}): Promise<{
-  series: DailyHistoryPoint[];
-  summary: Omit<DailyHistoryPoint, "date" | "delta">;
-}> => {
-  const query = buildHistoryQuery({
-    startDate: params.startDate,
-    endDate: params.endDate,
-    wikiProject: params.wikiProject,
-    source: params.source,
-    withDelta: params.withDelta ? "true" : undefined,
-  });
-  return apiFetch<{
-    series: DailyHistoryPoint[];
-    summary: Omit<DailyHistoryPoint, "date" | "delta">;
-  }>(`/stats/history${query ? `?${query}` : ""}`);
-};
 
 export const fetchEditorHistory = async (params: {
   editorId: string;
@@ -328,107 +306,6 @@ export const fetchArticleHistory = async (params: {
   );
 };
 
-export type AnnualStats = {
-  year: number;
-  byWikiProject: Array<{
-    wikiProject: string;
-    edits: number;
-    wordsAdded: number;
-    pageviews: number;
-    articlesCreated: number;
-    articlesEdited: number;
-    editors: number;
-    referencesAdded: number;
-    commonsUploads: number;
-  }>;
-  totals: {
-    edits: number;
-    wordsAdded: number;
-    pageviews: number;
-    articlesCreated: number;
-    articlesEdited: number;
-    editors: number;
-    referencesAdded: number;
-    commonsUploads: number;
-  };
-  monthlyPerformance?: Array<{
-    period: string;
-    edits: number;
-    wordsAdded: number;
-    pageviews: number;
-    articlesCreated: number;
-    articlesEdited: number;
-    editors: number;
-    referencesAdded: number;
-    commonsUploads: number;
-  }>;
-  yoy?: {
-    articlesCreated: { current: number; previous: number; changePercent: number };
-    pageviews: { current: number; previous: number; changePercent: number };
-    wordsAdded: { current: number; previous: number; changePercent: number };
-  };
-};
-
-export type TopArticle = {
-  rank: number;
-  title: string;
-  wikiProject: string;
-  totalPageviews: number;
-  articleId: string;
-};
-
-export type TopArticlesResponse = {
-  year: number;
-  month?: number | null;
-  wikiProject: string | null;
-  articles: TopArticle[];
-  totalCount: number;
-};
-
-export const fetchAnnualStats = async (params: {
-  year: number;
-  wikiProject?: string;
-  includeYoY?: boolean;
-}): Promise<AnnualStats> => {
-  const query = new URLSearchParams();
-  query.set("year", String(params.year));
-  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
-  if (params.includeYoY) query.set("includeYoY", "true");
-
-  return apiFetch<AnnualStats>(
-    `/stats/annual-impact?${query.toString()}&limit=10&includeMonthly=true`,
-  );
-};
-
-export const fetchTopArticles = async (params: {
-  year: number;
-  month?: number;
-  wikiProject?: string;
-  limit?: number;
-}): Promise<TopArticlesResponse> => {
-  const query = new URLSearchParams();
-  query.set("year", String(params.year));
-  if (params.month) query.set("month", String(params.month));
-  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
-  if (params.limit) query.set("limit", String(params.limit));
-
-  if (!params.month) {
-    const annual = await apiFetch<{ topArticles: TopArticle[] }>(
-      `/stats/annual-impact?year=${params.year}&limit=${params.limit ?? 10}`,
-    );
-    const articles = (annual.topArticles ?? []).filter(
-      (article) => !params.wikiProject || article.wikiProject === params.wikiProject,
-    );
-    return {
-      year: params.year,
-      month: null,
-      wikiProject: params.wikiProject ?? null,
-      articles,
-      totalCount: articles.length,
-    };
-  }
-  return apiFetch<TopArticlesResponse>(`/stats/top-articles?${query.toString()}`);
-};
 
 export const downloadAnnualReport = async (params: {
   year: number;
@@ -445,63 +322,6 @@ export const downloadAnnualReport = async (params: {
     throw new Error("Failed to download report");
   }
   return response.blob();
-};
-
-export type MonthlyStats = {
-  year: number;
-  month: number;
-  byWikiProject: Array<{
-    wikiProject: string;
-    edits: number;
-    wordsAdded: number;
-    pageviews: number;
-    articlesCreated: number;
-    articlesEdited: number;
-    editors: number;
-    referencesAdded: number;
-    commonsUploads: number;
-  }>;
-  totals: {
-    edits: number;
-    wordsAdded: number;
-    pageviews: number;
-    articlesCreated: number;
-    articlesEdited: number;
-    editors: number;
-    referencesAdded: number;
-    commonsUploads: number;
-  };
-  dailyPerformance?: Array<{
-    period: string;
-    edits: number;
-    wordsAdded: number;
-    pageviews: number;
-    articlesCreated: number;
-    articlesEdited: number;
-    editors: number;
-    referencesAdded: number;
-    commonsUploads: number;
-  }>;
-  mom?: {
-    articlesCreated: { current: number; previous: number; changePercent: number };
-    pageviews: { current: number; previous: number; changePercent: number };
-    wordsAdded: { current: number; previous: number; changePercent: number };
-  };
-};
-
-export const fetchMonthlyStats = async (params: {
-  year: number;
-  month: number;
-  wikiProject?: string;
-  includeMoM?: boolean;
-}): Promise<MonthlyStats> => {
-  const query = new URLSearchParams();
-  query.set("year", String(params.year));
-  query.set("month", String(params.month));
-  if (params.wikiProject) query.set("wikiProject", params.wikiProject);
-  if (params.includeMoM) query.set("includeMoM", "true");
-
-  return apiFetch<MonthlyStats>(`/stats/monthly?${query.toString()}`);
 };
 
 export const downloadMonthlyReport = async (params: {
@@ -665,16 +485,6 @@ export const fetchSnapshotReport = (
   return apiFetch<SnapshotReport>(`/stats/snapshot/report?${params.toString()}`);
 };
 
-export const fetchSnapshotArticles = (
-  granularity: "DAY" | "MONTH" | "YEAR",
-  start: string,
-  end: string,
-  wikiProject?: string,
-) => {
-  const params = new URLSearchParams({ granularity, start, end });
-  if (wikiProject) params.set("wikiProject", wikiProject);
-  return apiFetch<ArticleActivityDetail[]>(`/stats/snapshot/articles?${params.toString()}`);
-};
 
 export const fetchSnapshotEditors = (
   granularity: "DAY" | "MONTH" | "YEAR",

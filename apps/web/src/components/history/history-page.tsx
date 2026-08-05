@@ -16,10 +16,9 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  fetchArticleHistory,
   fetchEditorHistory,
-  fetchStatsHistory,
-  fetchArticleStats,
+  fetchSnapshotDaily,
+  fetchArticleHistory,
 } from "@/lib/api";
 import { AnnualReportSection } from "./annual-report-section";
 import { MonthlyReportSection } from "./monthly-report-section";
@@ -49,8 +48,6 @@ export function HistoryPage() {
   const defaultRange = useMemo(() => getDefaultDateRange(), []);
   const [startDate, setStartDate] = useState(defaultRange.startDate);
   const [endDate, setEndDate] = useState(defaultRange.endDate);
-  const [wikiProject, setWikiProject] = useState<string>("all");
-  const [source, setSource] = useState<string>("all");
   const [editorId, setEditorId] = useState("");
   const [editorStart, setEditorStart] = useState(defaultRange.startDate);
   const [editorEnd, setEditorEnd] = useState(defaultRange.endDate);
@@ -62,20 +59,13 @@ export function HistoryPage() {
   const [articleDelta, setArticleDelta] = useState(true);
   const [snapshotStatus, setSnapshotStatus] = useState<string>("");
 
-  const { data: wikiStats } = useQuery({
-    queryKey: ["stats", "articles", "wiki"],
-    queryFn: fetchArticleStats,
-  });
-
   const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ["stats", "history", startDate, endDate, wikiProject, source],
+    queryKey: ["snapshot", "daily", startDate, endDate],
     queryFn: () =>
-      fetchStatsHistory({
-        startDate: startDate ? toIsoDate(startDate) : undefined,
-        endDate: endDate ? toIsoDate(endDate) : undefined,
-        wikiProject: wikiProject !== "all" ? wikiProject : undefined,
-        source: source !== "all" ? (source as "MEDIAWIKI" | "OUTREACH_DASHBOARD") : undefined,
-      }),
+      fetchSnapshotDaily(
+        startDate ? toIsoDate(startDate) : "2022-05-01T00:00:00.000Z",
+        endDate ? toIsoDate(endDate) : new Date().toISOString(),
+      ),
   });
 
   const { data: editorHistory, isLoading: editorLoading } = useQuery({
@@ -102,8 +92,31 @@ export function HistoryPage() {
     enabled: articleId.length > 0,
   });
 
-  const series = historyData?.series ?? [];
-  const summary = historyData?.summary;
+  const series = historyData ?? [];
+  const summary = useMemo(() => {
+    if (!series.length) return undefined;
+    const acc = {
+      articlesCreated: 0,
+      articlesEdited: 0,
+      editors: 0,
+      edits: 0,
+      wordsAdded: 0,
+      referencesAdded: 0,
+      pageviews: 0,
+      commonsUploads: 0,
+    };
+    for (const p of series) {
+      acc.articlesCreated += p.articlesCreated;
+      acc.articlesEdited += p.articlesEdited;
+      acc.editors += p.editors;
+      acc.edits += p.edits;
+      acc.wordsAdded += p.wordsAdded;
+      acc.referencesAdded += p.refsAdded;
+      acc.pageviews += p.viewsTotal;
+      acc.commonsUploads += p.commonsUploads;
+    }
+    return acc;
+  }, [series]);
 
   const handleBackfillSnapshots = async () => {
     try {
@@ -201,7 +214,7 @@ export function HistoryPage() {
                   Global Daily History
                 </CardTitle>
                 <p className="text-sm text-slate-500 mt-1">
-                  Daily snapshot table with optional source/wiki filter.
+                  Daily snapshot table from pre-aggregated daily metrics.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs font-medium bg-white px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 shadow-sm">
@@ -232,37 +245,6 @@ export function HistoryPage() {
                     onChange={(e) => setEndDate(e.target.value)}
                     className="bg-white"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Wiki Project
-                  </Label>
-                  <select
-                    value={wikiProject}
-                    onChange={(e) => setWikiProject(e.target.value)}
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none"
-                  >
-                    <option value="all">All Wikis</option>
-                    {(wikiStats?.wikiStats ?? []).map((stat) => (
-                      <option key={stat.wiki} value={stat.wiki}>
-                        {stat.wiki}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Source
-                  </Label>
-                  <select
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-slate-400 focus:outline-none"
-                  >
-                    <option value="all">All Sources</option>
-                    <option value="OUTREACH_DASHBOARD">Outreach Dashboard</option>
-                    <option value="MEDIAWIKI">MediaWiki</option>
-                  </select>
                 </div>
               </div>
 
@@ -407,9 +389,9 @@ export function HistoryPage() {
                       </TableRow>
                     ) : (
                       series.map((row) => (
-                        <TableRow key={row.date} className="hover:bg-slate-50/50">
+                        <TableRow key={row.periodStart} className="hover:bg-slate-50/50">
                           <TableCell className="font-medium text-slate-900">
-                            {row.date.slice(0, 10)}
+                            {row.periodStart.slice(0, 10)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-slate-700">
                             {formatNumber(row.edits)}
@@ -427,10 +409,10 @@ export function HistoryPage() {
                             {formatNumber(row.editors)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-slate-700">
-                            {formatNumber(row.referencesAdded)}
+                            {formatNumber(row.refsAdded)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-slate-700">
-                            {formatNumber(row.pageviews)}
+                            {formatNumber(row.viewsTotal)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-slate-700">
                             {formatNumber(row.commonsUploads)}
