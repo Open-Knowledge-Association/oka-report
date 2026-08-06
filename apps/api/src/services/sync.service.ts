@@ -334,7 +334,7 @@ export class SyncService {
               continue;
             }
             coverage.matched += 1;
-            const isCreation = contribution.parentId == null;
+            const isCreation = contribution.parentId == null || contribution.parentId === 0;
             await this.prisma.contribution.upsert({
               where: {
                 revisionId_articleId: {
@@ -352,7 +352,10 @@ export class SyncService {
                 isCreation,
                 editTimestamp: new Date(contribution.timestamp),
               },
-              update: {},
+              update: {
+                isCreation,
+                parentId: contribution.parentId,
+              },
             });
             if (isCreation) {
               await this.prisma.article.update({

@@ -32,7 +32,7 @@ export const getUserContributions = async (
       list: "usercontribs",
       format: "json",
       ucuser: username,
-      ucprop: "ids|title|timestamp|sizediff",
+      ucprop: "ids|title|timestamp|sizediff|parentid",
       uclimit: options.limit ?? "max",
       ucstart: options.start,
       ucend: options.end,
