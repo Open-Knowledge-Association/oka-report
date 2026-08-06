@@ -121,16 +121,11 @@ export function HistoryPage() {
 
   const handleBackfillSnapshots = async () => {
     try {
-      setSnapshotStatus("Submitting snapshot backfill job...");
-      const payload = {
-        startDate: toIsoDate(startDate),
-        endDate: toIsoDate(endDate),
-      };
-
-      const response = await fetch("/api/stats/history/backfill", {
+      setSnapshotStatus("Submitting snapshot build job...");
+      const response = await fetch("/api/sync/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ jobType: "snapshot_build" }),
       });
 
       const result = await response.json();
