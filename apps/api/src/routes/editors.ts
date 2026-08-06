@@ -350,29 +350,46 @@ editorsRoutes.get("/:id/profile", async (c) => {
   }
 
   const createdArticles = editor.createdArticles;
-  // editedArticles = articles with contributions by this editor, excluding created ones
+  // editedArticles = all articles with contributions by this editor
+  // (including created ones) — consistent with snapshot articlesEdited.
   const contribArticles = await prisma.article.findMany({
     where: {
       contributions: { some: { editorId: editor.id } },
-      id: { notIn: createdArticles.map((ca) => ca.id) },
     },
-    select: { id: true, title: true, wikiProject: true, url: true, characterSum: true, referencesCount: true, isNewArticle: true, rating: true },
+    select: {
+      id: true,
+      title: true,
+      wikiProject: true,
+      url: true,
+      characterSum: true,
+      referencesCount: true,
+      isNewArticle: true,
+      rating: true,
+      pageviews: { orderBy: { date: "desc" }, take: 1 },
+    },
   });
   const editedArticles = contribArticles;
   const editedArticlesCount = editedArticles.length;
 
   const articles = createdArticles;
   const articlesCount = createdArticles.length;
-  const totalEdits = createdArticles.reduce(
-    (sum, article) => sum + (article.characterSum > 0 ? 1 : 0),
+  // totalEdits = all program contributions by this editor (not just created
+  // articles) — consistent with daily-stats aggregation.
+  const totalEdits = await prisma.contribution.count({
+    where: { editorId: editor.id },
+  });
+  // wordsAdded across ALL contributions (consistent with snapshot editors).
+  const wordsAgg = await prisma.contribution.aggregate({
+    where: { editorId: editor.id },
+    _sum: { wordsAdded: true },
+  });
+  const charactersAdded = wordsAgg._sum.wordsAdded ?? 0;
+  // references across all articles the editor touched (created or edited).
+  const referencesAdded = contribArticles.reduce(
+    (sum, article) => sum + (article.referencesCount ?? 0),
     0,
   );
-  const charactersAdded = createdArticles.reduce((sum, article) => sum + article.characterSum, 0);
-  const referencesAdded = createdArticles.reduce(
-    (sum, article) => sum + article.referencesCount,
-    0,
-  );
-  const pageviews = createdArticles.reduce((sum, article) => {
+  const pageviews = contribArticles.reduce((sum, article) => {
     const latestPageview = article.pageviews[0];
     return sum + (latestPageview?.cumulativeViews ?? latestPageview?.views ?? 0);
   }, 0);

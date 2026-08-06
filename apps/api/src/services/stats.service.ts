@@ -626,26 +626,49 @@ export class StatsService {
   }
 
   private async getPageviewsByWikiProject(filters: StatsFilter): Promise<Map<string, number>> {
-    // Consistent with getTotalPageviews: read from snapshots.
+    // Per-wiki pageview breakdown: distribute the canonical snapshot total
+    // (viewsTotal, cutoff-aware) proportionally by per-wiki active-article
+    // views from period_article_activity DAY rows. This keeps the breakdown
+    // summing to the global total (consistent with reports).
     const start = filters.startDate ? new Date(filters.startDate) : new Date(Date.UTC(2026, 0, 1));
     const end = filters.endDate ? new Date(filters.endDate) : new Date();
+
+    // 1) Global canonical total (from snapshots).
     const periodMs = end.getTime() - start.getTime();
     const granularity =
       periodMs <= 32 * 86400_000 ? "DAY" : periodMs <= 400 * 86400_000 ? "MONTH" : "YEAR";
+    const snapRows = await this.prisma.metricSnapshot.findMany({
+      where: { granularity, periodStart: { gte: start, lte: end } },
+      select: { viewsTotal: true },
+    });
+    const globalTotal = snapRows.reduce((s, r) => s + (r.viewsTotal ?? 0), 0);
 
-    const rows = await this.prisma.metricSnapshot.findMany({
+    // 2) Per-wiki active-article views (relative distribution).
+    const rows = await this.prisma.periodArticleActivity.findMany({
       where: {
-        granularity,
-        periodStart: { gte: start, lte: end },
-        ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+        granularity: "DAY",
+        periodStart: { gte: start, lt: end },
       },
-      select: { wikiProject: true, viewsTotal: true },
+      select: {
+        viewsTotal: true,
+        article: { select: { wikiProject: true } },
+      },
     });
 
-    const totals = new Map<string, number>();
+    const perWiki = new Map<string, number>();
+    let perWikiSum = 0;
     for (const row of rows) {
-      const project = row.wikiProject ?? "unknown";
-      totals.set(project, (totals.get(project) ?? 0) + (row.viewsTotal ?? 0));
+      const project = row.article.wikiProject ?? "unknown";
+      const v = row.viewsTotal ?? 0;
+      perWiki.set(project, (perWiki.get(project) ?? 0) + v);
+      perWikiSum += v;
+    }
+
+    const totals = new Map<string, number>();
+    if (perWikiSum > 0) {
+      for (const [project, v] of perWiki) {
+        totals.set(project, Math.round((v / perWikiSum) * globalTotal));
+      }
     }
     return totals;
   }
@@ -1037,6 +1060,20 @@ export class StatsService {
       const article = articleMap.get(articleId);
       if (article) ensure(article.wikiProject).pageviews += views;
     }
+    // Distribute canonical yearly pageview total proportionally per wiki so
+    // the breakdown sums to totals.pageviews (61M+), consistent with reports.
+    const wikiActive = new Map<string, number>();
+    let wikiActiveSum = 0;
+    for (const [project, row] of byWiki) {
+      wikiActive.set(project, row.pageviews);
+      wikiActiveSum += row.pageviews;
+    }
+    const canonicalViews = yearSnapshot?.viewsTotal ?? 0;
+    if (wikiActiveSum > 0) {
+      for (const [project, row] of byWiki) {
+        row.pageviews = Math.round((wikiActive.get(project)! / wikiActiveSum) * canonicalViews);
+      }
+    }
     for (const [wikiProject, row] of byWiki) {
       row.articlesEdited = new Set(
         eligibleContributions
@@ -1128,21 +1165,12 @@ export class StatsService {
       this.getMonthlyPerformance(year, filters),
     ]);
     const nextMonth = new Date(Date.UTC(year, month, 1));
-    const [monthSnapshots] = await Promise.all([
-      this.prisma.metricSnapshot.findMany({
-        where: {
-          granularity: "MONTH",
-          periodStart: { gte: startOfMonth, lt: nextMonth },
-          ...(filters?.wikiProject ? { wikiProject: filters.wikiProject } : {}),
-        },
-        select: { wikiProject: true, viewsTotal: true },
-      }),
-    ]);
-    const pageviewsByWiki = new Map<string, number>();
-    for (const snap of monthSnapshots) {
-      const project = snap.wikiProject || "unknown";
-      pageviewsByWiki.set(project, (pageviewsByWiki.get(project) ?? 0) + (snap.viewsTotal ?? 0));
-    }
+    // Per-wiki pageview breakdown (proportional to canonical snapshot total).
+    const pageviewsByWiki = await this.getPageviewsByWikiProject({
+      startDate: startOfMonth,
+      endDate: endOfMonth,
+      ...(filters?.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+    });
     for (const row of byWikiProject) row.pageviews = pageviewsByWiki.get(row.wikiProject) ?? 0;
     const point = monthlyPerformance[month - 1];
     const totals = point

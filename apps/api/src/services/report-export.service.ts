@@ -251,27 +251,27 @@ export class ReportExportService {
 
     const rows = data.byWikiProject.map((project) => [
       project.wikiProject,
-      project.articlesCreated,
-      project.articlesEdited,
-      project.edits,
-      project.wordsAdded,
-      project.pageviews,
-      project.editors,
-      project.referencesAdded,
-      project.commonsUploads,
+      project.articlesCreated ?? 0,
+      project.articlesEdited ?? 0,
+      project.edits ?? 0,
+      project.wordsAdded ?? 0,
+      project.pageviews ?? 0,
+      project.editors ?? 0,
+      project.referencesAdded ?? 0,
+      project.commonsUploads ?? 0,
     ]);
 
     // Add totals row
     rows.push([
       "TOTAL",
-      data.totals.articlesCreated,
-      data.totals.articlesEdited,
-      data.totals.edits,
-      data.totals.wordsAdded,
-      data.totals.pageviews,
-      data.totals.editors,
-      data.totals.referencesAdded,
-      data.totals.commonsUploads,
+      data.totals.articlesCreated ?? 0,
+      data.totals.articlesEdited ?? 0,
+      data.totals.edits ?? 0,
+      data.totals.wordsAdded ?? 0,
+      data.totals.pageviews ?? 0,
+      data.totals.editors ?? 0,
+      data.totals.referencesAdded ?? 0,
+      data.totals.commonsUploads ?? 0,
     ]);
 
     // Convert to CSV format with proper escaping

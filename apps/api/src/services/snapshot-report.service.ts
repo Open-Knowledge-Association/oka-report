@@ -293,6 +293,31 @@ export class SnapshotReportService {
       },
     });
 
+    // Distinct edited-article count per editor (articlesEdited must not be
+    // summed across days — same article edited on two days would double count).
+    const distinctEdited = await this.prisma.contribution.groupBy({
+      by: ["editorId", "articleId"],
+      where: {
+        editorId: { in: members.map((m) => m.editorId) },
+        ...(start || end
+          ? {
+              editTimestamp: {
+                ...(start ? { gte: start } : {}),
+                ...(end ? { lt: end } : {}),
+              },
+            }
+          : {}),
+      },
+      _count: { _all: true },
+    });
+    const distinctEditedCount = new Map<string, number>();
+    for (const row of distinctEdited) {
+      distinctEditedCount.set(
+        row.editorId,
+        (distinctEditedCount.get(row.editorId) ?? 0) + 1,
+      );
+    }
+
     const agg = new Map<string, {
       edits: number; wordsAdded: number;
       articlesCreated: number; articlesEdited: number; commonsUploads: number;
@@ -306,7 +331,7 @@ export class SnapshotReportService {
       e.edits += r.edits;
       e.wordsAdded += r.wordsAdded;
       e.articlesCreated += r.articlesCreated;
-      e.articlesEdited += r.articlesEdited;
+      e.articlesEdited = distinctEditedCount.get(r.editorId) ?? 0;
       e.commonsUploads += r.commonsUploads;
     }
 
