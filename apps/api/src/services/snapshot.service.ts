@@ -179,6 +179,14 @@ export class SnapshotService {
         a.viewsTotal = viewsByArticleDay.get(`${articleId}|${k}`) ?? 0;
       }
     }
+    // Distinct created-article count per day (articles with a creation
+    // contribution that day) — used for DAY snapshot articlesCreated.
+    const createdCountByDay = new Map<string, number>();
+    for (const [k, byArticle] of articleDetailByDay) {
+      let created = 0;
+      for (const a of byArticle.values()) if (a.created) created += 1;
+      if (created > 0) createdCountByDay.set(k, created);
+    }
     // editorDay -> per-editor metrics
     const editorDetailByDay = new Map<string, Map<string, {
       edits: number; words: number; articlesCreated: number; articlesEdited: number; commonsUploads: number;
@@ -250,7 +258,7 @@ export class SnapshotService {
           agentType: "ALL_AGENTS",
           edits: activity?.edits ?? 0,
           wordsAdded: activity?.words ?? 0,
-          articlesCreated: activity?.created ? 1 : 0,
+          articlesCreated: createdCountByDay.get(day) ?? 0,
           articlesEdited: editedCount,
           editors: activity?.editors.size ?? 0,
           refsAdded: 0,
@@ -262,7 +270,7 @@ export class SnapshotService {
           periodEnd: new Date(`${day}T23:59:59.999Z`),
           edits: activity?.edits ?? 0,
           wordsAdded: activity?.words ?? 0,
-          articlesCreated: activity?.created ? 1 : 0,
+          articlesCreated: createdCountByDay.get(day) ?? 0,
           articlesEdited: editedCount,
           editors: activity?.editors.size ?? 0,
           refsAdded: 0,

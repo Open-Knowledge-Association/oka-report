@@ -470,10 +470,10 @@ export class StatsService {
     }
 
     if (filters.source === "OUTREACH_DASHBOARD") {
-      return ["CUMULATIVE"];
+      return ["DAILY"];
     }
 
-    return ["DAILY", "CUMULATIVE"];
+    return ["DAILY"];
   }
 
 
@@ -600,52 +600,53 @@ export class StatsService {
   }
 
   private async getTotalPageviews(filters: StatsFilter): Promise<number> {
-    const pageviewTypes = this.resolvePageviewTypes(filters);
-    let total = 0;
+    // Read from pre-aggregated snapshots (viewsTotal), the single source of
+    // truth — consistent with snapshot reports and the daily-first rollups.
+    // Views are attributed to articles with program contributions only, and
+    // counted from each article's earliest program contribution onward.
+    const start = filters.startDate ? new Date(filters.startDate) : new Date(Date.UTC(2026, 0, 1));
+    const end = filters.endDate ? new Date(filters.endDate) : new Date();
+    const periodMs = end.getTime() - start.getTime();
+    const granularity =
+      periodMs <= 32 * 86400_000 ? "DAY" : periodMs <= 400 * 86400_000 ? "MONTH" : "YEAR";
 
-    if (pageviewTypes.includes("DAILY")) {
-      const daily = await this.prisma.pageview.aggregate({
-        where: this.buildPageviewWhere(filters, "DAILY"),
-        _sum: { views: true },
-      });
-      total += daily._sum.views ?? 0;
-    }
+    const rows = await this.prisma.metricSnapshot.findMany({
+      where: {
+        granularity,
+        periodStart: {
+          gte: start,
+          lte: end,
+        },
+        ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+      },
+      select: { viewsTotal: true },
+    });
 
-    if (pageviewTypes.includes("CUMULATIVE")) {
-      const snapshots = await this.getLatestCumulativePageviews(filters);
-      for (const snapshot of snapshots) {
-        total += snapshot.cumulativeViews ?? snapshot.views ?? 0;
-      }
-    }
-
-    return total;
+    return rows.reduce((sum, row) => sum + (row.viewsTotal ?? 0), 0);
   }
 
   private async getPageviewsByWikiProject(filters: StatsFilter): Promise<Map<string, number>> {
+    // Consistent with getTotalPageviews: read from snapshots.
+    const start = filters.startDate ? new Date(filters.startDate) : new Date(Date.UTC(2026, 0, 1));
+    const end = filters.endDate ? new Date(filters.endDate) : new Date();
+    const periodMs = end.getTime() - start.getTime();
+    const granularity =
+      periodMs <= 32 * 86400_000 ? "DAY" : periodMs <= 400 * 86400_000 ? "MONTH" : "YEAR";
+
+    const rows = await this.prisma.metricSnapshot.findMany({
+      where: {
+        granularity,
+        periodStart: { gte: start, lte: end },
+        ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+      },
+      select: { wikiProject: true, viewsTotal: true },
+    });
+
     const totals = new Map<string, number>();
-    const pageviewTypes = this.resolvePageviewTypes(filters);
-
-    if (pageviewTypes.includes("DAILY")) {
-      const pageviews = await this.prisma.pageview.findMany({
-        where: this.buildPageviewWhere(filters, "DAILY"),
-        select: { views: true, article: { select: { wikiProject: true } } },
-      });
-
-      for (const pageview of pageviews) {
-        const project = pageview.article.wikiProject;
-        totals.set(project, (totals.get(project) ?? 0) + pageview.views);
-      }
+    for (const row of rows) {
+      const project = row.wikiProject ?? "unknown";
+      totals.set(project, (totals.get(project) ?? 0) + (row.viewsTotal ?? 0));
     }
-
-    if (pageviewTypes.includes("CUMULATIVE")) {
-      const snapshots = await this.getLatestCumulativePageviews(filters);
-      for (const snapshot of snapshots) {
-        const project = snapshot.article.wikiProject;
-        const value = snapshot.cumulativeViews ?? snapshot.views ?? 0;
-        totals.set(project, (totals.get(project) ?? 0) + value);
-      }
-    }
-
     return totals;
   }
 
@@ -679,7 +680,11 @@ export class StatsService {
     };
 
     if (type === "DAILY") {
-      articleWhere.createdByEditorId = filters.editorId ?? { not: null };
+      // Views are attributed to all articles with program contributions
+      // (created OR edited), consistent with snapshot viewsTotal.
+      articleWhere.contributions = filters.editorId
+        ? { some: { editorId: filters.editorId } }
+        : { some: {} };
     } else {
       articleWhere.isNewArticle = true;
       if (filters.editorId) {
@@ -853,10 +858,25 @@ export class StatsService {
     // Enrolled-at map for program attribution: contributions before a member's
     // enrollment are excluded from monthly metrics.
     const enrolledAtByEditor = await this.getEnrolledAtByEditorMap();
+    // Pre-aggregated MONTH snapshots (cutoff-aware) for pageview totals.
+    const monthSnapshots = await this.prisma.metricSnapshot.findMany({
+      where: {
+        granularity: "MONTH",
+        periodStart: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) },
+        ...(filters?.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+      },
+      select: { periodStart: true, viewsTotal: true, edits: true },
+    });
+    const viewsByMonth = new Map<number, number>();
+    const snapshotEditsByMonth = new Map<number, number>();
+    for (const snap of monthSnapshots) {
+      viewsByMonth.set(snap.periodStart.getUTCMonth(), snap.viewsTotal ?? 0);
+      snapshotEditsByMonth.set(snap.periodStart.getUTCMonth(), snap.edits ?? 0);
+    }
     for (let month = 1; month <= 12; month++) {
       const start = new Date(Date.UTC(year, month - 1, 1));
       const end = new Date(Date.UTC(year, month, 1));
-      const [contributions, created, dailyViews, historicalViews, commonsUploads] =
+      const [contributions, created, commonsUploads] =
         await Promise.all([
           this.prisma.contribution.findMany({
             where: { editTimestamp: { gte: start, lt: end }, article: articleWhere },
@@ -871,27 +891,6 @@ export class StatsService {
             distinct: ["articleId"],
             select: { articleId: true },
           }),
-          this.prisma.pageview.groupBy({
-            by: ["articleId"],
-            where: {
-              date: { gte: start, lt: end },
-              type: "DAILY",
-              agentType: "ALL_AGENTS",
-              article: articleWhere,
-            },
-            _sum: { views: true },
-          }),
-          this.prisma.historicalPageview.groupBy({
-            by: ["articleId"],
-            where: {
-              periodStart: { gte: start, lt: end },
-              granularity: "MONTHLY",
-              agentType: "ALL_AGENTS",
-              status: "SUCCESS",
-              article: articleWhere,
-            },
-            _sum: { views: true },
-          }),
           this.prisma.commonsUpload.count({ where: { uploadedAt: { gte: start, lt: end } } }),
         ]);
       const eligibleContributions = contributions.filter((row) => {
@@ -900,17 +899,7 @@ export class StatsService {
       });
       const editors = new Set(eligibleContributions.map((row) => row.editorId));
       const editedArticles = new Set(eligibleContributions.map((row) => row.articleId));
-      const historicalByArticle = new Map(
-        historicalViews.map((row) => [row.articleId, row._sum.views ?? 0]),
-      );
-      const dailyByArticle = new Map(dailyViews.map((row) => [row.articleId, row._sum.views ?? 0]));
-      let pageviewTotal = 0;
-      for (const articleId of new Set([...historicalByArticle.keys(), ...dailyByArticle.keys()])) {
-        pageviewTotal += historicalByArticle.has(articleId)
-          ? historicalByArticle.get(articleId)!
-          : dailyByArticle.get(articleId)!;
-      }
-      const pageviews = historicalByArticle.size || dailyByArticle.size ? pageviewTotal : null;
+      const pageviews = viewsByMonth.get(month - 1) ?? 0;
       points.push({
         period: `${year}-${String(month).padStart(2, "0")}`,
         edits: eligibleContributions.length,
@@ -957,7 +946,7 @@ export class StatsService {
   async getImpactReport(year: number, topLimit = 10, includeMonthly = false) {
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year + 1, 0, 1));
-    const [articles, contributions, pageviewGroups, historicalGroups, commonsGroups, enrolledAtByEditor] =
+    const [articles, contributions, periodActivity, yearSnapshot, commonsGroups, enrolledAtByEditor] =
       await Promise.all([
         this.prisma.article.findMany({
           where: {
@@ -975,20 +964,16 @@ export class StatsService {
           where: { editTimestamp: { gte: start, lt: end } },
           select: { articleId: true, editorId: true, wordsAdded: true, editTimestamp: true },
         }),
-        this.prisma.pageview.groupBy({
-          by: ["articleId"],
-          where: { date: { gte: start, lt: end }, type: "DAILY", agentType: "ALL_AGENTS" },
-          _sum: { views: true },
+        // Pre-aggregated per-article activity (DAY rows, cutoff-aware) used for
+        // relative top-article ranking.
+        this.prisma.periodArticleActivity.findMany({
+          where: { granularity: "DAY", periodStart: { gte: start, lt: end } },
+          select: { articleId: true, viewsActive: true },
         }),
-        this.prisma.historicalPageview.groupBy({
-          by: ["articleId"],
-          where: {
-            periodStart: { gte: start, lt: end },
-            granularity: "MONTHLY",
-            agentType: "ALL_AGENTS",
-            status: "SUCCESS",
-          },
-          _sum: { views: true },
+        // Canonical yearly totals (cutoff-aware) — single source of truth.
+        this.prisma.metricSnapshot.findFirst({
+          where: { granularity: "YEAR", periodStart: { gte: start, lt: end } },
+          select: { viewsTotal: true },
         }),
         this.prisma.commonsUpload.count({ where: { uploadedAt: { gte: start, lt: end } } }),
         this.getEnrolledAtByEditorMap(),
@@ -1001,25 +986,11 @@ export class StatsService {
     });
 
     const articleMap = new Map(articles.map((article) => [article.id, article]));
-    // Choose pageview source per article. A global historical fallback silently
-    // drops daily coverage for projects/articles without historical rows.
-    const historicalByArticle = new Map(
-      historicalGroups.map((row) => [row.articleId, row._sum.views ?? 0]),
-    );
-    const dailyByArticle = new Map(
-      pageviewGroups.map((row) => [row.articleId, row._sum.views ?? 0]),
-    );
+    // Roll up DAY rows per article (relative ranking signal).
     const pageviewsByArticle = new Map<string, number>();
-    for (const articleId of new Set([...historicalByArticle.keys(), ...dailyByArticle.keys()])) {
-      pageviewsByArticle.set(
-        articleId,
-        historicalByArticle.has(articleId)
-          ? historicalByArticle.get(articleId)!
-          : dailyByArticle.get(articleId)!,
-      );
+    for (const row of periodActivity) {
+      pageviewsByArticle.set(row.articleId, (pageviewsByArticle.get(row.articleId) ?? 0) + (row.viewsActive ?? 0));
     }
-    const rawPageviewGroups =
-      pageviewGroups.length && historicalByArticle.size === 0 ? pageviewGroups : historicalGroups;
     const pageviewArticleRows = await this.prisma.article.findMany({
       where: { id: { in: Array.from(pageviewsByArticle.keys()) } },
       select: { id: true, title: true, wikiProject: true },
@@ -1094,9 +1065,7 @@ export class StatsService {
       articlesEdited: editedIds.size,
       edits: eligibleContributions.length,
       wordsAdded: eligibleContributions.reduce((sum, row) => sum + row.wordsAdded, 0),
-      pageviews: rawPageviewGroups.length
-        ? Array.from(pageviewsByArticle.values()).reduce((sum, value) => sum + value, 0)
-        : null,
+      pageviews: yearSnapshot?.viewsTotal ?? null,
       editors: editorIds.size,
       referencesAdded: null,
       commonsUploads: commonsGroups,
@@ -1110,9 +1079,8 @@ export class StatsService {
       monthlyPerformance: includeMonthly ? await this.getMonthlyPerformance(year) : [],
       topArticles,
       methodology: {
-        pageviews: historicalByArticle.size
-          ? "Historical Wikimedia MONTHLY/ALL_AGENTS rows; DAILY fallback only for articles without historical coverage"
-          : "Wikimedia DAILY/ALL_AGENTS rows",
+        pageviews:
+          "Pre-aggregated period article activity (YEAR) built from Wikimedia DAILY/ALL_AGENTS rows with the earliest-program-contribution cutoff",
         articlesCreated:
           "Articles with a first tracked creation contribution within the selected calendar year",
         wordsAdded: "Estimated from contribution bytes using the existing wordsAdded metric",
@@ -1160,56 +1128,20 @@ export class StatsService {
       this.getMonthlyPerformance(year, filters),
     ]);
     const nextMonth = new Date(Date.UTC(year, month, 1));
-    const [dailyViewRows, historicalViewRows] = await Promise.all([
-      this.prisma.pageview.groupBy({
-        by: ["articleId"],
+    const [monthSnapshots] = await Promise.all([
+      this.prisma.metricSnapshot.findMany({
         where: {
-          date: { gte: startOfMonth, lt: nextMonth },
-          type: "DAILY",
-          agentType: "ALL_AGENTS",
-        },
-        _sum: { views: true },
-      }),
-      this.prisma.historicalPageview.groupBy({
-        by: ["articleId"],
-        where: {
+          granularity: "MONTH",
           periodStart: { gte: startOfMonth, lt: nextMonth },
-          granularity: "MONTHLY",
-          agentType: "ALL_AGENTS",
-          status: "SUCCESS",
+          ...(filters?.wikiProject ? { wikiProject: filters.wikiProject } : {}),
         },
-        _sum: { views: true },
+        select: { wikiProject: true, viewsTotal: true },
       }),
     ]);
-    const historicalByArticle = new Map(
-      historicalViewRows.map((row) => [row.articleId, row._sum.views ?? 0]),
-    );
-    const dailyByArticle = new Map(
-      dailyViewRows.map((row) => [row.articleId, row._sum.views ?? 0]),
-    );
-    const selectedByArticle = new Map<string, number>();
-    for (const articleId of new Set([...historicalByArticle.keys(), ...dailyByArticle.keys()])) {
-      selectedByArticle.set(
-        articleId,
-        historicalByArticle.has(articleId)
-          ? historicalByArticle.get(articleId)!
-          : dailyByArticle.get(articleId)!,
-      );
-    }
-    const viewArticles = await this.prisma.article.findMany({
-      where: {
-        id: { in: Array.from(selectedByArticle.keys()) },
-        ...(filters?.wikiProject ? { wikiProject: filters.wikiProject } : {}),
-      },
-      select: { id: true, wikiProject: true },
-    });
-    const viewProjectByArticle = new Map(
-      viewArticles.map((article) => [article.id, article.wikiProject]),
-    );
     const pageviewsByWiki = new Map<string, number>();
-    for (const [articleId, views] of selectedByArticle) {
-      const project = viewProjectByArticle.get(articleId);
-      if (project) pageviewsByWiki.set(project, (pageviewsByWiki.get(project) ?? 0) + views);
+    for (const snap of monthSnapshots) {
+      const project = snap.wikiProject || "unknown";
+      pageviewsByWiki.set(project, (pageviewsByWiki.get(project) ?? 0) + (snap.viewsTotal ?? 0));
     }
     for (const row of byWikiProject) row.pageviews = pageviewsByWiki.get(row.wikiProject) ?? 0;
     const point = monthlyPerformance[month - 1];

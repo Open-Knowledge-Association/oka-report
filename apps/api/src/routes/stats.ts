@@ -881,7 +881,7 @@ statsRoutes.get("/snapshot/report", async (c) => {
   if (!["DAY", "MONTH", "YEAR"].includes(granularity)) {
     return c.json({ success: false, error: "granularity must be DAY|MONTH|YEAR" }, 400);
   }
-  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2026, 0, 1)).toISOString());
   const end = new Date(c.req.query("end") ?? new Date().toISOString());
   const wikiProject = c.req.query("wikiProject") || undefined;
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
@@ -899,7 +899,7 @@ statsRoutes.get("/snapshot/report", async (c) => {
 // GET /api/stats/snapshot/articles?granularity=MONTH&start=&end=
 statsRoutes.get("/snapshot/articles", async (c) => {
   const granularity = (c.req.query("granularity") ?? "DAY").toUpperCase();
-  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2026, 0, 1)).toISOString());
   const end = new Date(c.req.query("end") ?? new Date().toISOString());
   const wikiProject = c.req.query("wikiProject") || undefined;
   if (!["DAY", "MONTH", "YEAR"].includes(granularity) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
@@ -916,7 +916,7 @@ statsRoutes.get("/snapshot/articles", async (c) => {
 // GET /api/stats/snapshot/editors?granularity=MONTH&start=&end=
 statsRoutes.get("/snapshot/editors", async (c) => {
   const granularity = (c.req.query("granularity") ?? "DAY").toUpperCase();
-  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2026, 0, 1)).toISOString());
   const end = new Date(c.req.query("end") ?? new Date().toISOString());
   if (!["DAY", "MONTH", "YEAR"].includes(granularity) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return c.json({ success: false, error: "invalid params" }, 400);
@@ -931,7 +931,7 @@ statsRoutes.get("/snapshot/editors", async (c) => {
 
 // GET /api/stats/snapshot/daily?start=&end=
 statsRoutes.get("/snapshot/daily", async (c) => {
-  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2022, 4, 1)).toISOString());
+  const start = new Date(c.req.query("start") ?? new Date(Date.UTC(2026, 0, 1)).toISOString());
   const end = new Date(c.req.query("end") ?? new Date().toISOString());
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return c.json({ success: false, error: "invalid params" }, 400);

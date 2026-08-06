@@ -318,15 +318,6 @@ editorsRoutes.get("/:id/profile", async (c) => {
   let editor = await prisma.editor.findUnique({
     where: { id },
     include: {
-      articles: {
-        include: {
-          article: {
-            include: {
-              pageviews: { orderBy: { date: "desc" }, take: 1 },
-            },
-          },
-        },
-      },
       createdArticles: {
         include: {
           pageviews: { orderBy: { date: "desc" }, take: 1 },
@@ -339,15 +330,6 @@ editorsRoutes.get("/:id/profile", async (c) => {
     editor = await prisma.editor.findFirst({
       where: { externalId: id },
       include: {
-        articles: {
-          include: {
-            article: {
-              include: {
-                pageviews: { orderBy: { date: "desc" }, take: 1 },
-              },
-            },
-          },
-        },
         createdArticles: {
           include: {
             pageviews: { orderBy: { date: "desc" }, take: 1 },
