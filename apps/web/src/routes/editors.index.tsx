@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchSnapshotEditors, type EditorActivityDetail } from "@/lib/api";
+import { fetchSnapshotEditors, PROGRAM_START_DATE, type EditorActivityDetail } from "@/lib/api";
 
 export const Route = createFileRoute("/editors/")({
   component: EditorsStatsPage,
@@ -45,7 +45,7 @@ function EditorsStatsPage() {
 
   const { data: editorsData = [], isLoading, error } = useQuery<EditorActivityDetail[]>({
     queryKey: ["snapshot-editors", "lifetime"],
-    queryFn: () => fetchSnapshotEditors("YEAR", "2022-05-01", "2099-01-01"),
+    queryFn: () => fetchSnapshotEditors("YEAR", PROGRAM_START_DATE, new Date().toISOString()),
   });
 
   const editors: EditorActivityDetail[] = editorsData;

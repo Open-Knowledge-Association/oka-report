@@ -19,6 +19,7 @@ import {
   fetchEditorHistory,
   fetchSnapshotDaily,
   fetchArticleHistory,
+  PROGRAM_START_DATE,
 } from "@/lib/api";
 import { AnnualReportSection } from "./annual-report-section";
 import { MonthlyReportSection } from "./monthly-report-section";
@@ -63,7 +64,7 @@ export function HistoryPage() {
     queryKey: ["snapshot", "daily", startDate, endDate],
     queryFn: () =>
       fetchSnapshotDaily(
-        startDate ? toIsoDate(startDate) : "2022-05-01T00:00:00.000Z",
+        startDate ? toIsoDate(startDate) : `${PROGRAM_START_DATE}T00:00:00.000Z`,
         endDate ? toIsoDate(endDate) : new Date().toISOString(),
       ),
   });
