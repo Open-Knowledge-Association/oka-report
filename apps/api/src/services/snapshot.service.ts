@@ -61,6 +61,17 @@ export class SnapshotService {
     });
     const enrolledByEditor = new Map(members.map((m) => [m.editorId, m.enrolledAt]));
 
+    // --- Article "entered program" cutoff per article: earliest program
+    //     contribution by an enrolled editor. Articles with zero program
+    //     contributions (target-only) are excluded from view totals entirely.
+    const earliestByArticle = new Map<string, Date>();
+    for (const c of contributions) {
+      const enrolledAt = enrolledByEditor.get(c.editorId);
+      if (!enrolledAt || c.editTimestamp < enrolledAt) continue; // pre-join, ignore
+      const cur = earliestByArticle.get(c.articleId);
+      if (!cur || c.editTimestamp < cur) earliestByArticle.set(c.articleId, c.editTimestamp);
+    }
+
     // --- Article activity per day: edits, words, created, editors, active. ---
     // articleDay -> { edits, wordsAdded, editors:Set, created }
     const articleDayMap = new Map<string, { edits: number; words: number; editors: Set<string>; created: boolean }>();
@@ -99,9 +110,14 @@ export class SnapshotService {
 
     // --- Pageviews per day (ALL_AGENTS) + active-article scope. ---
     // day -> { total, active }  where active = pageviews of articles edited that day.
+    // Only articles WITH program contributions count (target-only articles with
+    // zero contributions are NOT part of the program's view totals), and only
+    // pageviews from the article's earliest program contribution onward.
     const dayViews = new Map<string, { total: number; active: number }>();
     const viewsByArticleDay = new Map<string, number>();
     for (const pv of pageviews) {
+      const cutoff = earliestByArticle.get(pv.articleId);
+      if (!cutoff || pv.date < cutoff) continue; // no program contribution yet (or none at all)
       const k = dayKey(pv.date);
       const entry = dayViews.get(k) ?? { total: 0, active: 0 };
       entry.total += pv.views;

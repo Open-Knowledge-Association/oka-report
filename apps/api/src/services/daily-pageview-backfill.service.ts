@@ -39,13 +39,6 @@ export class DailyPageviewBackfillService {
     const program = await this.prisma.program.findFirst({ where: { slug: "OKA" } });
     if (!program) throw new Error("OKA program not found; run program_sync first");
 
-    // All articles tagged to the program with a pageId (needed for the API).
-    const articles = await this.prisma.article.findMany({
-      where: { programId: program.id, pageId: { not: null } },
-      select: { id: true, title: true, wikiProject: true },
-      orderBy: { title: "asc" },
-    });
-
     // Article -> earliest program activity (contribution by enrolled editor).
     const contributionRows = await this.prisma.contribution.findMany({
       where: { article: { programId: program.id } },
@@ -67,6 +60,14 @@ export class DailyPageviewBackfillService {
       const cur = earliestByArticle.get(row.articleId);
       if (!cur || row.editTimestamp < cur) earliestByArticle.set(row.articleId, row.editTimestamp);
     }
+
+    // ONLY articles that have program contributions get backfilled (target-only
+    // articles with zero contributions are excluded from view totals entirely).
+    const articles = await this.prisma.article.findMany({
+      where: { programId: program.id, pageId: { not: null }, id: { in: [...earliestByArticle.keys()] } },
+      select: { id: true, title: true, wikiProject: true },
+      orderBy: { title: "asc" },
+    });
 
     // Resume support: job metadata stores processed article count.
     const job = await this.prisma.syncJob.findUnique({ where: { id: jobId } });
