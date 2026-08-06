@@ -310,6 +310,9 @@ export class SyncService {
         select: { enrolledAt: true },
       });
       const enrolledAt = member?.enrolledAt ?? null;
+      // Data window starts 2026-01-01; nothing before that is counted.
+      const DATA_START = new Date(Date.UTC(2026, 0, 1));
+      const attributionStart = enrolledAt && enrolledAt > DATA_START ? enrolledAt : DATA_START;
 
       for (const wikiProject of wikiProjects) {
         const wikiClient = wikiClients.get(wikiProject);
@@ -321,8 +324,8 @@ export class SyncService {
           );
           coverage.fetched += contributions.length;
           for (const contribution of contributions) {
-            // Skip edits made before the editor joined the program.
-            if (enrolledAt && new Date(contribution.timestamp) < enrolledAt) {
+            // Skip edits made before the editor joined the program (or before data start).
+            if (new Date(contribution.timestamp) < attributionStart) {
               continue;
             }
             const article = await this.findArticleForContribution(contribution, wikiProject);

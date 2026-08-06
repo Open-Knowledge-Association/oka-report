@@ -37,6 +37,9 @@ export class ProgramSyncService {
     let updated = 0;
     let errors = 0;
 
+    // Data window starts 2026-01-01 (fresh start; no historical data before this).
+    const DATA_START = new Date(Date.UTC(2026, 0, 1));
+
     try {
       const [courseData, userData] = await Promise.all([
         this.dashboardClient.getCourse(school, slug),
@@ -44,20 +47,23 @@ export class ProgramSyncService {
       ]);
 
       const course = courseData.course;
+      const courseStart = new Date(course.start);
+      // Clamp program window to data start (ignore pre-2026 history).
+      const programStart = courseStart < DATA_START ? DATA_START : courseStart;
       const program = await this.prisma.program.upsert({
         where: { slug },
         create: {
           name: course.title || slug,
           slug,
           school: course.school || school,
-          startAt: new Date(course.start),
+          startAt: programStart,
           endAt: new Date(course.end),
           source: "outreach_dashboard",
         },
         update: {
           name: course.title || slug,
           school: course.school || school,
-          startAt: new Date(course.start),
+          startAt: programStart,
           endAt: new Date(course.end),
           updatedAt: new Date(),
         },
@@ -72,11 +78,13 @@ export class ProgramSyncService {
           const normalizedUsername = String(user.username)
             .normalize("NFC")
             .replace(/\s+/g, "_");
-          const enrolledAt = typeof user.enrolled_at === "string" ? new Date(user.enrolled_at) : null;
+          let enrolledAt = typeof user.enrolled_at === "string" ? new Date(user.enrolled_at) : null;
           if (!enrolledAt || Number.isNaN(enrolledAt.getTime())) {
             errors += 1;
             continue;
           }
+          // Clamp enrollment to data start (attribution only counts from 2026-01-01).
+          if (enrolledAt < DATA_START) enrolledAt = DATA_START;
 
           // Ensure editor exists. Do NOT set externalId here: it may already be
           // claimed by another editor record (syncEditorsFromDashboard owns it),

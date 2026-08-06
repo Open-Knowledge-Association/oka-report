@@ -417,8 +417,8 @@ export const fetchSchedulerLogs = async (id: string, limit = 20) => {
   return apiFetch<{ logs: SchedulerRunLog[] }>(`/scheduler/${id}/logs?limit=${limit}`);
 };
 
-/** OKA program start (2022-05-06) — earliest possible snapshot period. */
-export const PROGRAM_START_DATE = "2022-05-06";
+/** OKA program data window starts 2026-01-01 — earliest possible snapshot period. */
+export const PROGRAM_START_DATE = "2026-01-01";
 
 // --- Snapshot-based report API (daily-first layered rollups) ---
 
