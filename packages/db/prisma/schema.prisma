@@ -37,11 +37,13 @@ enum Granularity {
 
 /// A tracked program (e.g. "OKA") that groups editors and articles.
 /// Source of truth for the program window and membership.
+/// NOTE: data window starts 2026-01-01 (fresh start; no historical data).
 model Program {
   id        String   @id @default(cuid())
   name      String   @unique
   slug      String   @unique
   school    String
+  /// Program window start. Set to 2026-01-01 for the fresh start.
   startAt   DateTime
   endAt     DateTime
   source    String   @default("outreach_dashboard")
@@ -107,8 +109,6 @@ model Editor {
   contributions    Contribution[]
   commonsUploads   CommonsUpload[]
   createdArticles  Article[]       @relation("CreatedArticles")
-  articles         ArticleEditor[]
-  dailyStats       EditorDailyStat[]
   programMembers   ProgramMember[]
   periodActivities PeriodEditorActivity[]
 
@@ -179,8 +179,6 @@ model Article {
   contributions Contribution[]
   pageviews     Pageview[]
   historicalPageviews HistoricalPageview[]
-  editors       ArticleEditor[]
-  dailyStats    ArticleDailyStat[]
   periodActivities PeriodArticleActivity[]
 
   createdAt DateTime @default(now())
@@ -388,25 +386,8 @@ model PeriodEditorActivity {
 
 /// Join table linking articles to editors
 /// Tracks which editors worked on which unified articles
-model ArticleEditor {
-  id String @id @default(cuid())
-
-  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  articleId String
-
-  editor   Editor @relation(fields: [editorId], references: [id], onDelete: Cascade)
-  editorId String
-
-  /// Whether this editor is the original article creator
-  isAuthor Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  @@unique([articleId, editorId])
-  @@index([articleId])
-  @@index([editorId])
-  @@map("article_editors")
-}
+/// NOTE: removed in schema cleanup — article-editor links come from contributions
+/// [REMOVED]
 
 /// Wikimedia Commons file uploads by tracked editors
 model CommonsUpload {
@@ -496,105 +477,6 @@ model SyncJob {
 }
 
 /// Daily aggregated stats for reporting
-model DailyStat {
-  id String @id @default(cuid())
-
-  /// Snapshot date (UTC)
-  date DateTime @db.Date
-
-  edits           Int
-  wordsAdded      Int
-  pageviews       Int
-  articlesCreated Int
-  articlesEdited  Int
-  editors         Int
-  referencesAdded Int
-  commonsUploads  Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([date])
-  @@index([date])
-  @@map("daily_stats")
-}
-
-/// Daily aggregated stats per wiki project
-model DailyWikiStat {
-  id String @id @default(cuid())
-
-  date DateTime @db.Date
-
-  wikiProject String
-
-  edits           Int
-  wordsAdded      Int
-  pageviews       Int
-  articlesCreated Int
-  articlesEdited  Int
-  editors         Int
-  referencesAdded Int
-  commonsUploads  Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([date, wikiProject])
-  @@index([date])
-  @@index([wikiProject])
-  @@map("daily_wiki_stats")
-}
-
-/// Daily aggregated stats per source
-model DailySourceStat {
-  id String @id @default(cuid())
-
-  date DateTime @db.Date
-
-  source ArticleSource
-
-  edits           Int
-  wordsAdded      Int
-  pageviews       Int
-  articlesCreated Int
-  articlesEdited  Int
-  editors         Int
-  referencesAdded Int
-  commonsUploads  Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([date, source])
-  @@index([date])
-  @@index([source])
-  @@map("daily_source_stats")
-}
-
-/// Daily aggregated stats per wiki project and source
-model DailyWikiSourceStat {
-  id String @id @default(cuid())
-
-  date DateTime @db.Date
-
-  wikiProject String
-  source ArticleSource
-
-  edits           Int
-  wordsAdded      Int
-  pageviews       Int
-  articlesCreated Int
-  articlesEdited  Int
-  editors         Int
-  referencesAdded Int
-  commonsUploads  Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([date, wikiProject, source])
-  @@index([date])
-  @@index([wikiProject])
-  @@index([source])
-  @@map("daily_wiki_source_stats")
-}
-
 model SchedulerSetting {
   id String @id
   enabled Boolean @default(true)
@@ -661,46 +543,3 @@ model BootstrapState {
 }
 
 /// Daily stats per editor for reporting
-model EditorDailyStat {
-  id String @id @default(cuid())
-
-  date DateTime @db.Date
-
-  editor   Editor @relation(fields: [editorId], references: [id])
-  editorId String
-
-  edits           Int
-  wordsAdded      Int
-  articlesCreated Int
-  articlesEdited  Int
-  referencesAdded Int
-  commonsUploads  Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([date, editorId])
-  @@index([date])
-  @@index([editorId])
-  @@map("editor_daily_stats")
-}
-
-/// Daily stats per article for reporting
-model ArticleDailyStat {
-  id String @id @default(cuid())
-
-  date DateTime @db.Date
-
-  article   Article @relation(fields: [articleId], references: [id])
-  articleId String
-
-  pageviews       Int
-  characterSum    Int
-  referencesCount Int
-
-  createdAt DateTime @default(now())
-
-  @@unique([date, articleId])
-  @@index([date])
-  @@index([articleId])
-  @@map("article_daily_stats")
-}

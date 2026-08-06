@@ -111,9 +111,6 @@ export class OutreachArticleSyncService {
       const program = await this.prisma.program.findUnique({ where: { slug } });
       const programId = program?.id ?? null;
 
-      const editors = await this.prisma.editor.findMany();
-      const editorMap = new Map(editors.map((e) => [e.externalId, e]));
-
       let imported = 0;
       let updated = 0;
       const errorDetails: Array<{ articleId: number; error: string }> = [];
@@ -289,11 +286,16 @@ export class OutreachArticleSyncService {
               }
 
               const authorEditor = creatorUsername
-                ? (editors.find(
-                    (editor) =>
-                      normalizeAuthorUsername(editor.username) ===
-                      normalizeAuthorUsername(creatorUsername!),
-                  ) ?? null)
+                ? (
+                    await this.prisma.editor.findFirst({
+                      where: {
+                        username: {
+                          equals: creatorUsername,
+                          mode: "insensitive",
+                        },
+                      },
+                    })
+                  ) ?? null
                 : null;
               if (authorEditor) authorStatus = "verified_tracked";
               await this.prisma.article.update({
@@ -306,27 +308,9 @@ export class OutreachArticleSyncService {
                 },
               });
 
-              for (const userId of dashboardArticle.user_ids) {
-                const editor = editorMap.get(String(userId));
-                if (!editor) continue;
-
-                await this.prisma.articleEditor.upsert({
-                  where: {
-                    articleId_editorId: {
-                      articleId: article.id,
-                      editorId: editor.id,
-                    },
-                  },
-                  create: {
-                    articleId: article.id,
-                    editorId: editor.id,
-                    isAuthor: Boolean(authorEditor && authorEditor.id === editor.id),
-                  },
-                  update: {
-                    isAuthor: Boolean(authorEditor && authorEditor.id === editor.id),
-                  },
-                });
-              }
+              // NOTE: article-editor link table (ArticleEditor) was removed in
+              // schema cleanup. Editor-article relationships now come from
+              // contributions only (synced separately).
 
               return { articleId: dashboardArticle.id, isNewlyCreated };
             }),

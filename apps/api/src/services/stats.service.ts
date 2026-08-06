@@ -147,6 +147,22 @@ export class StatsService {
   }
 
   /**
+   * Queue a snapshot_build sync job (replaces legacy daily-stats backfill).
+   */
+  async queueSnapshotBuild() {
+    return this.prisma.syncJob.create({
+      data: {
+        jobType: "snapshot_build",
+        status: "pending",
+        metadata: {
+          startDate: "2026-01-01T00:00:00.000Z",
+          endDate: new Date().toISOString(),
+        },
+      },
+    });
+  }
+
+  /**
    * Canonical lifetime totals used by the dashboard and article catalogue.
    * Period reports use the same contribution semantics, constrained by date.
    */
@@ -200,56 +216,6 @@ export class StatsService {
       wikiPageviews.set(article.wikiProject, (wikiPageviews.get(article.wikiProject) ?? 0) + views);
     }
     return { articles, pageviewsByArticle, wikiPageviews };
-  }
-
-  async getPeriodActivitySummary(
-    startDate: Date,
-    endDateInclusive: Date,
-    filters: { wikiProject?: string; source?: ArticleSource } = {},
-  ): Promise<AnnualStats> {
-    const start = toUtcDate(startDate);
-    const end = addUtcDays(toUtcDate(endDateInclusive), 1);
-    const articleFilter: Prisma.ArticleWhereInput = {
-      ...(filters.wikiProject ? { wikiProject: filters.wikiProject } : {}),
-      ...(filters.source ? { source: filters.source } : {}),
-    };
-    const contributionWhere: Prisma.ContributionWhereInput = {
-      editTimestamp: { gte: start, lt: end },
-      ...(Object.keys(articleFilter).length ? { article: articleFilter } : {}),
-    };
-    const [contributions, views, uploads] = await Promise.all([
-      this.prisma.contribution.findMany({
-        where: contributionWhere,
-        select: { articleId: true, editorId: true, isCreation: true, wordsAdded: true },
-      }),
-      this.prisma.pageview.aggregate({
-        where: {
-          date: { gte: start, lt: end },
-          type: "DAILY",
-          agentType: "ALL_AGENTS",
-          ...(Object.keys(articleFilter).length ? { article: articleFilter } : {}),
-        },
-        _sum: { views: true },
-      }),
-      this.prisma.commonsUpload.count({ where: { uploadedAt: { gte: start, lt: end } } }),
-    ]);
-    const createdIds = new Set(
-      contributions.filter((row) => row.isCreation).map((row) => row.articleId),
-    );
-    const createdArticles = await this.prisma.article.findMany({
-      where: { id: { in: Array.from(createdIds) } },
-      select: { referencesCount: true },
-    });
-    return {
-      edits: contributions.length,
-      wordsAdded: contributions.reduce((sum, row) => sum + row.wordsAdded, 0),
-      pageviews: views._sum.views ?? 0,
-      articlesCreated: createdIds.size,
-      articlesEdited: new Set(contributions.map((row) => row.articleId)).size,
-      editors: new Set(contributions.map((row) => row.editorId)).size,
-      referencesAdded: createdArticles.reduce((sum, row) => sum + row.referencesCount, 0),
-      commonsUploads: uploads,
-    };
   }
 
   async getCurrentPageviewsForArticles(
@@ -308,706 +274,6 @@ export class StatsService {
       totals.set(article.id, value);
     }
     return asMap ? totals : Array.from(totals.values()).reduce((sum, value) => sum + value, 0);
-  }
-
-  async getDailyHistory(range: {
-    startDate?: Date;
-    endDate?: Date;
-    wikiProject?: string;
-    source?: ArticleSource;
-  }) {
-    const startDate = range.startDate ? toUtcDate(range.startDate) : undefined;
-    const endDate = range.endDate ? toUtcDate(range.endDate) : undefined;
-
-    if (range.wikiProject && range.source) {
-      return this.prisma.dailyWikiSourceStat.findMany({
-        where: {
-          wikiProject: range.wikiProject,
-          source: range.source,
-          ...(startDate || endDate
-            ? {
-                date: {
-                  ...(startDate ? { gte: startDate } : {}),
-                  ...(endDate ? { lte: endDate } : {}),
-                },
-              }
-            : {}),
-        },
-        orderBy: { date: "asc" },
-      });
-    }
-
-    if (range.source) {
-      return this.prisma.dailySourceStat.findMany({
-        where: {
-          source: range.source,
-          ...(startDate || endDate
-            ? {
-                date: {
-                  ...(startDate ? { gte: startDate } : {}),
-                  ...(endDate ? { lte: endDate } : {}),
-                },
-              }
-            : {}),
-        },
-        orderBy: { date: "asc" },
-      });
-    }
-
-    if (range.wikiProject) {
-      return this.prisma.dailyWikiStat.findMany({
-        where: {
-          wikiProject: range.wikiProject,
-          ...(startDate || endDate
-            ? {
-                date: {
-                  ...(startDate ? { gte: startDate } : {}),
-                  ...(endDate ? { lte: endDate } : {}),
-                },
-              }
-            : {}),
-        },
-        orderBy: { date: "asc" },
-      });
-    }
-
-    return this.prisma.dailyStat.findMany({
-      where: {
-        ...(startDate || endDate
-          ? {
-              date: {
-                ...(startDate ? { gte: startDate } : {}),
-                ...(endDate ? { lte: endDate } : {}),
-              },
-            }
-          : {}),
-      },
-      orderBy: { date: "asc" },
-    });
-  }
-
-  async getEditorDailyHistory(editorId: string, range: { startDate?: Date; endDate?: Date }) {
-    const startDate = range.startDate ? toUtcDate(range.startDate) : undefined;
-    const endDate = range.endDate ? toUtcDate(range.endDate) : undefined;
-
-    return this.prisma.editorDailyStat.findMany({
-      where: {
-        editorId,
-        ...(startDate || endDate
-          ? {
-              date: {
-                ...(startDate ? { gte: startDate } : {}),
-                ...(endDate ? { lte: endDate } : {}),
-              },
-            }
-          : {}),
-      },
-      orderBy: { date: "asc" },
-    });
-  }
-
-  async getArticleDailyHistory(articleId: string, range: { startDate?: Date; endDate?: Date }) {
-    const startDate = range.startDate ? toUtcDate(range.startDate) : undefined;
-    const endDate = range.endDate ? toUtcDate(range.endDate) : undefined;
-
-    return this.prisma.articleDailyStat.findMany({
-      where: {
-        articleId,
-        ...(startDate || endDate
-          ? {
-              date: {
-                ...(startDate ? { gte: startDate } : {}),
-                ...(endDate ? { lte: endDate } : {}),
-              },
-            }
-          : {}),
-      },
-      orderBy: { date: "asc" },
-    });
-  }
-
-  async recordDailySnapshots(startDate: Date, endDate: Date) {
-    let current = toUtcDate(startDate);
-    const last = toUtcDate(endDate);
-
-    while (current <= last) {
-      await this.recordDailySnapshot(current);
-      current = addUtcDays(current, 1);
-    }
-  }
-
-  async recordDailySnapshot(date: Date) {
-    const dayStart = toUtcDate(date);
-    const dayEnd = addUtcDays(dayStart, 1);
-
-    const contributions = await this.prisma.contribution.findMany({
-      where: { editTimestamp: { gte: dayStart, lt: dayEnd } },
-      select: {
-        editorId: true,
-        articleId: true,
-        wordsAdded: true,
-        isCreation: true,
-        article: { select: { wikiProject: true, source: true } },
-      },
-    });
-
-    const edits = contributions.length;
-    const wordsAdded = contributions.reduce((sum, item) => sum + item.wordsAdded, 0);
-
-    const editorSet = new Set<string>();
-    const editedArticleSet = new Set<string>();
-    const createdArticleSet = new Set<string>();
-    const wikiStats = new Map<
-      string,
-      {
-        edits: number;
-        wordsAdded: number;
-        pageviews: number;
-        createdArticles: Set<string>;
-        editedArticles: Set<string>;
-        editors: Set<string>;
-        referencesAdded: number;
-        commonsUploads: number;
-      }
-    >();
-    const sourceStats = new Map<
-      ArticleSource,
-      {
-        edits: number;
-        wordsAdded: number;
-        pageviews: number;
-        createdArticles: Set<string>;
-        editedArticles: Set<string>;
-        editors: Set<string>;
-        referencesAdded: number;
-        commonsUploads: number;
-      }
-    >();
-    const editorStats = new Map<
-      string,
-      {
-        edits: number;
-        wordsAdded: number;
-        createdArticles: Set<string>;
-        editedArticles: Set<string>;
-        referencesAdded: number;
-        commonsUploads: number;
-      }
-    >();
-    const wikiSourceStats = new Map<
-      string,
-      {
-        wikiProject: string;
-        source: ArticleSource;
-        edits: number;
-        wordsAdded: number;
-        pageviews: number;
-        createdArticles: Set<string>;
-        editedArticles: Set<string>;
-        editors: Set<string>;
-        referencesAdded: number;
-        commonsUploads: number;
-      }
-    >();
-
-    for (const contribution of contributions) {
-      editorSet.add(contribution.editorId);
-      editedArticleSet.add(contribution.articleId);
-
-      const wikiProject = contribution.article.wikiProject;
-      let wikiStat = wikiStats.get(wikiProject);
-      if (!wikiStat) {
-        wikiStat = {
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          editors: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        wikiStats.set(wikiProject, wikiStat);
-      }
-
-      wikiStat.edits += 1;
-      wikiStat.wordsAdded += contribution.wordsAdded;
-      wikiStat.editedArticles.add(contribution.articleId);
-      wikiStat.editors.add(contribution.editorId);
-
-      const source = contribution.article.source;
-      let sourceStat = sourceStats.get(source);
-      if (!sourceStat) {
-        sourceStat = {
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          editors: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        sourceStats.set(source, sourceStat);
-      }
-
-      sourceStat.edits += 1;
-      sourceStat.wordsAdded += contribution.wordsAdded;
-      sourceStat.editedArticles.add(contribution.articleId);
-      sourceStat.editors.add(contribution.editorId);
-
-      const wikiSourceKey = `${wikiProject}::${source}`;
-      let wikiSourceStat = wikiSourceStats.get(wikiSourceKey);
-      if (!wikiSourceStat) {
-        wikiSourceStat = {
-          wikiProject,
-          source,
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          editors: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        wikiSourceStats.set(wikiSourceKey, wikiSourceStat);
-      }
-      wikiSourceStat.edits += 1;
-      wikiSourceStat.wordsAdded += contribution.wordsAdded;
-      wikiSourceStat.editedArticles.add(contribution.articleId);
-      wikiSourceStat.editors.add(contribution.editorId);
-
-      let stats = editorStats.get(contribution.editorId);
-      if (!stats) {
-        stats = {
-          edits: 0,
-          wordsAdded: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        editorStats.set(contribution.editorId, stats);
-      }
-
-      stats.edits += 1;
-      stats.wordsAdded += contribution.wordsAdded;
-      stats.editedArticles.add(contribution.articleId);
-
-      if (contribution.isCreation) {
-        createdArticleSet.add(contribution.articleId);
-        stats.createdArticles.add(contribution.articleId);
-        wikiStat.createdArticles.add(contribution.articleId);
-        sourceStat.createdArticles.add(contribution.articleId);
-        wikiSourceStat.createdArticles.add(contribution.articleId);
-      }
-    }
-
-    const createdArticleIds = Array.from(createdArticleSet);
-    const createdArticles =
-      createdArticleIds.length > 0
-        ? await this.prisma.article.findMany({
-            where: { id: { in: createdArticleIds } },
-            select: { id: true, referencesCount: true, wikiProject: true, source: true },
-          })
-        : [];
-
-    const articlesCreated = createdArticleSet.size;
-    const referencesAdded = createdArticles.reduce(
-      (sum, article) => sum + (article.referencesCount ?? 0),
-      0,
-    );
-
-    for (const article of createdArticles) {
-      const wikiStat = wikiStats.get(article.wikiProject);
-      if (wikiStat) {
-        wikiStat.referencesAdded += article.referencesCount ?? 0;
-      }
-
-      const sourceStat = sourceStats.get(article.source);
-      if (sourceStat) {
-        sourceStat.referencesAdded += article.referencesCount ?? 0;
-      }
-
-      const wikiSourceKey = `${article.wikiProject}::${article.source}`;
-      const wikiSourceStat = wikiSourceStats.get(wikiSourceKey);
-      if (wikiSourceStat) {
-        wikiSourceStat.referencesAdded += article.referencesCount ?? 0;
-      }
-    }
-
-    const refsByArticleId = new Map(
-      createdArticles.map((article) => [article.id, article.referencesCount ?? 0]),
-    );
-
-    for (const stats of editorStats.values()) {
-      let totalRefs = 0;
-      for (const articleId of stats.createdArticles) {
-        totalRefs += refsByArticleId.get(articleId) ?? 0;
-      }
-      stats.referencesAdded = totalRefs;
-    }
-
-    const uploads = await this.prisma.commonsUpload.findMany({
-      where: { uploadedAt: { gte: dayStart, lt: dayEnd } },
-      select: { editorId: true },
-    });
-
-    for (const upload of uploads) {
-      let stats = editorStats.get(upload.editorId);
-      if (!stats) {
-        stats = {
-          edits: 0,
-          wordsAdded: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        editorStats.set(upload.editorId, stats);
-      }
-      stats.commonsUploads += 1;
-    }
-
-    for (const wikiStat of wikiStats.values()) {
-      for (const upload of uploads) {
-        if (wikiStat.editors.has(upload.editorId)) {
-          wikiStat.commonsUploads += 1;
-        }
-      }
-    }
-
-    for (const sourceStat of sourceStats.values()) {
-      for (const upload of uploads) {
-        if (sourceStat.editors.has(upload.editorId)) {
-          sourceStat.commonsUploads += 1;
-        }
-      }
-    }
-
-    for (const wikiSourceStat of wikiSourceStats.values()) {
-      for (const upload of uploads) {
-        if (wikiSourceStat.editors.has(upload.editorId)) {
-          wikiSourceStat.commonsUploads += 1;
-        }
-      }
-    }
-
-    const commonsUploads = uploads.length;
-    const articlesEdited = editedArticleSet.size;
-    const editors = editorSet.size;
-
-    const dailyPageviews = await this.prisma.pageview.findMany({
-      where: { date: dayStart, type: "DAILY", agentType: "ALL_AGENTS" },
-      select: {
-        articleId: true,
-        views: true,
-        article: { select: { wikiProject: true, source: true } },
-      },
-    });
-    const pageviews = dailyPageviews.reduce((sum, item) => sum + item.views, 0);
-
-    for (const item of dailyPageviews) {
-      const wikiProject = item.article.wikiProject;
-      let wikiStat = wikiStats.get(wikiProject);
-      if (!wikiStat) {
-        wikiStat = {
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          editors: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        wikiStats.set(wikiProject, wikiStat);
-      }
-      wikiStat.pageviews += item.views;
-
-      const source = item.article.source;
-      let sourceStat = sourceStats.get(source);
-      if (!sourceStat) {
-        sourceStat = {
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          editors: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        sourceStats.set(source, sourceStat);
-      }
-      sourceStat.pageviews += item.views;
-
-      const wikiSourceKey = `${wikiProject}::${source}`;
-      let wikiSourceStat = wikiSourceStats.get(wikiSourceKey);
-      if (!wikiSourceStat) {
-        wikiSourceStat = {
-          wikiProject,
-          source,
-          edits: 0,
-          wordsAdded: 0,
-          pageviews: 0,
-          createdArticles: new Set<string>(),
-          editedArticles: new Set<string>(),
-          editors: new Set<string>(),
-          referencesAdded: 0,
-          commonsUploads: 0,
-        };
-        wikiSourceStats.set(wikiSourceKey, wikiSourceStat);
-      }
-      wikiSourceStat.pageviews += item.views;
-    }
-
-    await this.prisma.dailyStat.upsert({
-      where: { date: dayStart },
-      update: {
-        edits,
-        wordsAdded,
-        pageviews,
-        articlesCreated,
-        articlesEdited,
-        editors,
-        referencesAdded,
-        commonsUploads,
-      },
-      create: {
-        date: dayStart,
-        edits,
-        wordsAdded,
-        pageviews,
-        articlesCreated,
-        articlesEdited,
-        editors,
-        referencesAdded,
-        commonsUploads,
-      },
-    });
-
-    const editorRows = Array.from(editorStats.entries()).map(([editorId, stats]) => ({
-      date: dayStart,
-      editorId,
-      edits: stats.edits,
-      wordsAdded: stats.wordsAdded,
-      articlesCreated: stats.createdArticles.size,
-      articlesEdited: stats.editedArticles.size,
-      referencesAdded: stats.referencesAdded,
-      commonsUploads: stats.commonsUploads,
-    }));
-
-    if (editorRows.length > 0) {
-      await this.prisma.$transaction([
-        this.prisma.editorDailyStat.deleteMany({ where: { date: dayStart } }),
-        this.prisma.editorDailyStat.createMany({ data: editorRows }),
-      ]);
-    }
-
-    await this.prisma.dailyWikiStat.deleteMany({ where: { date: dayStart } });
-
-    const wikiRows = Array.from(wikiStats.entries()).map(([wikiProject, stats]) => ({
-      date: dayStart,
-      wikiProject,
-      edits: stats.edits,
-      wordsAdded: stats.wordsAdded,
-      pageviews: stats.pageviews,
-      articlesCreated: stats.createdArticles.size,
-      articlesEdited: stats.editedArticles.size,
-      editors: stats.editors.size,
-      referencesAdded: stats.referencesAdded,
-      commonsUploads: stats.commonsUploads,
-    }));
-
-    if (wikiRows.length > 0) {
-      await this.prisma.dailyWikiStat.createMany({ data: wikiRows });
-    }
-
-    await this.prisma.dailySourceStat.deleteMany({ where: { date: dayStart } });
-
-    const sourceRows = Array.from(sourceStats.entries()).map(([source, stats]) => ({
-      date: dayStart,
-      source,
-      edits: stats.edits,
-      wordsAdded: stats.wordsAdded,
-      pageviews: stats.pageviews,
-      articlesCreated: stats.createdArticles.size,
-      articlesEdited: stats.editedArticles.size,
-      editors: stats.editors.size,
-      referencesAdded: stats.referencesAdded,
-      commonsUploads: stats.commonsUploads,
-    }));
-
-    if (sourceRows.length > 0) {
-      await this.prisma.dailySourceStat.createMany({ data: sourceRows });
-    }
-
-    await this.prisma.dailyWikiSourceStat.deleteMany({ where: { date: dayStart } });
-
-    const wikiSourceRows = Array.from(wikiSourceStats.values()).map((stats) => ({
-      date: dayStart,
-      wikiProject: stats.wikiProject,
-      source: stats.source,
-      edits: stats.edits,
-      wordsAdded: stats.wordsAdded,
-      pageviews: stats.pageviews,
-      articlesCreated: stats.createdArticles.size,
-      articlesEdited: stats.editedArticles.size,
-      editors: stats.editors.size,
-      referencesAdded: stats.referencesAdded,
-      commonsUploads: stats.commonsUploads,
-    }));
-
-    if (wikiSourceRows.length > 0) {
-      await this.prisma.dailyWikiSourceStat.createMany({ data: wikiSourceRows });
-    }
-
-    await this.prisma.articleDailyStat.deleteMany({
-      where: { date: dayStart },
-    });
-
-    const articleIds = Array.from(new Set(dailyPageviews.map((item) => item.articleId)));
-    if (articleIds.length > 0) {
-      const articles = await this.prisma.article.findMany({
-        where: { id: { in: articleIds } },
-        select: { id: true, characterSum: true, referencesCount: true },
-      });
-
-      const articleMap = new Map(
-        articles.map((article) => [
-          article.id,
-          { characterSum: article.characterSum, referencesCount: article.referencesCount },
-        ]),
-      );
-
-      const articleRows = dailyPageviews.map((item) => {
-        const details = articleMap.get(item.articleId);
-        return {
-          date: dayStart,
-          articleId: item.articleId,
-          pageviews: item.views,
-          characterSum: details?.characterSum ?? 0,
-          referencesCount: details?.referencesCount ?? 0,
-        };
-      });
-
-      if (articleRows.length > 0) {
-        await this.prisma.articleDailyStat.createMany({ data: articleRows });
-      }
-    }
-  }
-
-  async runHistoryBackfill(startDate: Date, endDate: Date, jobId: string) {
-    const start = toUtcDate(startDate);
-    const end = toUtcDate(endDate);
-    const total = Math.max(
-      0,
-      Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1,
-    );
-    const job = await this.prisma.syncJob.findUnique({
-      where: { id: jobId },
-      select: { metadata: true },
-    });
-    const raw =
-      job?.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
-        ? (job.metadata as Record<string, unknown>)
-        : {};
-    let processed = Math.max(0, Math.min(total, Number(raw.processed ?? 0)));
-
-    const checkpoint = async (stage: string) => {
-      await this.prisma.syncJob.update({
-        where: { id: jobId },
-        data: {
-          metadata: {
-            startDate: start.toISOString(),
-            endDate: end.toISOString(),
-            total,
-            processed,
-            stage,
-          },
-        },
-      });
-    };
-
-    await checkpoint(`Backfilling snapshots (${processed}/${total} days)`);
-    for (let offset = processed; offset < total; offset += 1) {
-      await this.recordDailySnapshot(addUtcDays(start, offset));
-      processed = offset + 1;
-      await checkpoint(`Backfilling snapshots (${processed}/${total} days)`);
-    }
-    return { total, processed };
-  }
-
-  async backfillMissingDailySnapshots() {
-    const earliest = await this.getEarliestActivityDate();
-    if (!earliest) {
-      return;
-    }
-
-    const latest = await this.prisma.dailyStat.findFirst({
-      orderBy: { date: "desc" },
-      select: { date: true },
-    });
-
-    const startDate = latest ? addUtcDays(latest.date, 1) : earliest;
-    const yesterday = addUtcDays(toUtcDate(new Date()), -1);
-
-    if (startDate > yesterday) {
-      return;
-    }
-
-    await this.recordDailySnapshots(startDate, yesterday);
-  }
-
-  /** Reconcile snapshots that may have been written before upstream sync finished. */
-  async refreshRecentDailySnapshots(days = 35) {
-    const yesterday = addUtcDays(toUtcDate(new Date()), -1);
-    const start = addUtcDays(yesterday, -(Math.max(1, days) - 1));
-    await this.recordDailySnapshots(start, yesterday);
-  }
-
-  private async getEarliestActivityDate() {
-    const [firstContribution, firstPageview, firstUpload, firstArticle, firstArticleFallback] =
-      await Promise.all([
-        this.prisma.contribution.findFirst({
-          orderBy: { editTimestamp: "asc" },
-          select: { editTimestamp: true },
-        }),
-        this.prisma.pageview.findFirst({
-          orderBy: { date: "asc" },
-          select: { date: true },
-        }),
-        this.prisma.commonsUpload.findFirst({
-          orderBy: { uploadedAt: "asc" },
-          select: { uploadedAt: true },
-        }),
-        this.prisma.article.findFirst({
-          where: { articleCreatedAt: { not: null } },
-          orderBy: { articleCreatedAt: "asc" },
-          select: { articleCreatedAt: true },
-        }),
-        this.prisma.article.findFirst({
-          orderBy: { createdAt: "asc" },
-          select: { createdAt: true },
-        }),
-      ]);
-
-    const dates = [
-      firstContribution?.editTimestamp,
-      firstPageview?.date,
-      firstUpload?.uploadedAt,
-      firstArticle?.articleCreatedAt ?? undefined,
-      firstArticleFallback?.createdAt,
-    ].filter((value): value is Date => Boolean(value));
-
-    if (dates.length === 0) {
-      return null;
-    }
-
-    const earliest = dates.reduce((min, value) => (value < min ? value : min));
-    return toUtcDate(earliest);
   }
 
   async getOverallStats(filters: StatsFilter = {}): Promise<OverallStats> {
@@ -1417,7 +683,8 @@ export class StatsService {
     } else {
       articleWhere.isNewArticle = true;
       if (filters.editorId) {
-        articleWhere.editors = { some: { editorId: filters.editorId, isAuthor: true } };
+        // ArticleEditor table removed — filter by contributions instead.
+        articleWhere.contributions = { some: { editorId: filters.editorId, isCreation: true } };
       }
     }
 
@@ -1664,22 +931,25 @@ export class StatsService {
     endDate: Date,
     filters?: { wikiProject?: string; source?: ArticleSource },
   ): Promise<PeriodPerformancePoint[]> {
-    const series = await this.getDailyHistory({
-      startDate,
-      endDate,
-      wikiProject: filters?.wikiProject,
-      source: filters?.source,
+    // Daily performance derived from MetricSnapshot DAY rows (source of truth).
+    const rows = await this.prisma.metricSnapshot.findMany({
+      where: {
+        granularity: "DAY",
+        periodStart: { gte: toUtcDate(startDate), lte: toUtcDate(endDate) },
+        ...(filters?.wikiProject ? { wikiProject: filters.wikiProject } : {}),
+      },
+      orderBy: { periodStart: "asc" },
     });
 
-    return series.map((row) => ({
-      period: row.date.toISOString().slice(0, 10),
+    return rows.map((row) => ({
+      period: row.periodStart.toISOString().slice(0, 10),
       edits: row.edits,
       wordsAdded: row.wordsAdded,
-      pageviews: row.pageviews,
+      pageviews: row.viewsTotal,
       articlesCreated: row.articlesCreated,
       articlesEdited: row.articlesEdited,
       editors: row.editors,
-      referencesAdded: row.referencesAdded,
+      referencesAdded: row.refsAdded,
       commonsUploads: row.commonsUploads,
     }));
   }
@@ -2006,13 +1276,19 @@ export class StatsService {
     limit: number,
     wikiProject?: string,
   ): Promise<TopArticle[]> {
-    const grouped = await this.prisma.articleDailyStat.groupBy({
+    // Top articles by views derived from PeriodArticleActivity snapshot rows
+    // (source of truth), aggregated over the range.
+    const grouped = await this.prisma.periodArticleActivity.groupBy({
       by: ["articleId"],
-      where: { date: { gte: startDate, lt: endDate } },
-      _sum: { pageviews: true },
+      where: {
+        granularity: "MONTH",
+        periodStart: { gte: toUtcDate(startDate), lte: toUtcDate(endDate) },
+        ...(wikiProject ? { wikiProject } : {}),
+      },
+      _sum: { viewsTotal: true },
     });
     const ranked = grouped
-      .map((row) => ({ articleId: row.articleId, totalPageviews: row._sum.pageviews ?? 0 }))
+      .map((row) => ({ articleId: row.articleId, totalPageviews: row._sum.viewsTotal ?? 0 }))
       .filter((row) => row.totalPageviews > 0)
       .sort((a, b) => b.totalPageviews - a.totalPageviews)
       .slice(0, Math.max(limit * 5, limit));

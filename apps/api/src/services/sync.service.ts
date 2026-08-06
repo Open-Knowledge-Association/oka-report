@@ -361,11 +361,6 @@ export class SyncService {
                   authorVerifiedAt: new Date(),
                 },
               });
-              await this.prisma.articleEditor.upsert({
-                where: { articleId_editorId: { articleId: article.id, editorId: editor.id } },
-                create: { articleId: article.id, editorId: editor.id, isAuthor: true },
-                update: { isAuthor: true },
-              });
             }
             syncedCount += 1;
           }

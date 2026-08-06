@@ -7,10 +7,7 @@ import { SnapshotReportService } from "../services/snapshot-report.service";
 import { ReportExportService } from "../services/report-export.service";
 import {
   StatsFilterSchema,
-  HistoryRangeSchema,
   HistoryBackfillSchema,
-  EditorHistoryQuerySchema,
-  ArticleHistoryQuerySchema,
   AnnualStatsQuerySchema,
   MonthlyStatsQuerySchema,
   MonthlyExportQuerySchema,
@@ -157,31 +154,6 @@ const getExternalSnapshotWithTimeout = async (
   return Promise.race([getExternalSnapshot().catch(() => null), timeout]);
 };
 
-const withDelta = <T extends Record<string, number | string | Date | null | undefined>>(
-  series: T[],
-  fields: Array<keyof T>,
-) => {
-  let prev: T | null = null;
-  return series.map((item) => {
-    if (!prev) {
-      prev = item;
-      return { ...item, delta: {} };
-    }
-
-    const delta: Record<string, number> = {};
-    for (const field of fields) {
-      const current = item[field];
-      const previous = prev[field];
-      if (typeof current === "number" && typeof previous === "number") {
-        delta[String(field)] = current - previous;
-      }
-    }
-
-    prev = item;
-    return { ...item, delta };
-  });
-};
-
 const parseFilters = (input: Record<string, string | undefined>) => {
   const parsed = StatsFilterSchema.parse(input);
   return {
@@ -192,26 +164,6 @@ const parseFilters = (input: Record<string, string | undefined>) => {
     source: parsed.source,
   };
 };
-
-statsRoutes.get("/editors/history", async (c) => {
-  const parsed = EditorHistoryQuerySchema.parse(c.req.query());
-  const series = await statsService.getEditorDailyHistory(parsed.editorId, {
-    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
-    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
-  });
-  const data = parsed.withDelta
-    ? withDelta(series, [
-        "edits",
-        "wordsAdded",
-        "articlesCreated",
-        "articlesEdited",
-        "referencesAdded",
-        "commonsUploads",
-      ])
-    : series;
-
-  return c.json({ success: true, data: { editorId: parsed.editorId, series: data } });
-});
 
 statsRoutes.get("/annual/export", async (c) => {
   try {
@@ -365,25 +317,6 @@ statsRoutes.get("/monthly/export", async (c) => {
       500,
     );
   }
-});
-
-statsRoutes.get("/history", async (c) => {
-  const parsed = HistoryRangeSchema.parse(c.req.query());
-  const series = await statsService.getDailyHistory({
-    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
-    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
-    wikiProject: parsed.wikiProject,
-    source: parsed.source,
-  });
-
-  const data = series;
-  const summary = await statsService.getPeriodActivitySummary(
-    parsed.startDate ? new Date(parsed.startDate) : (series[0]?.date ?? new Date()),
-    parsed.endDate ? new Date(parsed.endDate) : (series.at(-1)?.date ?? new Date()),
-    { wikiProject: parsed.wikiProject, source: parsed.source },
-  );
-
-  return c.json({ success: true, data: { series: data, summary } });
 });
 
 statsRoutes.get("/annual-impact", async (c) => {
@@ -594,34 +527,6 @@ statsRoutes.post("/history/backfill", async (c) => {
     { success: true, data: { jobId: job.id, startDate, endDate, status: "pending" } },
     202,
   );
-});
-
-statsRoutes.post("/snapshot", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const dateValue = typeof body?.date === "string" ? new Date(body.date) : null;
-  const target = dateValue ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-  await statsService.recordDailySnapshot(target);
-
-  return c.json({
-    success: true,
-    data: {
-      date: target.toISOString(),
-    },
-  });
-});
-
-statsRoutes.get("/articles/history", async (c) => {
-  const parsed = ArticleHistoryQuerySchema.parse(c.req.query());
-  const series = await statsService.getArticleDailyHistory(parsed.articleId, {
-    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
-    endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
-  });
-  const data = parsed.withDelta
-    ? withDelta(series, ["pageviews", "characterSum", "referencesCount"])
-    : series;
-
-  return c.json({ success: true, data: { articleId: parsed.articleId, series: data } });
 });
 
 /**

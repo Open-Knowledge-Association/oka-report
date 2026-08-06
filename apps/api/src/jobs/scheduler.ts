@@ -154,10 +154,10 @@ export const startScheduler = () => {
     yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
     try {
-      await statsService.recordDailySnapshot(yesterday);
-      console.log("[Scheduler] Daily stats snapshot completed");
+      await statsService.queueSnapshotBuild();
+      console.log("[Scheduler] Snapshot build queued");
     } catch (error) {
-      console.error("[Scheduler] Daily stats snapshot failed:", error);
+      console.error("[Scheduler] Snapshot build queue failed:", error);
     }
   });
 
@@ -181,11 +181,10 @@ export const startScheduler = () => {
     }
 
     try {
-      await statsService.backfillMissingDailySnapshots();
-      await statsService.refreshRecentDailySnapshots(35);
-      console.log("[Scheduler] Daily stats backfill and rolling reconciliation completed");
+      await statsService.queueSnapshotBuild();
+      console.log("[Scheduler] Snapshot build queued");
     } catch (error) {
-      console.error("[Scheduler] Daily stats backfill failed:", error);
+      console.error("[Scheduler] Snapshot build queue failed:", error);
     }
   });
 

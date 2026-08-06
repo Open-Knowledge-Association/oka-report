@@ -37,7 +37,6 @@ articlesRoutes.get("/", async (c) => {
       take: query.limit,
       include: {
         createdByEditor: { select: { id: true, username: true } },
-        editors: { include: { editor: { select: { id: true, username: true } } } },
         _count: { select: { pageviews: true, contributions: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -123,7 +122,6 @@ articlesRoutes.get("/:id", async (c) => {
     where: { id },
     include: {
       createdByEditor: { select: { id: true, username: true } },
-      editors: { include: { editor: { select: { id: true, username: true } } } },
       pageviews: { orderBy: { date: "desc" }, take: 30 },
       contributions: {
         orderBy: { editTimestamp: "desc" },

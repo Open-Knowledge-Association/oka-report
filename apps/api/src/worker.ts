@@ -84,7 +84,6 @@ const processQueuedJob = async () => {
           "commons",
           "editors",
           "outreach_articles",
-          "history_backfill",
           "historical_pageviews",
         ],
       },
@@ -113,7 +112,7 @@ const processQueuedJob = async () => {
         job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
           ? (job.metadata as { startDate?: unknown; endDate?: unknown })
           : {};
-      const startDate = new Date(String(metadata.startDate ?? "2025-10-01"));
+      const startDate = new Date(String(metadata.startDate ?? "2026-01-01"));
       const endDate = new Date(String(metadata.endDate ?? new Date().toISOString()));
       if (
         Number.isNaN(startDate.getTime()) ||
@@ -151,22 +150,6 @@ const processQueuedJob = async () => {
         parentJobId: job.parentJobId ?? undefined,
         jobId: job.id,
       });
-    } else if (job.jobType === "history_backfill") {
-      const metadata =
-        job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
-          ? (job.metadata as { startDate?: unknown; endDate?: unknown })
-          : {};
-      const startDate = new Date(String(metadata.startDate ?? ""));
-      const endDate = new Date(String(metadata.endDate ?? ""));
-      if (
-        Number.isNaN(startDate.getTime()) ||
-        Number.isNaN(endDate.getTime()) ||
-        endDate < startDate
-      ) {
-        throw new Error("Invalid history backfill date range");
-      }
-      const result = await queuedStatsService.runHistoryBackfill(startDate, endDate, job.id);
-      await queuedSyncService.completeSyncJob(job.id, result as any);
     } else if (job.jobType === "historical_pageviews") {
       const metadata =
         job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
@@ -202,16 +185,16 @@ const cycle = async () => {
     const rootJobId = state.rootJobId;
     backfillForRoot = rootJobId;
     console.log(
-      `[Worker] Starting non-blocking post-bootstrap daily stats backfill for ${rootJobId}`,
+      `[Worker] Starting non-blocking post-bootstrap snapshot build for ${rootJobId}`,
     );
     void new StatsService(prisma)
-      .backfillMissingDailySnapshots()
+      .queueSnapshotBuild()
       .then(() =>
-        console.log(`[Worker] Post-bootstrap daily stats backfill completed for ${rootJobId}`),
+        console.log(`[Worker] Post-bootstrap snapshot build queued for ${rootJobId}`),
       )
       .catch((error) => {
         console.error(
-          `[Worker] Backfill failed: ${error instanceof Error ? error.message : String(error)}`,
+          `[Worker] Snapshot build queue failed: ${error instanceof Error ? error.message : String(error)}`,
         );
         backfillForRoot = null;
       });
@@ -241,8 +224,7 @@ const cycle = async () => {
       try {
         console.log(`[Worker] Claimed/resuming root job ${rootJobId} as ${WORKER_ID}`);
         await runBootstrapJob(rootJobId);
-        await queuedStatsService.refreshRecentDailySnapshots(35);
-        console.log(`[Worker] Reconciled recent daily statistics after full sync ${rootJobId}`);
+        console.log(`[Worker] Full sync completed for ${rootJobId}`);
       } catch (error) {
         console.error(
           `[Worker] Root job failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,

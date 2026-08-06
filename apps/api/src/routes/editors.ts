@@ -204,7 +204,6 @@ editorsRoutes.put("/:id", async (c) => {
 
 editorsRoutes.delete("/all", async (c) => {
   await prisma.$transaction(async (tx) => {
-    await tx.articleEditor.deleteMany({});
     await tx.contribution.deleteMany({});
     await tx.commonsUpload.deleteMany({});
     await tx.article.updateMany({
@@ -369,9 +368,16 @@ editorsRoutes.get("/:id/profile", async (c) => {
   }
 
   const createdArticles = editor.createdArticles;
-  const editedArticles = editor.articles
-    .filter((ae) => !createdArticles.some((ca) => ca.id === ae.article.id))
-    .map((ae) => ae.article);
+  // editedArticles = articles with contributions by this editor, excluding created ones
+  const contribArticles = await prisma.article.findMany({
+    where: {
+      contributions: { some: { editorId: editor.id } },
+      id: { notIn: createdArticles.map((ca) => ca.id) },
+    },
+    select: { id: true, title: true, wikiProject: true, url: true, characterSum: true, referencesCount: true, isNewArticle: true, rating: true },
+  });
+  const editedArticles = contribArticles;
+  const editedArticlesCount = editedArticles.length;
 
   const articles = createdArticles;
   const articlesCount = createdArticles.length;
@@ -395,7 +401,7 @@ editorsRoutes.get("/:id/profile", async (c) => {
     charactersAdded,
     referencesAdded,
     pageviews,
-    editedArticlesCount: editedArticles.length,
+    editedArticlesCount,
   };
 
   let wikimediaProfile = null;
@@ -526,24 +532,68 @@ editorsRoutes.get("/:id/daily-stats", async (c) => {
     );
   }
 
-  const where: { editorId: string; date?: { gte?: Date; lte?: Date } } = {
+  const where: { editorId: string; editTimestamp?: { gte?: Date; lte?: Date } } = {
     editorId: editor.id,
   };
 
   if (from || to) {
-    where.date = {};
+    where.editTimestamp = {};
     if (from) {
-      where.date.gte = new Date(from);
+      where.editTimestamp.gte = new Date(from);
     }
     if (to) {
-      where.date.lte = new Date(to);
+      where.editTimestamp.lte = new Date(to);
     }
   }
 
-  const dailyStats = await prisma.editorDailyStat.findMany({
+  // Daily contribution stats derived from contributions (source of truth).
+  const rows = await prisma.contribution.groupBy({
+    by: ["editTimestamp"],
     where,
-    orderBy: { date: "asc" },
+    _count: { _all: true },
+    _sum: { wordsAdded: true },
+    orderBy: { editTimestamp: "asc" },
   });
+
+  const byDay = new Map<string, { date: Date; edits: number; wordsAdded: number; articlesCreated: number; articlesEdited: number }>();
+  for (const r of rows) {
+    const d = new Date(r.editTimestamp);
+    d.setUTCHours(0, 0, 0, 0);
+    const key = d.toISOString();
+    const cur = byDay.get(key) ?? { date: d, edits: 0, wordsAdded: 0, articlesCreated: 0, articlesEdited: 0 };
+    cur.edits += r._count._all;
+    cur.wordsAdded += r._sum.wordsAdded ?? 0;
+    byDay.set(key, cur);
+  }
+
+  // Distinct articles per day for articlesCreated/articlesEdited.
+  const distinct = await prisma.contribution.findMany({
+    where,
+    select: { editTimestamp: true, articleId: true, isCreation: true },
+  });
+  const createdSet = new Set<string>();
+  const editedSet = new Set<string>();
+  for (const c of distinct) {
+    const d = new Date(c.editTimestamp);
+    d.setUTCHours(0, 0, 0, 0);
+    const key = d.toISOString();
+    const day = byDay.get(key);
+    if (!day) continue;
+    if (c.isCreation) {
+      const ck = `${key}|${c.articleId}`;
+      if (!createdSet.has(ck)) {
+        createdSet.add(ck);
+        day.articlesCreated += 1;
+      }
+    }
+    const ek = `${key}|${c.articleId}`;
+    if (!editedSet.has(ek)) {
+      editedSet.add(ek);
+      day.articlesEdited += 1;
+    }
+  }
+
+  const dailyStats = [...byDay.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
 
   return c.json({
     success: true,
@@ -568,28 +618,23 @@ editorsRoutes.get("/:id/achievements", async (c) => {
     );
   }
 
-  // Fetch all daily stats for this editor
-  const dailyStats = await prisma.editorDailyStat.findMany({
-    where: { editorId: id },
-  });
-
-  // Calculate aggregate totals
-  const totals = dailyStats.reduce(
-    (acc, stat) => ({
-      articlesCreated: acc.articlesCreated + stat.articlesCreated,
-      wordsAdded: acc.wordsAdded + stat.wordsAdded,
-      referencesAdded: acc.referencesAdded + stat.referencesAdded,
-      edits: acc.edits + stat.edits,
-      commonsUploads: acc.commonsUploads + stat.commonsUploads,
+  // Aggregate totals from contributions (source of truth)
+  const [contribAgg, createdCount, commonsCount] = await Promise.all([
+    prisma.contribution.aggregate({
+      where: { editorId: id },
+      _count: { _all: true },
+      _sum: { wordsAdded: true },
     }),
-    {
-      articlesCreated: 0,
-      wordsAdded: 0,
-      referencesAdded: 0,
-      edits: 0,
-      commonsUploads: 0,
-    },
-  );
+    prisma.contribution.count({ where: { editorId: id, isCreation: true } }),
+    prisma.commonsUpload.count({ where: { editorId: id } }),
+  ]);
+  const totals = {
+    articlesCreated: createdCount,
+    wordsAdded: contribAgg._sum.wordsAdded ?? 0,
+    referencesAdded: 0,
+    edits: contribAgg._count._all,
+    commonsUploads: commonsCount,
+  };
 
   // Calculate account age in days
   const accountAgeMs = new Date().getTime() - editor.createdAt.getTime();
