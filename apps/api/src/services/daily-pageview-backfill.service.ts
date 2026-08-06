@@ -97,6 +97,7 @@ export class DailyPageviewBackfillService {
     let nextIndex = 0;
     let inFlight = 0;
     let shouldStop = false;
+    let cooldownUntil = 0; // epoch ms — pause then resume instead of stopping
 
     const processArticle = async (article: (typeof articles)[number]): Promise<void> => {
       // Cutoff: earliest program activity, else program start.
@@ -125,7 +126,9 @@ export class DailyPageviewBackfillService {
             continue;
           }
           if (error instanceof WikimediaClientError && (error.status === 429 || error.status >= 500)) {
-            console.warn(`[DailyBackfill] transient ${error.status} on ${article.title}; pausing`);
+            console.warn(`[DailyBackfill] transient ${error.status} on ${article.title}; cooldown 60s`);
+            // Pause (cooldown) then resume — do NOT stop the whole backfill.
+            cooldownUntil = Date.now() + 60_000;
             shouldStop = true;
             return;
           }
@@ -170,7 +173,16 @@ export class DailyPageviewBackfillService {
       result.processed += 1;
     };
 
-    while (nextIndex < remaining.length && !shouldStop) {
+    while (nextIndex < remaining.length) {
+      // If in cooldown (transient 429/5xx), wait for it to expire then resume.
+      if (shouldStop) {
+        if (Date.now() < cooldownUntil) {
+          await sleep(5_000);
+          continue;
+        }
+        console.warn(`[DailyBackfill] cooldown over — resuming from index ${nextIndex}`);
+        shouldStop = false;
+      }
       // Fill up to CONCURRENCY in-flight tasks.
       while (inFlight < CONCURRENCY && nextIndex < remaining.length && !shouldStop) {
         const article = remaining[nextIndex];
