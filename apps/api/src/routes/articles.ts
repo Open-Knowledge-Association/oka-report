@@ -65,6 +65,15 @@ articlesRoutes.get("/", async (c) => {
         existing.isAuthor = true;
       }
     }
+    // Fall back to the Outreach-attributed creator (createdByEditor) when no
+    // verified contribution exists — keeps the Editors column consistent with
+    // the "Created" badge.
+    if (editorsMap.size === 0 && article.createdByEditor) {
+      editorsMap.set(article.createdByEditor.id, {
+        editor: article.createdByEditor,
+        isAuthor: true,
+      });
+    }
     const { contributions: _contributions, ...rest } = article;
 
     return {
