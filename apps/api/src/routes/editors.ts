@@ -357,14 +357,39 @@ editorsRoutes.get("/:id/profile", async (c) => {
   }
 
   const createdArticles = editor.createdArticles;
-  // editedArticlesCount = distinct articles touched by this editor
-  // (fast groupBy, no need to load 1.4k article rows + pageviews).
+  // ArticlesCreated = articles with a verified creation contribution
+  // (isCreation from usercontribs) — consistent with snapshot editors &
+  // the editors list page. The Outreach-imported createdByEditorId rows
+  // (many without any recorded contribution) are NOT counted here.
+  const createdCountAgg = await prisma.contribution.groupBy({
+    by: ["articleId"],
+    where: { editorId: editor.id, isCreation: true },
+    _count: { _all: true },
+  });
+  const articlesCount = createdCountAgg.length;
+  // Distinct articles touched by this editor (created or edited).
   const editedCountAgg = await prisma.contribution.groupBy({
     by: ["articleId"],
     where: { editorId: editor.id },
     _count: { _all: true },
   });
   const editedArticlesCount = editedCountAgg.length;
+  // Articles table = verified created articles (isCreation), with details.
+  const createdIds = createdCountAgg.map((r) => r.articleId);
+  const articles = await prisma.article.findMany({
+    where: { id: { in: createdIds } },
+    select: {
+      id: true,
+      title: true,
+      wikiProject: true,
+      url: true,
+      characterSum: true,
+      referencesCount: true,
+      isNewArticle: true,
+      rating: true,
+      pageviews: { orderBy: { date: "desc" }, take: 1 },
+    },
+  });
   const editedArticles: Array<{
     id: string;
     title: string;
@@ -377,8 +402,6 @@ editorsRoutes.get("/:id/profile", async (c) => {
     pageviews?: Array<{ type: string; views?: number; cumulativeViews?: number; date: string }>;
   }> = [];
 
-  const articles = createdArticles;
-  const articlesCount = createdArticles.length;
   // totalEdits = all program contributions by this editor (not just created
   // articles) — consistent with daily-stats aggregation.
   const totalEdits = await prisma.contribution.count({

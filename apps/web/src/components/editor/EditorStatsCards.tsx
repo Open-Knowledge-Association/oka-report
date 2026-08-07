@@ -38,7 +38,7 @@ export function EditorStatsCards({ stats }: EditorStatsCardsProps) {
       color: "text-indigo-600",
       bgColor: "bg-indigo-50",
       tooltip:
-        "Number of new Wikipedia articles created by this editor (revision with parent revision 0), since enrollment.",
+        "Number of new Wikipedia articles created by this editor, verified from Wikimedia contribution data (revision with parent revision 0) since enrollment. Consistent with snapshot reports.",
     },
     {
       title: "Articles Edited",
