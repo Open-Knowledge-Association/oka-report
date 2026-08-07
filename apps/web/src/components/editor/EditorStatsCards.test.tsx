@@ -6,6 +6,8 @@ describe("EditorStatsCards", () => {
   it("renders stats cards", () => {
     const stats = {
       articlesCount: 10,
+      totalEdits: 120,
+      editedArticlesCount: 15,
       charactersAdded: 5000,
       referencesAdded: 25,
       pageviews: 1000,

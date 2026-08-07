@@ -61,7 +61,7 @@ export function AchievementBadges({ editorId }: AchievementBadgesProps) {
 
   return (
     <TooltipProvider>
-      <div data-testid="achievement-badges" className="flex flex-wrap gap-4">
+      <div data-testid="achievement-badges" className="grid grid-cols-3 sm:grid-cols-4 gap-3">
         {data.map((badge) => {
           const Icon = badgeIcons[badge.id] || Star;
           return (
@@ -69,22 +69,36 @@ export function AchievementBadges({ editorId }: AchievementBadgesProps) {
               <TooltipTrigger asChild>
                 <div
                   className={`
-                    relative w-16 h-16 rounded-full flex items-center justify-center
-                    transition-all duration-300 cursor-help
+                    flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-300 cursor-help
                     ${
                       badge.achieved
-                        ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg scale-100"
-                        : "bg-slate-200 text-slate-400 grayscale"
+                        ? "bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200"
+                        : "bg-slate-50 border-slate-200 opacity-60"
                     }
-                    ${badge.achieved ? "hover:scale-110" : ""}
+                    ${badge.achieved ? "hover:shadow-md hover:-translate-y-0.5" : ""}
                   `}
                 >
-                  <Icon className="w-8 h-8" />
-                  {badge.achieved && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-xs">
-                      ✓
-                    </span>
-                  )}
+                  <div
+                    className={`relative w-12 h-12 rounded-full flex items-center justify-center ${
+                      badge.achieved
+                        ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow"
+                        : "bg-slate-200 text-slate-400 grayscale"
+                    }`}
+                  >
+                    <Icon className="w-6 h-6" />
+                    {badge.achieved && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center text-[10px]">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`text-[11px] font-medium text-center leading-tight ${
+                      badge.achieved ? "text-slate-800" : "text-slate-500"
+                    }`}
+                  >
+                    {badge.name}
+                  </span>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">

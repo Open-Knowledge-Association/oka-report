@@ -8,6 +8,7 @@ import {
   Medal,
   Calendar,
   Image as ImageIcon,
+  PencilLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ interface EditorProfile {
     charactersAdded: number;
     referencesAdded: number;
     pageviews: number;
+    editedArticlesCount: number;
   };
   wikimediaProfile: {
     registration: string;
@@ -146,30 +148,42 @@ function EditorProfilePage() {
       <div className="mx-auto w-full max-w-6xl space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-slate-900">{editor.username}</h1>
-              <Badge variant="outline" className="text-slate-500 font-normal gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                {editor.wiki}
-              </Badge>
+          <div className="flex items-center gap-4">
+            {/* Avatar inisial */}
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center text-2xl font-bold shrink-0">
+              {editor.username.slice(0, 1).toUpperCase()}
             </div>
-            <div className="flex items-center gap-4 text-sm text-slate-600">
-              <a
-                href={`https://${editor.wiki}.org/wiki/User:${encodeURIComponent(editor.username)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 hover:text-blue-600 transition-colors"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Wikipedia Profile
-              </a>
-              {wikimediaProfile?.registration && (
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                  Joined {new Date(wikimediaProfile.registration).getFullYear()}
-                </span>
-              )}
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-3xl font-bold text-slate-900">{editor.username}</h1>
+                <Badge variant="outline" className="text-slate-500 font-normal gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                  {editor.wiki}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-slate-600">
+                <a
+                  href={`https://${editor.wiki}.org/wiki/User:${encodeURIComponent(editor.username)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Wikipedia Profile
+                </a>
+                {wikimediaProfile?.registration && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                    Joined {new Date(wikimediaProfile.registration).getFullYear()}
+                  </span>
+                )}
+                {typeof wikimediaProfile?.editcount === "number" && (
+                  <span className="flex items-center gap-1 text-slate-500">
+                    <PencilLine className="h-3.5 w-3.5 text-slate-400" />
+                    {wikimediaProfile.editcount.toLocaleString()} lifetime edits
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
@@ -202,6 +216,7 @@ function EditorProfilePage() {
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="h-5 w-5 text-slate-500" />
                 <h2 className="text-lg font-semibold text-slate-900">Created Articles</h2>
+                <Badge variant="secondary" className="ml-1">{articles.length}</Badge>
               </div>
               <ArticlesTable articles={articles} />
             </section>
