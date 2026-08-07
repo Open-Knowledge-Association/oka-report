@@ -34,6 +34,68 @@ const fmtCompact = (n: number) => {
   return String(n);
 };
 
+function MethodologyFlowChart() {
+  const steps = [
+    { title: "Program & Editors", sub: "Outreach Dashboard API", color: "#3b82f6" },
+    { title: "Articles", sub: "Outreach Dashboard", color: "#3b82f6" },
+    { title: "Contributions", sub: "Wikimedia usercontribs API", color: "#8b5cf6" },
+    { title: "Commons Uploads", sub: "Wikimedia Commons API", color: "#8b5cf6" },
+    { title: "Pageviews", sub: "Wikimedia pageviews API", color: "#0ea5e9" },
+    { title: "Snapshots", sub: "Aggregation DAY/MONTH/YEAR", color: "#10b981" },
+  ];
+  // Layout: 6 kotak horizontal (2 baris: 3 atas, 3 bawah) — seperti diagram alur pipeline.
+  const w = 180, h = 64, gapX = 60, gapY = 90;
+  const positions = [
+    { x: 0, y: 0 }, { x: w + gapX, y: 0 }, { x: (w + gapX) * 2, y: 0 },
+    { x: (w + gapX) * 0.5, y: h + gapY }, { x: (w + gapX) * 1.5, y: h + gapY }, { x: (w + gapX) * 2.5, y: h + gapY },
+  ];
+  const totalW = (w + gapX) * 2 + w;
+  const totalH = h * 2 + gapY;
+  return (
+    <div className="w-full overflow-x-auto py-2">
+      <svg viewBox={`0 0 ${totalW + 40} ${totalH + 30}`} className="w-full min-w-[720px]" role="img" aria-label="Data pipeline flowchart">
+        {/* panah baris 1 (3-> kanan) */}
+        {[0, 1].map((i) => {
+          const p1 = positions[i], p2 = positions[i + 1];
+          return (
+            <g key={`a1-${i}`}>
+              <line x1={p1.x + w} y1={p1.y + h / 2} x2={p2.x - 6} y2={p2.y + h / 2} stroke="#94a3b8" strokeWidth={2} markerEnd="url(#arrow)" />
+            </g>
+          );
+        })}
+        {/* panah 3 -> 4 (turun miring) */}
+        <line x1={positions[2].x + w / 2} y1={positions[2].y + h} x2={positions[3].x + w / 2} y2={positions[3].y - 6} stroke="#94a3b8" strokeWidth={2} markerEnd="url(#arrow)" />
+        {/* panah baris 2 */}
+        {[3, 4].map((i) => {
+          const p1 = positions[i], p2 = positions[i + 1];
+          return (
+            <g key={`a2-${i}`}>
+              <line x1={p1.x + w} y1={p1.y + h / 2} x2={p2.x - 6} y2={p2.y + h / 2} stroke="#94a3b8" strokeWidth={2} markerEnd="url(#arrow)" />
+            </g>
+          );
+        })}
+        {/* defs marker panah */}
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="#94a3b8" />
+          </marker>
+        </defs>
+        {/* kotak */}
+        {steps.map((s, i) => {
+          const pos = positions[i];
+          return (
+            <g key={s.title}>
+              <rect x={pos.x} y={pos.y} width={w} height={h} rx={10} fill={s.color} opacity={0.12} stroke={s.color} strokeWidth={1.5} />
+              <text x={pos.x + w / 2} y={pos.y + 28} textAnchor="middle" fontSize={13} fontWeight={600} fill="#1e293b">{s.title}</text>
+              <text x={pos.x + w / 2} y={pos.y + 46} textAnchor="middle" fontSize={10.5} fill="#64748b">{s.sub}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function MetricCard({
   icon,
   label,
@@ -237,6 +299,7 @@ function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 text-sm text-slate-600 leading-relaxed">
+          <MethodologyFlowChart />
           <div>
             <h3 className="font-semibold text-slate-800 mb-2">Data pipeline</h3>
             <ol className="list-decimal list-inside space-y-1.5">
@@ -307,6 +370,81 @@ function DashboardPage() {
               <li>Full data sync: daily at 02:00 (UTC).</li>
               <li>Outreach article sync: daily at 03:00 (UTC).</li>
               <li>Historical pageview backfill: weekly (Sundays) at 04:00 (UTC).</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">Data sources</h3>
+            <ul className="list-disc list-inside space-y-1.5">
+              <li>
+                <a
+                  href="https://outreachdashboard.wmflabs.org/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
+                >
+                  Outreach Dashboard API
+                </a>{" "}
+                — program, editors, article list.
+              </li>
+              <li>
+                <a
+                  href="https://www.mediawiki.org/wiki/API:Usercontribs"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
+                >
+                  Wikimedia usercontribs API
+                </a>{" "}
+                — contribution history (edits, size diff, parent revision).
+              </li>
+              <li>
+                <a
+                  href="https://commons.wikimedia.org/w/api.php"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
+                >
+                  Wikimedia Commons API
+                </a>{" "}
+                — file uploads by editors.
+              </li>
+              <li>
+                <a
+                  href="https://wikimedia.org/api/rest_v1/#/Pageviews%20data"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
+                >
+                  Wikimedia Pageviews API (REST v1)
+                </a>{" "}
+                — daily pageviews (DAILY/ALL_AGENTS).
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">Limitations</h3>
+            <ul className="list-disc list-inside space-y-1.5">
+              <li>
+                <strong>Words Added</strong> is an <em>estimate</em>: it is derived from the
+                revision byte-size difference (sizediff) via the Wikimedia API, not from
+                actual word counting. Size changes from templates, categories or formatting
+                can influence the value.
+              </li>
+              <li>
+                <strong>Pageview coverage</strong> starts at each article&apos;s first program
+                contribution (cutoff). Pageviews before the program touched an article are
+                intentionally excluded — figures therefore represent program-attributed views,
+                not total article lifetime views.
+              </li>
+              <li>
+                <strong>Data freshness</strong> depends on the last completed sync. Numbers
+                reflect the state at the last snapshot (see &quot;Last sync&quot; badge on the
+                dashboard) and may lag live Wikimedia data by up to a day.
+              </li>
+              <li>
+                <strong>Commons uploads</strong> only include uploads made after each
+                editor&apos;s enrollment date; earlier uploads are outside the program window.
+              </li>
             </ul>
           </div>
         </CardContent>
