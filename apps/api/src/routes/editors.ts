@@ -678,7 +678,7 @@ editorsRoutes.get("/:id/achievements", async (c) => {
   }
 
   // Aggregate totals from contributions (source of truth)
-  const [contribAgg, createdCount, commonsCount] = await Promise.all([
+  const [contribAgg, createdCount, commonsCount, refAgg] = await Promise.all([
     prisma.contribution.aggregate({
       where: { editorId: id },
       _count: { _all: true },
@@ -686,11 +686,17 @@ editorsRoutes.get("/:id/achievements", async (c) => {
     }),
     prisma.contribution.count({ where: { editorId: id, isCreation: true } }),
     prisma.commonsUpload.count({ where: { editorId: id } }),
+    prisma.article.aggregate({
+      where: {
+        contributions: { some: { editorId: id } },
+      },
+      _sum: { referencesCount: true },
+    }),
   ]);
   const totals = {
     articlesCreated: createdCount,
     wordsAdded: contribAgg._sum.wordsAdded ?? 0,
-    referencesAdded: 0,
+    referencesAdded: refAgg._sum.referencesCount ?? 0,
     edits: contribAgg._count._all,
     commonsUploads: commonsCount,
   };
