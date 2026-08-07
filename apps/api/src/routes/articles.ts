@@ -37,6 +37,12 @@ articlesRoutes.get("/", async (c) => {
       take: query.limit,
       include: {
         createdByEditor: { select: { id: true, username: true } },
+        contributions: {
+          select: {
+            isCreation: true,
+            editor: { select: { id: true, username: true } },
+          },
+        },
         _count: { select: { pageviews: true, contributions: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -49,8 +55,21 @@ articlesRoutes.get("/", async (c) => {
   const normalizedArticles = articles.map((article) => {
     const totalPageviews = pageviewsByArticle.get(article.id);
 
+    // Build the editors list (frontend expects [{ editor, isAuthor }]).
+    const editorsMap = new Map<string, { editor: { id: string; username: string }; isAuthor: boolean }>();
+    for (const c of article.contributions ?? []) {
+      const existing = editorsMap.get(c.editor.id);
+      if (!existing) {
+        editorsMap.set(c.editor.id, { editor: c.editor, isAuthor: !!c.isCreation });
+      } else if (c.isCreation) {
+        existing.isAuthor = true;
+      }
+    }
+    const { contributions: _contributions, ...rest } = article;
+
     return {
-      ...article,
+      ...rest,
+      editors: Array.from(editorsMap.values()),
       pageviews:
         totalPageviews === undefined
           ? []
