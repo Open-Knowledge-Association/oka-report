@@ -483,6 +483,7 @@ editorsRoutes.get("/:id/profile", async (c) => {
           isNewArticle: article.isNewArticle,
           rating: article.rating,
           isCreated: true,
+          pageviews: article.pageviews ?? [],
         };
       }),
       editedArticles: editedArticles.map((article) => {
@@ -499,6 +500,7 @@ editorsRoutes.get("/:id/profile", async (c) => {
           isNewArticle: article.isNewArticle,
           rating: article.rating,
           isCreated: false,
+          pageviews: article.pageviews ?? [],
         };
       }),
     },
