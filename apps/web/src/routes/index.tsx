@@ -197,9 +197,7 @@ function DashboardPage() {
           {loadingDaily || !daily ? (
             <div className="py-8 text-center text-sm text-slate-400">Loading daily series...</div>
           ) : (
-            <div className="h-48 w-full">
-              <DailyChart data={daily} />
-            </div>
+            <DailyChart data={daily} />
           )}
         </CardContent>
       </Card>
@@ -249,7 +247,7 @@ function DailyChart({ data }: { data: Array<{ periodStart: string; edits: number
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-400/60" /> Views
         </span>
       </div>
-      <div className="relative">
+      <div className="relative h-48 w-full">
         <svg viewBox="0 0 800 180" className="w-full h-full" preserveAspectRatio="none">
           {data.map((d, i) => {
             const x = (i / Math.max(1, data.length - 1)) * 780 + 10;
