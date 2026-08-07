@@ -399,10 +399,20 @@ editorsRoutes.get("/:id/profile", async (c) => {
     _sum: { referencesCount: true },
   });
   const referencesAdded = refAgg._sum.referencesCount ?? 0;
-  const pageviews = createdArticles.reduce((sum, article) => {
-    const latestPageview = article.pageviews?.[0];
-    return sum + (latestPageview?.cumulativeViews ?? latestPageview?.views ?? 0);
-  }, 0);
+  // Pageviews = program-window views (cutoff-aware, from period_article_activity)
+  // for articles this editor contributed to — consistent with the dashboard's
+  // snapshot methodology (not lifetime cumulative views).
+  const viewsAgg = await prisma.periodArticleActivity.aggregate({
+    where: {
+      granularity: "DAY",
+      periodStart: { gte: new Date("2026-01-01T00:00:00Z") },
+      article: {
+        contributions: { some: { editorId: editor.id } },
+      },
+    },
+    _sum: { viewsTotal: true },
+  });
+  const pageviews = viewsAgg._sum.viewsTotal ?? 0;
 
   const outreachStats = {
     articlesCount,

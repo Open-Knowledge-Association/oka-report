@@ -74,7 +74,7 @@ export function EditorStatsCards({ stats }: EditorStatsCardsProps) {
       color: "text-orange-600",
       bgColor: "bg-orange-50",
       tooltip:
-        "Cumulative pageviews of this editor's articles since each article's first program contribution (cutoff). Views before the program touched an article are excluded.",
+        "Total pageviews of this editor's articles during the program window (since Jan 1, 2026, attributed from each article's first contribution). Views before the program touched an article are excluded. Source: snapshot pageview data, consistent with the dashboard.",
     },
   ];
 
