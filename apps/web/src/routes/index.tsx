@@ -228,6 +228,89 @@ function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg text-slate-900">Methodology</CardTitle>
+          <CardDescription>
+            How the numbers on this dashboard are collected and computed
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5 text-sm text-slate-600 leading-relaxed">
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">Data pipeline</h3>
+            <ol className="list-decimal list-inside space-y-1.5">
+              <li>
+                <strong>Program &amp; editors</strong> — Program members are pulled from the
+                Outreach Dashboard API. Each editor's participation is counted from their
+                enrollment date (clamped to January 1, 2026).
+              </li>
+              <li>
+                <strong>Articles</strong> — The article list (51,755 articles) is synced from
+                the Outreach Dashboard.
+              </li>
+              <li>
+                <strong>Contributions</strong> — Each editor's edits are fetched from the
+                Wikimedia <code>usercontribs</code> API. Words added are estimated from the
+                revision size difference (<code>sizediff</code>); an article counts as{" "}
+                <em>created</em> when its revision is the first in the article&apos;s history
+                (parent revision id = 0).
+              </li>
+              <li>
+                <strong>Commons uploads</strong> — Files uploaded by editors are fetched from
+                the Wikimedia Commons API, counted from each editor&apos;s enrollment date.
+              </li>
+              <li>
+                <strong>Pageviews</strong> — Daily pageview data (Wikimedia{" "}
+                <code>DAILY/ALL_AGENTS</code>) is backfilled for every article that received a
+                program contribution. Views are attributed from the date of the article&apos;s
+                first program contribution (cutoff) onward — views before the program touched
+                the article are excluded.
+              </li>
+              <li>
+                <strong>Snapshots</strong> — A snapshot builder aggregates the raw data into
+                daily, monthly and yearly metrics (edits, words, created/edited articles,
+                views, editors, uploads) that power this dashboard.
+              </li>
+            </ol>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">Metric definitions</h3>
+            <ul className="list-disc list-inside space-y-1.5">
+              <li>
+                <strong>Views (all articles)</strong> — pageviews of every program article
+                since its first program contribution, cumulative for the period.
+              </li>
+              <li>
+                <strong>Views (active articles)</strong> — pageviews of only the articles that
+                were created or edited within the displayed period (direct impact of recent
+                work).
+              </li>
+              <li>
+                <strong>Edits / Articles Edited</strong> — counted only for contributions on or
+                after the editor&apos;s enrollment date; an article counts once regardless of
+                how many editors touched it.
+              </li>
+              <li>
+                <strong>Articles Created</strong> — articles whose first-ever revision was made
+                by a program editor (detected via parent revision id = 0).
+              </li>
+              <li>
+                <strong>Top Articles</strong> — ranked by pageviews (total views during the
+                period), with edit count shown alongside.
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">Sync schedule</h3>
+            <ul className="list-disc list-inside space-y-1.5">
+              <li>Full data sync: daily at 02:00 (UTC).</li>
+              <li>Outreach article sync: daily at 03:00 (UTC).</li>
+              <li>Historical pageview backfill: weekly (Sundays) at 04:00 (UTC).</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
       </div>
     </TooltipProvider>
   );
