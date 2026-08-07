@@ -139,7 +139,7 @@ export class SnapshotReportService {
     };
   }
 
-  /** Top articles by edits within a range (from period_article_activity DAY rows). */
+  /** Top articles by pageviews (tie-break edits) within a range. */
   private async getTopArticles(
     granularity: Granularity,
     start: Date,
@@ -173,7 +173,7 @@ export class SnapshotReportService {
       agg.set(r.articleId, a);
     }
     return [...agg.entries()]
-      .sort(([, x], [, y]) => y.edits - x.edits)
+      .sort(([, x], [, y]) => y.viewsTotal - x.viewsTotal || y.edits - x.edits)
       .slice(0, limit)
       .map(([articleId, a]) => ({
         articleId,

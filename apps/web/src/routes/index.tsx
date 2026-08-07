@@ -1,17 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
+import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   CheckCircle2,
+  Eye,
   FileText,
   PencilLine,
   RefreshCw,
-  Users,
-  Eye,
   UploadCloud,
+  Users,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { fetchSnapshotReport, fetchSnapshotDaily, fetchSyncStatus, type SnapshotTotals } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
@@ -32,24 +39,34 @@ function MetricCard({
   label,
   value,
   sub,
+  tooltip,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
+  tooltip?: string;
 }) {
-  return (
-    <Card>
+  const content = (
+    <Card className="h-full">
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          {icon}
-          <span className="text-xs uppercase tracking-wider font-medium">{label}</span>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-2 text-muted-foreground cursor-help">
+              {icon}
+              <span className="text-xs uppercase tracking-wider font-medium">{label}</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs text-left leading-relaxed">
+            {tooltip}
+          </TooltipContent>
+        </Tooltip>
         <p className="text-2xl font-bold text-slate-900 mt-2">{value}</p>
         {sub ? <p className="text-xs text-slate-500 mt-1">{sub}</p> : null}
       </CardContent>
     </Card>
   );
+  return content;
 }
 
 function DashboardPage() {
@@ -82,7 +99,8 @@ function DashboardPage() {
   const monthTotals: SnapshotTotals | undefined = monthly?.totals;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <TooltipProvider>
+      <div className="mx-auto w-full max-w-6xl space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-slate-600 mt-1">OKA program impact — {year}</p>
@@ -108,18 +126,64 @@ function DashboardPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <MetricCard icon={<PencilLine className="h-4 w-4" />} label="Edits" value={fmt(totals?.edits ?? 0)} sub={`${fmt(monthTotals?.edits ?? 0)} this month`} />
-          <MetricCard icon={<FileText className="h-4 w-4" />} label="Words Added" value={fmtCompact(totals?.wordsAdded ?? 0)} sub={`${fmtCompact(monthTotals?.wordsAdded ?? 0)} this month`} />
-          <MetricCard icon={<FileText className="h-4 w-4" />} label="Articles Created" value={fmt(totals?.articlesCreated ?? 0)} sub={`${fmt(monthTotals?.articlesCreated ?? 0)} this month`} />
-          <MetricCard icon={<PencilLine className="h-4 w-4" />} label="Articles Edited" value={fmt(totals?.articlesEdited ?? 0)} sub={`${fmt(monthTotals?.articlesEdited ?? 0)} this month`} />
-          <MetricCard icon={<Users className="h-4 w-4" />} label="Editors" value={fmt(totals?.editors ?? 0)} />
-          <MetricCard icon={<UploadCloud className="h-4 w-4" />} label="Commons Uploads" value={fmt(totals?.commonsUploads ?? 0)} />
+          <MetricCard
+            icon={<PencilLine className="h-4 w-4" />}
+            label="Edits"
+            value={fmt(totals?.edits ?? 0)}
+            sub={`${fmt(monthTotals?.edits ?? 0)} this month`}
+            tooltip="Total revisions/edits made by program editors on Wikipedia articles since January 1, 2026 (start of the OKA program). Source: Wikimedia contribution data (usercontribs), synced periodically."
+          />
+          <MetricCard
+            icon={<FileText className="h-4 w-4" />}
+            label="Words Added"
+            value={fmtCompact(totals?.wordsAdded ?? 0)}
+            sub={`${fmtCompact(monthTotals?.wordsAdded ?? 0)} this month`}
+            tooltip="Estimated total words added by program editors to articles, computed from revision size differences (sizediff) in the Wikimedia API, since January 1, 2026."
+          />
+          <MetricCard
+            icon={<FileText className="h-4 w-4" />}
+            label="Articles Created"
+            value={fmt(totals?.articlesCreated ?? 0)}
+            sub={`${fmt(monthTotals?.articlesCreated ?? 0)} this month`}
+            tooltip="Number of new articles created by program editors on Wikipedia (first revision of the article = parentid 0), since January 1, 2026."
+          />
+          <MetricCard
+            icon={<PencilLine className="h-4 w-4" />}
+            label="Articles Edited"
+            value={fmt(totals?.articlesEdited ?? 0)}
+            sub={`${fmt(monthTotals?.articlesEdited ?? 0)} this month`}
+            tooltip="Number of unique articles that received contributions from program editors (created or edited), since January 1, 2026."
+          />
+          <MetricCard
+            icon={<Users className="h-4 w-4" />}
+            label="Editors"
+            value={fmt(totals?.editors ?? 0)}
+            tooltip="Number of registered OKA program editors with at least one contribution in the period (2026)."
+          />
+          <MetricCard
+            icon={<UploadCloud className="h-4 w-4" />}
+            label="Commons Uploads"
+            value={fmt(totals?.commonsUploads ?? 0)}
+            tooltip="Number of files (images, documents) uploaded by program editors to Wikimedia Commons since each editor's enrollment date (minimum January 1, 2026)."
+          />
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <MetricCard icon={<Eye className="h-4 w-4" />} label="Views (all articles)" value={fmtCompact(totals?.viewsTotal ?? 0)} sub={`${fmtCompact(monthTotals?.viewsTotal ?? 0)} this month`} />
-        <MetricCard icon={<Eye className="h-4 w-4" />} label="Views (active articles)" value={fmtCompact(totals?.viewsActive ?? 0)} sub="articles created/edited in period" />
+        <MetricCard
+          icon={<Eye className="h-4 w-4" />}
+          label="Views (all articles)"
+          value={fmtCompact(totals?.viewsTotal ?? 0)}
+          sub={`${fmtCompact(monthTotals?.viewsTotal ?? 0)} this month`}
+          tooltip="Total pageviews of all program articles from Wikimedia, counted from the first program editor contribution on each article (cutoff), cumulative January 1, 2026 – now."
+        />
+        <MetricCard
+          icon={<Eye className="h-4 w-4" />}
+          label="Views (active articles)"
+          value={fmtCompact(totals?.viewsActive ?? 0)}
+          sub="articles created/edited in period"
+          tooltip="Pageviews only for articles actively created/edited in the period (not all program articles). Shows the direct impact of contributions."
+        />
       </div>
 
       <Card>
@@ -143,7 +207,7 @@ function DashboardPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg text-slate-900">Top Articles — {year}</CardTitle>
-          <CardDescription>By edits (from snapshot detail)</CardDescription>
+          <CardDescription>By pageviews (from snapshot detail)</CardDescription>
         </CardHeader>
         <CardContent>
           {!yearly?.topArticles?.length ? (
@@ -158,7 +222,7 @@ function DashboardPage() {
                     <Badge variant="outline" className="text-[10px] text-slate-400">{a.wikiProject.replace(".wikipedia.org", "")}</Badge>
                   </div>
                   <div className="text-sm text-slate-600 shrink-0">
-                    {fmt(a.edits)} edits · {fmtCompact(a.viewsTotal)} views
+                    {fmtCompact(a.viewsTotal)} views · {fmt(a.edits)} edits
                   </div>
                 </div>
               ))}
@@ -166,30 +230,55 @@ function DashboardPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 
 function DailyChart({ data }: { data: Array<{ periodStart: string; edits: number; viewsTotal: number }> }) {
   const maxEdits = Math.max(1, ...data.map((d) => d.edits));
   const maxViews = Math.max(1, ...data.map((d) => d.viewsTotal));
+  const [hovered, setHovered] = React.useState<number | null>(null);
   return (
-    <svg viewBox="0 0 800 180" className="w-full h-full" preserveAspectRatio="none">
-      {data.map((d, i) => {
-        const x = (i / Math.max(1, data.length - 1)) * 780 + 10;
-        const hE = (d.edits / maxEdits) * 140;
-        const hV = (d.viewsTotal / maxViews) * 140;
-        return (
-          <g key={d.periodStart}>
-            <rect x={x - 2} y={170 - hE} width={4} height={hE} fill="#3b82f6" opacity={0.85}>
-              <title>{`${d.periodStart}: ${d.edits} edits`}</title>
-            </rect>
-            <rect x={x - 2} y={170 - hV} width={4} height={hV} fill="#94a3b8" opacity={0.4}>
-              <title>{`${d.periodStart}: ${d.viewsTotal.toLocaleString()} views`}</title>
-            </rect>
-          </g>
-        );
-      })}
-    </svg>
+    <div>
+      <div className="flex items-center justify-end gap-4 mb-2 text-xs text-slate-600">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-blue-500" /> Edits
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-400/60" /> Views
+        </span>
+      </div>
+      <div className="relative">
+        <svg viewBox="0 0 800 180" className="w-full h-full" preserveAspectRatio="none">
+          {data.map((d, i) => {
+            const x = (i / Math.max(1, data.length - 1)) * 780 + 10;
+            const hE = (d.edits / maxEdits) * 140;
+            const hV = (d.viewsTotal / maxViews) * 140;
+            return (
+              <g
+                key={d.periodStart}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+                className="cursor-pointer"
+              >
+                <rect x={x - 2} y={170 - hE} width={4} height={hE} fill="#3b82f6" opacity={0.85} />
+                <rect x={x - 2} y={170 - hV} width={4} height={hV} fill="#94a3b8" opacity={0.4} />
+              </g>
+            );
+          })}
+        </svg>
+        {hovered !== null && data[hovered] ? (
+          <div
+            className="pointer-events-none absolute top-0 z-10 rounded-md bg-slate-900 px-3 py-1.5 text-xs text-white shadow"
+            style={{ left: `${(hovered / Math.max(1, data.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
+          >
+            <div className="font-medium">{new Date(data[hovered].periodStart).toLocaleDateString()}</div>
+            <div>Edits: {data[hovered].edits.toLocaleString()}</div>
+            <div>Views: {data[hovered].viewsTotal.toLocaleString()}</div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
