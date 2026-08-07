@@ -105,6 +105,24 @@ export class SnapshotReportService {
       totals.commonsUploads += t.commonsUploads;
     }
 
+    // refsAdded is not populated by the snapshot builder (historical value 0),
+    // so compute it directly: sum of referencesCount across program articles
+    // touched within the range (distinct per article).
+    const refRows = await this.prisma.periodArticleActivity.findMany({
+      where: {
+        granularity: "DAY",
+        programId,
+        wikiProject: wikiProject ?? "",
+        periodStart: { gte: start, lt: end },
+      },
+      select: { articleId: true, article: { select: { referencesCount: true } } },
+      distinct: ["articleId"],
+    });
+    totals.refsAdded = refRows.reduce(
+      (sum, r) => sum + (r.article.referencesCount ?? 0),
+      0,
+    );
+
     // byPeriod = breakdown at the granularity BELOW the requested one:
     //   DAY report  -> DAY rows (same)
     //   MONTH report -> DAY rows within the month range

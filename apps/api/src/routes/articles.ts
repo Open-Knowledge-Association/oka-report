@@ -83,8 +83,12 @@ articlesRoutes.get("/stats", async (c) => {
 
   const totalArticles = await prisma.article.count({ where: articleWhere });
 
-  const { pageviewsByArticle, wikiPageviews } = await statsService.getCurrentArticleStats(query);
-  const totalPageviews = Array.from(pageviewsByArticle.values()).reduce(
+  const { pageviewsByArticle } = await statsService.getCurrentArticleStats(query);
+  // Per-wiki breakdown & total: distributed proportionally from the
+  // canonical snapshot total (61.38M, cutoff-aware) so this page is
+  // consistent with the dashboard & annual report cards.
+  const wikiPageviews = await statsService.getPageviewsByWikiProject(query);
+  const totalPageviews = Array.from(wikiPageviews.values()).reduce(
     (sum, value) => sum + value,
     0,
   );

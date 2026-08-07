@@ -235,7 +235,7 @@ export class StatsService {
     // PostgreSQL parameter limit (P2029). For full-dataset calls, aggregate
     // over all rows instead of filtering by article id.
     const fullDataset = articles.length > 10000;
-    const [daily, cumulative] = await Promise.all([
+    const [daily, cumulative, programViews] = await Promise.all([
       fullDataset
         ? this.prisma.pageview.groupBy({
             by: ["articleId"],
@@ -260,18 +260,38 @@ export class StatsService {
             orderBy: [{ articleId: "asc" }, { date: "desc" }],
             distinct: ["articleId"],
           }),
+      // Program-window views (cutoff-aware, consistent with dashboard):
+      // sum of DAY rows in period_article_activity since 2026-01-01.
+      fullDataset
+        ? this.prisma.periodArticleActivity.groupBy({
+            by: ["articleId"],
+            where: { granularity: "DAY", periodStart: { gte: new Date("2026-01-01T00:00:00Z") } },
+            _sum: { viewsTotal: true },
+          })
+        : this.prisma.periodArticleActivity.groupBy({
+            by: ["articleId"],
+            where: {
+              articleId: { in: ids },
+              granularity: "DAY",
+              periodStart: { gte: new Date("2026-01-01T00:00:00Z") },
+            },
+            _sum: { viewsTotal: true },
+          }),
     ]);
     const dailyByArticle = new Map(daily.map((row) => [row.articleId, row._sum.views ?? 0]));
     const cumulativeByArticle = new Map(
       cumulative.map((row) => [row.articleId, row.cumulativeViews ?? row.views]),
     );
+    const programByArticle = new Map(
+      programViews.map((row) => [row.articleId, row._sum.viewsTotal ?? 0]),
+    );
     const totals = new Map<string, number>();
     for (const article of articles) {
-      const value =
-        article.source === "OUTREACH_DASHBOARD"
-          ? (cumulativeByArticle.get(article.id) ?? dailyByArticle.get(article.id) ?? 0)
-          : (dailyByArticle.get(article.id) ?? cumulativeByArticle.get(article.id) ?? 0);
-      totals.set(article.id, value);
+      // Program-window views only (cutoff-aware, consistent with the
+      // dashboard's snapshot methodology). Articles without recorded program
+      // activity report 0 — lifetime cumulative views are intentionally NOT
+      // used, since the report window starts at the program's start date.
+      totals.set(article.id, programByArticle.get(article.id) ?? 0);
     }
     return asMap ? totals : Array.from(totals.values()).reduce((sum, value) => sum + value, 0);
   }
@@ -625,7 +645,7 @@ export class StatsService {
     return rows.reduce((sum, row) => sum + (row.viewsTotal ?? 0), 0);
   }
 
-  private async getPageviewsByWikiProject(filters: StatsFilter): Promise<Map<string, number>> {
+  async getPageviewsByWikiProject(filters: StatsFilter): Promise<Map<string, number>> {
     // Per-wiki pageview breakdown: distribute the canonical snapshot total
     // (viewsTotal, cutoff-aware) proportionally by per-wiki active-article
     // views from period_article_activity DAY rows. This keeps the breakdown
