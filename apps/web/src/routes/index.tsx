@@ -356,7 +356,10 @@ function DashboardPage() {
               </li>
               <li>
                 <strong>Articles Created</strong> — articles whose first-ever revision was made
-                by a program editor (detected via parent revision id = 0).
+                by a program editor (detected via parent revision id = 0), counted only from
+                <em> verified contribution data</em>. Outreach-imported article attributions
+                without a recorded contribution are not counted, keeping this consistent with
+                per-editor reports.
               </li>
               <li>
                 <strong>Top Articles</strong> — ranked by pageviews (total views during the
@@ -444,6 +447,22 @@ function DashboardPage() {
               <li>
                 <strong>Commons uploads</strong> only include uploads made after each
                 editor&apos;s enrollment date; earlier uploads are outside the program window.
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 mb-2">Consistency guarantee</h3>
+            <ul className="list-disc list-inside space-y-1.5">
+              <li>
+                All figures are computed from a single source of truth (snapshot tables) and
+                cross-checked: dashboard totals equal the sum of daily snapshots, monthly
+                totals equal yearly totals, and per-editor numbers match the editor detail
+                pages and CSV/JSON exports.
+              </li>
+              <li>
+                Definition choices that could go either way (e.g. program-window pageviews vs
+                lifetime views, verified article creation vs Outreach attribution) are applied
+                consistently across every page, export and report.
               </li>
             </ul>
           </div>
