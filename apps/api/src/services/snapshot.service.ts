@@ -228,9 +228,17 @@ export class SnapshotService {
       const enrolledAt = enrolledByEditor.get(u.editorId);
       if (!enrolledAt || u.uploadedAt < enrolledAt) continue;
       const k = dayKey(u.uploadedAt);
-      const byEditor = editorDetailByDay.get(k);
-      const e = byEditor?.get(u.editorId);
-      if (e) e.commonsUploads += 1;
+      let byEditor = editorDetailByDay.get(k);
+      if (!byEditor) {
+        byEditor = new Map();
+        editorDetailByDay.set(k, byEditor);
+      }
+      let e = byEditor.get(u.editorId);
+      if (!e) {
+        e = { edits: 0, words: 0, articlesCreated: 0, articlesEdited: 0, commonsUploads: 0 };
+        byEditor.set(u.editorId, e);
+      }
+      e.commonsUploads += 1;
     }
 
     let days = 0;
