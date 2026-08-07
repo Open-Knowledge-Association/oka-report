@@ -19,6 +19,8 @@ interface CommonsGalleryProps {
 export function CommonsGallery({ editorId }: CommonsGalleryProps) {
   const [selectedImage, setSelectedImage] = useState<CommonsUpload | null>(null);
   const [imageError, setImageError] = useState<Record<string, boolean>>({});
+  const [visibleCount, setVisibleCount] = useState(24);
+  const PAGE_SIZE = 24;
 
   const handleImageError = (fileName: string) => {
     setImageError((prev) => ({ ...prev, [fileName]: true }));
@@ -61,13 +63,19 @@ export function CommonsGallery({ editorId }: CommonsGalleryProps) {
     );
   }
 
+  const visible = data.slice(0, visibleCount);
+  const remaining = data.length - visibleCount;
+
   return (
     <>
+      <div className="mb-2 text-xs text-slate-500">
+        Showing {Math.min(visibleCount, data.length).toLocaleString()} of {data.length.toLocaleString()} uploads
+      </div>
       <div
         data-testid="commons-gallery"
         className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"
       >
-        {data.map((upload) => {
+        {visible.map((upload) => {
           const isError = imageError[upload.fileName];
           const displayUrl = !isError && upload.thumbnailUrl ? upload.thumbnailUrl : upload.fileUrl;
 
@@ -99,6 +107,17 @@ export function CommonsGallery({ editorId }: CommonsGalleryProps) {
           );
         })}
       </div>
+
+      {remaining > 0 && (
+        <div className="mt-4 flex items-center justify-center">
+          <button
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            Load more ({remaining.toLocaleString()} remaining)
+          </button>
+        </div>
+      )}
 
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black/95 border-slate-800">

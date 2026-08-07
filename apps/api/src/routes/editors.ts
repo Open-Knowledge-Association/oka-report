@@ -10,6 +10,13 @@ import {
 
 export const editorsRoutes = new Hono();
 
+// In-memory cache for Wikimedia profile lookups (60 min TTL) — keeps the
+// profile endpoint fast when the Wikimedia API is slow or rate-limited.
+const WIKI_PROFILE_CACHE = new Map<
+  string,
+  { data: { registration: string | null; editcount: number; gender: string | null } | null; expiresAt: number }
+>();
+
 // Initialize Outreach Dashboard client
 const dashboardClient = new OutreachDashboardClient({
   baseUrl: "https://outreachdashboard.wmflabs.org",
@@ -350,26 +357,25 @@ editorsRoutes.get("/:id/profile", async (c) => {
   }
 
   const createdArticles = editor.createdArticles;
-  // editedArticles = all articles with contributions by this editor
-  // (including created ones) — consistent with snapshot articlesEdited.
-  const contribArticles = await prisma.article.findMany({
-    where: {
-      contributions: { some: { editorId: editor.id } },
-    },
-    select: {
-      id: true,
-      title: true,
-      wikiProject: true,
-      url: true,
-      characterSum: true,
-      referencesCount: true,
-      isNewArticle: true,
-      rating: true,
-      pageviews: { orderBy: { date: "desc" }, take: 1 },
-    },
+  // editedArticlesCount = distinct articles touched by this editor
+  // (fast groupBy, no need to load 1.4k article rows + pageviews).
+  const editedCountAgg = await prisma.contribution.groupBy({
+    by: ["articleId"],
+    where: { editorId: editor.id },
+    _count: { _all: true },
   });
-  const editedArticles = contribArticles;
-  const editedArticlesCount = editedArticles.length;
+  const editedArticlesCount = editedCountAgg.length;
+  const editedArticles: Array<{
+    id: string;
+    title: string;
+    wikiProject: string;
+    url: string;
+    characterSum: number;
+    referencesCount: number;
+    isNewArticle: boolean | null;
+    rating: string | null;
+    pageviews?: Array<{ type: string; views?: number; cumulativeViews?: number; date: string }>;
+  }> = [];
 
   const articles = createdArticles;
   const articlesCount = createdArticles.length;
@@ -384,13 +390,17 @@ editorsRoutes.get("/:id/profile", async (c) => {
     _sum: { wordsAdded: true },
   });
   const charactersAdded = wordsAgg._sum.wordsAdded ?? 0;
-  // references across all articles the editor touched (created or edited).
-  const referencesAdded = contribArticles.reduce(
-    (sum, article) => sum + (article.referencesCount ?? 0),
-    0,
-  );
-  const pageviews = contribArticles.reduce((sum, article) => {
-    const latestPageview = article.pageviews[0];
+  // references across ALL articles the editor touched (consistent with the
+  // editors list page which shows referencesCount from the same scope).
+  const refAgg = await prisma.article.aggregate({
+    where: {
+      contributions: { some: { editorId: editor.id } },
+    },
+    _sum: { referencesCount: true },
+  });
+  const referencesAdded = refAgg._sum.referencesCount ?? 0;
+  const pageviews = createdArticles.reduce((sum, article) => {
+    const latestPageview = article.pageviews?.[0];
     return sum + (latestPageview?.cumulativeViews ?? latestPageview?.views ?? 0);
   }, 0);
 
@@ -405,13 +415,26 @@ editorsRoutes.get("/:id/profile", async (c) => {
 
   let wikimediaProfile = null;
   try {
-    const firstArticle = articles[0];
-    const wikiBase = firstArticle
-      ? `https://${firstArticle.wikiProject}`
-      : "https://en.wikipedia.org";
+    // Cache Wikimedia profile lookups in-memory (60 min TTL) so the profile
+    // endpoint stays fast even when the Wikimedia API is slow/rate-limited.
+    const cacheKey = editor.username;
+    const cached = WIKI_PROFILE_CACHE.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      wikimediaProfile = cached.data;
+    } else {
+      const firstArticle = articles[0];
+      const wikiBase = firstArticle
+        ? `https://${firstArticle.wikiProject}`
+        : "https://en.wikipedia.org";
 
-    const { WikimediaClient } = await import("@repo/utils");
-    const client = new WikimediaClient({ baseUrl: `${wikiBase}/w/api.php` });
+      const { WikimediaClient } = await import("@repo/utils");
+      // Profile enrichment is optional — fail fast (8s, 1 retry) instead of
+      // blocking the page for 30-90s when Wikimedia is slow or rate-limited.
+      const client = new WikimediaClient({
+        baseUrl: `${wikiBase}/w/api.php`,
+        requestTimeoutMs: 8000,
+        maxRetries: 1,
+      });
 
     interface UserQueryResponse {
       query?: {
@@ -437,10 +460,12 @@ editorsRoutes.get("/:id/profile", async (c) => {
     const user = response.query?.users?.[0];
     if (user && !user.missing) {
       wikimediaProfile = {
-        registrationDate: user.registration || null,
-        editCount: user.editcount || 0,
+        registration: user.registration || null,
+        editcount: user.editcount || 0,
         gender: user.gender || null,
       };
+    }
+      WIKI_PROFILE_CACHE.set(cacheKey, { data: wikimediaProfile, expiresAt: Date.now() + 60 * 60 * 1000 });
     }
   } catch (error) {
     console.error("Failed to fetch MediaWiki profile:", error);
