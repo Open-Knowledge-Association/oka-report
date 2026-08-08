@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Calendar, Filter, LineChart, Users, FileText, BookOpen, Eye, Upload } from "lucide-react";
+import { Calendar, Filter, LineChart, Users, FileText, Eye, Upload, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   fetchEditorHistory,
   fetchSnapshotDaily,
@@ -38,6 +39,29 @@ const getDefaultDateRange = () => {
 };
 
 const formatNumber = (value: number | null | undefined) => (value ?? 0).toLocaleString();
+
+const dailyMetricHelp: Record<string, string> = {
+  "Articles Created": "Sum of daily snapshot article-creation counts across the selected date range.",
+  "Articles Edited": "Sum of daily unique edited-article counts. An article can appear on multiple days in a range.",
+  "Editors Active": "Sum of daily active-editor counts; this is operational daily activity, not a deduplicated range total.",
+  "Total Edits": "Contribution edits recorded in daily snapshots for the selected date range.",
+  "Words Added": "Estimated words added from daily snapshot rollups.",
+  "Article Views": "Daily snapshot reporting views for program activity, not lifetime cumulative pageviews.",
+  "Commons Uploads": "Commons uploads recorded in daily snapshots for the selected range.",
+};
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" aria-label="metric info" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-sm">{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 const formatDelta = (value?: number) => {
   if (value === undefined) return "-";
@@ -143,7 +167,10 @@ export function HistoryPage() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">History & Reports</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-slate-900">History & Reports</h1>
+          <InfoTip text="Operational history page. Reports use canonical snapshot/report totals; Daily History is for day-to-day monitoring; Entity Lookup drills into one editor or article." />
+        </div>
         <p className="text-slate-600 mt-1">
           Monitor daily snapshots, generate period reports, and debug specific editor/article
           trends.
@@ -154,16 +181,16 @@ export function HistoryPage() {
         <CardContent className="pt-6 text-sm text-slate-700">
           <div className="grid gap-2 md:grid-cols-2">
             <p>
-              <strong>1) Reports:</strong> Annual and monthly summaries for leadership.
+              <strong>1) Reports:</strong> Annual and monthly summaries for leadership; exports use the same canonical snapshot source as the UI.
             </p>
             <p>
-              <strong>2) Daily History:</strong> Day-to-day operational monitoring.
+              <strong>2) Daily History:</strong> Day-to-day operational monitoring from pre-aggregated daily snapshots.
             </p>
             <p>
-              <strong>3) Entity Lookup:</strong> Drill into one editor or one article.
+              <strong>3) Entity Lookup:</strong> Drill into one editor or one article, with optional daily delta rows.
             </p>
             <p>
-              <strong>4) Snapshot Utilities:</strong> Backfill missing periods after sync runs.
+              <strong>4) Snapshot Utilities:</strong> Queue snapshot rebuilds after sync runs; use carefully because it updates report source rows.
             </p>
           </div>
         </CardContent>
@@ -206,9 +233,10 @@ export function HistoryPage() {
           <Card>
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 bg-slate-50/50 pb-4">
               <div>
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Global Daily History
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg font-semibold text-slate-900">Global Daily History</CardTitle>
+                  <InfoTip text="Daily snapshots are operational rows. References Added is intentionally not shown here until daily refs are populated reliably." />
+                </div>
                 <p className="text-sm text-slate-500 mt-1">
                   Daily snapshot table from pre-aggregated daily metrics.
                 </p>
@@ -282,11 +310,6 @@ export function HistoryPage() {
                     icon: LineChart,
                   },
                   {
-                    title: "References Added",
-                    value: summary?.referencesAdded,
-                    icon: BookOpen,
-                  },
-                  {
                     title: "Article Views",
                     value: summary?.pageviews,
                     icon: Eye,
@@ -302,8 +325,9 @@ export function HistoryPage() {
                     className="rounded-lg border border-slate-200 p-4 bg-white shadow-sm"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 uppercase tracking-wider">
                         {item.title}
+                        <InfoTip text={dailyMetricHelp[item.title]} />
                       </span>
                       <item.icon className="h-4 w-4 text-slate-400" />
                     </div>
@@ -352,12 +376,6 @@ export function HistoryPage() {
                       </TableHead>
                       <TableHead
                         className="text-right font-semibold text-slate-700"
-                        title="References added by newly created articles on this day"
-                      >
-                        Refs
-                      </TableHead>
-                      <TableHead
-                        className="text-right font-semibold text-slate-700"
                         title="Pageviews captured for this day"
                       >
                         Views
@@ -373,13 +391,13 @@ export function HistoryPage() {
                   <TableBody>
                     {historyLoading ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12 text-sm text-slate-500">
+                        <TableCell colSpan={8} className="text-center py-12 text-sm text-slate-500">
                           Loading history...
                         </TableCell>
                       </TableRow>
                     ) : series.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12 text-sm text-slate-500">
+                        <TableCell colSpan={8} className="text-center py-12 text-sm text-slate-500">
                           No history data available for this range.
                         </TableCell>
                       </TableRow>
@@ -405,9 +423,6 @@ export function HistoryPage() {
                             {formatNumber(row.editors)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-slate-700">
-                            {formatNumber(row.refsAdded)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-slate-700">
                             {formatNumber(row.viewsTotal)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-slate-700">
@@ -427,9 +442,10 @@ export function HistoryPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card>
               <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Editor History
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg font-semibold text-slate-900">Editor History</CardTitle>
+                  <InfoTip text="Lookup a single editor by ID. Enable daily delta to compare each row with the previous day." />
+                </div>
                 <p className="text-sm text-slate-500 mt-1">
                   Paste an editor ID to inspect daily edits, words, created articles, and uploads.
                 </p>
@@ -568,9 +584,10 @@ export function HistoryPage() {
 
             <Card>
               <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Article History
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg font-semibold text-slate-900">Article History</CardTitle>
+                  <InfoTip text="Lookup one article by ID to inspect pageviews, character count, references, and daily deltas." />
+                </div>
                 <p className="text-sm text-slate-500 mt-1">
                   Paste an article ID to inspect day-by-day pageviews and content metrics.
                 </p>
@@ -701,9 +718,10 @@ export function HistoryPage() {
         <TabsContent value="utilities" className="space-y-6">
           <Card>
             <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-4">
-              <CardTitle className="text-lg font-semibold text-slate-900">
-                Snapshot Utilities
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg font-semibold text-slate-900">Snapshot Utilities</CardTitle>
+                <InfoTip text="Queues snapshot_build jobs for the selected range. Re-running a day updates the existing snapshot rows rather than creating duplicate day rows." />
+              </div>
               <p className="text-sm text-slate-500 mt-1">
                 Use after sync runs to fill missing historical days for the selected date range.
               </p>

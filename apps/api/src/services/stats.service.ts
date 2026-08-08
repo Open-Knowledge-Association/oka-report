@@ -766,6 +766,34 @@ export class StatsService {
     return where;
   }
 
+  private async getCanonicalReferencesForTouchedArticles(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<number> {
+    const program = await this.prisma.program.findFirst({ where: { slug: "OKA" } });
+    if (!program) return 0;
+
+    const endExclusive =
+      endDate.getUTCHours() === 23 &&
+      endDate.getUTCMinutes() === 59 &&
+      endDate.getUTCSeconds() === 59 &&
+      endDate.getUTCMilliseconds() === 999
+        ? new Date(endDate.getTime() + 1)
+        : endDate;
+
+    const rows = await this.prisma.periodArticleActivity.findMany({
+      where: {
+        granularity: "DAY",
+        programId: program.id,
+        periodStart: { gte: startDate, lt: endExclusive },
+      },
+      select: { articleId: true, article: { select: { referencesCount: true } } },
+      distinct: ["articleId"],
+    });
+
+    return rows.reduce((sum, row) => sum + (row.article.referencesCount ?? 0), 0);
+  }
+
   private async getPeriodTotals(
     startDate: Date,
     endDate: Date,
@@ -780,15 +808,7 @@ export class StatsService {
 
     const overall = await this.getOverallStats(scopedFilters);
     const editors = await this.getStatsByEditor(scopedFilters);
-    const createdArticles = await this.prisma.article.findMany({
-      where: this.buildCreatedArticleWhere(scopedFilters),
-      select: { referencesCount: true },
-    });
-
-    const referencesAdded = createdArticles.reduce(
-      (sum, item) => sum + (item.referencesCount ?? 0),
-      0,
-    );
+    const referencesAdded = await this.getCanonicalReferencesForTouchedArticles(startDate, endDate);
 
     return {
       edits: overall.edits,
@@ -884,6 +904,25 @@ export class StatsService {
       };
       item.editors = editorSet.size;
       wikiMap.set(project, item);
+    }
+
+    const refsTotal = await this.getCanonicalReferencesForTouchedArticles(startDate, endDate);
+    const refWeightTotal = Array.from(wikiMap.values()).reduce(
+      (sum, item) => sum + (item.pageviews || item.edits || 0),
+      0,
+    );
+    if (refsTotal > 0 && refWeightTotal > 0) {
+      const rows = Array.from(wikiMap.values());
+      let assigned = 0;
+      for (const item of rows) {
+        const weight = item.pageviews || item.edits || 0;
+        item.referencesAdded = Math.round((weight / refWeightTotal) * refsTotal);
+        assigned += item.referencesAdded;
+      }
+      const diff = refsTotal - assigned;
+      if (diff !== 0 && rows.length > 0) {
+        rows.sort((a, b) => (b.pageviews || b.edits) - (a.pageviews || a.edits))[0].referencesAdded += diff;
+      }
     }
 
     return Array.from(wikiMap.values()).sort((a, b) => b.edits - a.edits);
@@ -1016,7 +1055,16 @@ export class StatsService {
         // Canonical yearly totals (cutoff-aware) — single source of truth.
         this.prisma.metricSnapshot.findFirst({
           where: { granularity: "YEAR", periodStart: { gte: start, lt: end } },
-          select: { viewsTotal: true },
+          select: {
+            viewsTotal: true,
+            refsAdded: true,
+            edits: true,
+            wordsAdded: true,
+            articlesCreated: true,
+            articlesEdited: true,
+            editors: true,
+            commonsUploads: true,
+          },
         }),
         this.prisma.commonsUpload.count({ where: { uploadedAt: { gte: start, lt: end } } }),
         this.getEnrolledAtByEditorMap(),
@@ -1052,6 +1100,8 @@ export class StatsService {
         edits: number;
         wordsAdded: number;
         pageviews: number;
+        referencesAdded: number;
+        editors: number;
       }
     >();
     const ensure = (wikiProject: string) => {
@@ -1062,6 +1112,8 @@ export class StatsService {
         edits: 0,
         wordsAdded: 0,
         pageviews: 0,
+        referencesAdded: 0,
+        editors: 0,
       };
       byWiki.set(wikiProject, current);
       return current;
@@ -1094,13 +1146,54 @@ export class StatsService {
         row.pageviews = Math.round((wikiActive.get(project)! / wikiActiveSum) * canonicalViews);
       }
     }
+    // Distribute canonical yearly references proportionally per wiki so the
+    // breakdown sums to totals.referencesAdded (consistent with views).
+    const canonicalRefs =
+      yearSnapshot?.refsAdded && yearSnapshot.refsAdded > 0
+        ? yearSnapshot.refsAdded
+        : await this.getCanonicalReferencesForTouchedArticles(start, end);
+    if (canonicalRefs > 0 && wikiActiveSum > 0) {
+      for (const [project, row] of byWiki) {
+        row.referencesAdded = Math.round(
+          (wikiActive.get(project)! / wikiActiveSum) * canonicalRefs,
+        );
+      }
+    }
     for (const [wikiProject, row] of byWiki) {
       row.articlesEdited = new Set(
         eligibleContributions
           .filter((item) => articleMap.get(item.articleId)?.wikiProject === wikiProject)
           .map((item) => item.articleId),
       ).size;
+      row.editors = new Set(
+        eligibleContributions
+          .filter((item) => articleMap.get(item.articleId)?.wikiProject === wikiProject)
+          .map((item) => item.editorId),
+      ).size;
     }
+
+    const distributeCanonicalTotal = (
+      field: "articlesCreated" | "articlesEdited" | "edits" | "wordsAdded",
+      canonicalTotal: number | null | undefined,
+    ) => {
+      if (canonicalTotal == null) return;
+      const rows = Array.from(byWiki.values());
+      const currentTotal = rows.reduce((sum, row) => sum + row[field], 0);
+      if (currentTotal <= 0) return;
+      let assigned = 0;
+      for (const row of rows) {
+        row[field] = Math.round((row[field] / currentTotal) * canonicalTotal);
+        assigned += row[field];
+      }
+      const diff = canonicalTotal - assigned;
+      if (diff !== 0 && rows.length > 0) {
+        rows.sort((a, b) => b[field] - a[field])[0][field] += diff;
+      }
+    };
+    distributeCanonicalTotal("articlesCreated", yearSnapshot?.articlesCreated);
+    distributeCanonicalTotal("articlesEdited", yearSnapshot?.articlesEdited);
+    distributeCanonicalTotal("edits", yearSnapshot?.edits);
+    distributeCanonicalTotal("wordsAdded", yearSnapshot?.wordsAdded);
     const topArticles = Array.from(pageviewsByArticle.entries())
       .map(([articleId, totalPageviews]) => ({
         article: articleMap.get(articleId),
@@ -1118,14 +1211,15 @@ export class StatsService {
         totalPageviews: row.totalPageviews,
       }));
     const totals = {
-      articlesCreated: createdIds.size,
-      articlesEdited: editedIds.size,
-      edits: eligibleContributions.length,
-      wordsAdded: eligibleContributions.reduce((sum, row) => sum + row.wordsAdded, 0),
+      articlesCreated: yearSnapshot?.articlesCreated ?? createdIds.size,
+      articlesEdited: yearSnapshot?.articlesEdited ?? editedIds.size,
+      edits: yearSnapshot?.edits ?? eligibleContributions.length,
+      wordsAdded:
+        yearSnapshot?.wordsAdded ?? eligibleContributions.reduce((sum, row) => sum + row.wordsAdded, 0),
       pageviews: yearSnapshot?.viewsTotal ?? null,
-      editors: editorIds.size,
-      referencesAdded: null,
-      commonsUploads: commonsGroups,
+      editors: yearSnapshot?.editors ?? editorIds.size,
+      referencesAdded: canonicalRefs || null,
+      commonsUploads: yearSnapshot?.commonsUploads ?? commonsGroups,
     };
     return {
       year,
@@ -1141,7 +1235,8 @@ export class StatsService {
         articlesCreated:
           "Articles with a first tracked creation contribution within the selected calendar year",
         wordsAdded: "Estimated from contribution bytes using the existing wordsAdded metric",
-        referencesAdded: "Not available as a year-delta in current source data",
+        referencesAdded:
+          "Total references across program articles, from the canonical yearly snapshot (cutoff-aware)",
       },
     };
   }

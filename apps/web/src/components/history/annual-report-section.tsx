@@ -1,8 +1,9 @@
-import { LineChart, Users, Eye, Type, Download } from "lucide-react";
+import { LineChart, Users, Eye, Type, Download, Info } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -19,6 +20,26 @@ const yearRange = (year: number) => ({
   start: `${year}-01-01`,
   end: `${year + 1}-01-01`,
 });
+
+const metricHelp: Record<string, string> = {
+  "Edits": "Canonical yearly total from metric snapshots. Snapshot totals are the source of truth used by the dashboard and exports.",
+  "Words Added": "Estimated words added from contribution byte deltas, using the canonical yearly snapshot total.",
+  "Views (Total)": "Program reporting pageviews from metric snapshots; not lifetime cumulative article views.",
+  "Editors": "Unique active program editors represented in the yearly snapshot.",
+};
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" aria-label="metric info" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-sm">{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export function AnnualReportSection() {
   const [year, setYear] = useState(new Date().getFullYear());
@@ -106,7 +127,13 @@ export function AnnualReportSection() {
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-900">Annual Report</h3>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900">Annual Report</h3>
+              <InfoTip text="Leadership-oriented yearly report. Totals use canonical metric snapshots, and exports are aligned with the same source." />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Canonical annual totals, monthly trend, top articles, and downloadable PDF/CSV/JSON.</p>
+          </div>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={isLoading} className="gap-2">
             <Download className="h-4 w-4" />
             {isLoading ? "Exporting..." : "Export"}
@@ -151,7 +178,10 @@ export function AnnualReportSection() {
           ].map((item) => (
             <div key={item.title} className="rounded-lg border border-slate-200 p-4 bg-white shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">{item.title}</span>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  {item.title}
+                  <InfoTip text={metricHelp[item.title]} />
+                </span>
                 <item.icon className="h-4 w-4 text-slate-400" />
               </div>
               <p className="text-2xl font-bold text-slate-900">
@@ -163,9 +193,10 @@ export function AnnualReportSection() {
 
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-900">
-              Monthly Performance ({year})
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-slate-900">Monthly Performance ({year})</p>
+              <InfoTip text="Monthly bars come from snapshot report periods. Switch the metric to compare views, edits, or words across months." />
+            </div>
             <div className="flex items-center gap-2">
               <select
                 value={performanceMetric}
@@ -194,9 +225,9 @@ export function AnnualReportSection() {
                         : point.viewsTotal;
                   const height = Math.max(2, ((value ?? 0) / maxMonthlyValue) * 100);
                   return (
-                    <div key={point.periodStart} className="flex-1 flex flex-col items-center gap-1">
+                    <div key={point.periodStart} className="flex-1 h-full flex flex-col justify-end items-center gap-1">
                       <div
-                        className="w-full bg-slate-200 hover:bg-slate-400 transition-colors rounded-t"
+                        className="w-full bg-blue-500/70 hover:bg-blue-600 transition-colors rounded-t shadow-sm"
                         style={{ height: `${height}%` }}
                         title={`${point.periodStart}: ${(value ?? 0).toLocaleString()}`}
                       />
@@ -214,7 +245,10 @@ export function AnnualReportSection() {
 
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <p className="text-sm font-semibold text-slate-900">Top Articles</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-slate-900">Top Articles</p>
+              <InfoTip text="Top articles are ranked by period article activity views for the selected year." />
+            </div>
           </div>
           {isStatsLoading ? (
             <div className="p-8 text-center text-sm text-slate-500">Loading...</div>
