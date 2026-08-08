@@ -13,6 +13,7 @@ import {
   Search,
   Globe,
   ExternalLink,
+  Info,
 } from "lucide-react";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,16 +57,30 @@ const SummaryCard = ({
   value,
   icon: Icon,
   description,
+  help,
 }: {
   title: string;
   value: number | string;
   icon: any;
   description?: string;
+  help?: string;
 }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <div>
-        <CardTitle className="text-sm font-medium text-slate-600">{title}</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-sm font-medium text-slate-600">{title}</CardTitle>
+          {help ? (
+            <TooltipProvider delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 cursor-help text-slate-400" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">{help}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+        </div>
         {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
       </div>
       <Icon className="h-4 w-4 text-slate-400" />
@@ -181,42 +196,50 @@ function ArticlesPage() {
             title="Articles Created"
             value={statsLoading ? "..." : (dashboardStats?.articlesCreated ?? 0).toLocaleString()}
             icon={FilePlus}
+            help="New Wikipedia articles with a tracked first-revision contribution by a program editor this year (parent revision id = 0), from verified contribution data."
           />
           <SummaryCard
             title="Articles Edited"
             value={statsLoading ? "..." : (dashboardStats?.articlesEdited ?? 0).toLocaleString()}
             icon={FileEdit}
+            help="Unique articles with tracked contribution activity by program editors this year (created or edited)."
           />
           <SummaryCard
             title="Total Edits"
             value={statsLoading ? "..." : (dashboardStats?.totalEdits ?? 0).toLocaleString()}
             icon={Edit}
+            help="Total revisions made by program editors to tracked articles this year, from Wikimedia usercontribs data."
           />
           <SummaryCard
             title="Editors"
             value={statsLoading ? "..." : (dashboardStats?.editorsCount ?? 0).toLocaleString()}
             icon={Users}
+            help="Number of program editors with at least one tracked contribution this year, from the Outreach Dashboard enrollment list."
           />
           <SummaryCard
             title="Words Added"
             value={statsLoading ? "..." : (dashboardStats?.wordsAdded ?? 0).toLocaleString()}
             icon={Type}
+            help="Sum of net byte changes (sizediff) converted to a word estimate. An estimate, not a linguistic word count."
           />
           <SummaryCard
             title="References Added"
             value={statsLoading ? "..." : (dashboardStats?.referencesAdded ?? 0).toLocaleString()}
             icon={BookOpen}
+            help="Total citations (referencesCount) across all articles with program contribution activity this year."
           />
           <SummaryCard
             title="Article Views"
             description="Total impact (created + edited)"
             value={statsLoading ? "..." : (dashboardStats?.pageviews ?? 0).toLocaleString()}
             icon={Eye}
+            help="Wikimedia ALL_AGENTS pageviews across all program articles, cutoff-aware from each article's first program contribution."
           />
           <SummaryCard
             title="Commons Uploads"
             value={statsLoading ? "..." : (dashboardStats?.commonsUploads ?? 0).toLocaleString()}
             icon={Upload}
+            help="Files uploaded to Wikimedia Commons by program editors after their enrollment date."
           />
         </div>
 
@@ -470,6 +493,38 @@ function ArticlesPage() {
             onPageChange={handlePageChange}
           />
         )}
+
+        {/* Methodology and scope */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Methodology and scope</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm leading-6 text-slate-600">
+            <p>
+              This page reports Wikipedia and open-knowledge activity recorded in OKA's local
+              statistics database for the current year, attributed to program editors by their
+              enrollment date.
+            </p>
+            <p>
+              Summary cards are read from pre-aggregated yearly snapshots (same figures as the
+              dashboard and annual report). Article rows show program-window pageviews
+              (cutoff-aware from each article's first program contribution); articles without
+              program activity show 0. Characters and references reflect each article's tracked
+              contribution totals.
+            </p>
+            <p>
+              The Editors column lists program editors with a verified contribution to the
+              article; when no contribution is recorded but the article is attributed to an
+              editor via Outreach, that attribution is shown as the author. Articles with no
+              program attribution show "None recorded".
+            </p>
+            <p>
+              Figures are read from pre-aggregated daily/monthly/yearly snapshots, rebuilt by
+              the snapshot_build job; they may change after late upstream data or pageview
+              backfills.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </>
   );
